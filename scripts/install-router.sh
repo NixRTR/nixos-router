@@ -332,7 +332,18 @@ EOF
 
     # Generate hashed password for the user
     local hashed_password
-    hashed_password=$(mkpasswd -m sha512 "$USER_PASSWORD")
+    log_info "Generating password hash..."
+    # Use openssl for SHA-512 password hashing (should be available in NixOS installer)
+    hashed_password=$(echo -n "$USER_PASSWORD" | openssl passwd -6 -stdin 2>/dev/null)
+    if [[ $? -ne 0 || -z "$hashed_password" ]]; then
+        log_error "Failed to generate password hash with openssl. Trying alternative method..."
+        # Fallback: try mkpasswd with different options
+        hashed_password=$(mkpasswd -5 "$USER_PASSWORD" 2>/dev/null || mkpasswd -m sha-512 "$USER_PASSWORD" 2>/dev/null)
+        if [[ $? -ne 0 || -z "$hashed_password" ]]; then
+            log_error "Failed to generate password hash. Password hashing tools not available."
+            exit 1
+        fi
+    fi
 
     cat >> "$temp_secrets" << EOF
 password: "$hashed_password"
