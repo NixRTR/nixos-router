@@ -8,6 +8,11 @@ set -euo pipefail
 # Configuration
 REPO_URL="https://github.com/beardedtek/nixos-router.git"  # Update this with your actual repo URL
 
+# Initialize variables
+PPPOE_USER=""
+PPPOE_PASS=""
+USER_PASSWORD=""
+
 # Interactive configuration
 echo "Available disks:"
 lsblk -d -n -o NAME,SIZE,MODEL | grep -v loop
