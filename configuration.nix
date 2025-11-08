@@ -1,8 +1,13 @@
 # Edit this configuration file to define what should be installed on
 # your system.  Help is available in the configuration.nix(5) man page
-# and in the NixOS manual (accessible by running ‘nixos-help’).
+# and in the NixOS manual (accessible by running 'nixos-help').
 
 { config, pkgs, ... }:
+
+let
+  # Import router configuration variables
+  routerConfig = import ./router-config.nix;
+in
 
 {
   imports =
@@ -15,27 +20,26 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  networking.hostName = "nixos"; # Define your hostname.
+  networking.hostName = routerConfig.hostname; # Define your hostname.
 
   router = {
     enable = true;
     wan = {
-       type = "dhcp";
-       interface = "eno1";
-#      type = "pppoe";
-#      interface = "eno1";
-#      pppoe = {
-#        passwordFile = config.sops.secrets."pppoe-password".path;
-#        user = config.sops.secrets."pppoe-username".path;
-#        service = null;
-#        ipv6 = false;
-#      };
-    };
+       type = routerConfig.wan.type;
+       interface = routerConfig.wan.interface;
+    } // (if routerConfig.wan.type == "pppoe" then {
+      pppoe = {
+        passwordFile = config.sops.secrets."pppoe-password".path;
+        user = config.sops.secrets."pppoe-username".path;
+        service = null;
+        ipv6 = false;
+      };
+    } else {});
     lan = {
-      bridge.interfaces = [ "enp4s0" "enp5s0" "enp6s0" "enp7s0" ];
+      bridge.interfaces = routerConfig.lan.interfaces;
       ipv4 = {
-        address = "192.168.4.1";
-        prefixLength = 24;
+        address = routerConfig.lan.ip;
+        prefixLength = routerConfig.lan.prefix;
       };
       ipv6 = {
         enable = false;
@@ -46,32 +50,32 @@
       allowedUDPPorts = [ 80 443 22000 4242];
     };
     dnsmasq = {
-      rangeStart = "192.168.4.100";
-      rangeEnd = "192.168.4.200";
+      rangeStart = routerConfig.dhcp.start;
+      rangeEnd = routerConfig.dhcp.end;
     };
     portForwards = [
       {
         proto = "both";
         externalPort = 80;
-        destination = "192.168.2.33";
+        destination = routerConfig.lan.ip;
         destinationPort = 80;
       }
       {
         proto = "both";
         externalPort = 443;
-        destination = "192.168.2.33";
+        destination = routerConfig.lan.ip;
         destinationPort = 443;
       }
       {
         proto = "both";
         externalPort = 22000;
-        destination = "192.168.2.33";
+        destination = routerConfig.lan.ip;
         destinationPort = 22000;
       }
       {
         proto = "both";
         externalPort = 4242;
-        destination = "192.168.2.31";
+        destination = routerConfig.lan.ip;
         destinationPort = 4242;
       }
     ];
@@ -107,15 +111,15 @@
   };
 
   # Set your time zone.
-  time.timeZone = "America/Anchorage";
+  time.timeZone = routerConfig.timezone;
 
   # Select internationalisation properties.
   i18n.defaultLocale = "en_US.UTF-8";
 
   # Define a user account. Don't forget to set a password with 'passwd'.
-  users.users.routeradmin = {
+  users.users.${routerConfig.username} = {
     isNormalUser = true;
-    description = "Router administrator";
+    description = routerConfig.username;
     extraGroups = [ "wheel" ];
     packages = with pkgs; [];
     hashedPasswordFile = config.sops.secrets."password".path;
@@ -124,7 +128,7 @@
   # Enable passwordless sudo for routeradmin
   security.sudo.extraRules = [
     {
-      users = [ "routeradmin" ];
+      users = [ routerConfig.username ];
       commands = [
         {
           command = "ALL";
