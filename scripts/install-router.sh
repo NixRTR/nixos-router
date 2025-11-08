@@ -333,15 +333,29 @@ EOF
     # Generate hashed password for the user
     local hashed_password
     log_info "Generating password hash..."
-    # Use openssl for SHA-512 password hashing (should be available in NixOS installer)
-    hashed_password=$(echo -n "$USER_PASSWORD" | openssl passwd -6 -stdin 2>/dev/null)
-    if [[ $? -ne 0 || -z "$hashed_password" ]]; then
-        log_error "Failed to generate password hash with openssl. Trying alternative method..."
-        # Fallback: try mkpasswd with different options
-        hashed_password=$(mkpasswd -5 "$USER_PASSWORD" 2>/dev/null || mkpasswd -m sha-512 "$USER_PASSWORD" 2>/dev/null)
-        if [[ $? -ne 0 || -z "$hashed_password" ]]; then
-            log_error "Failed to generate password hash. Password hashing tools not available."
-            exit 1
+
+    # Use mkpasswd (from whois package) - should be available in NixOS
+    if command -v mkpasswd >/dev/null 2>&1; then
+        log_info "Using mkpasswd for password hashing..."
+        # Try different mkpasswd syntaxes for SHA-512
+        hashed_password=$(mkpasswd -m sha-512 "$USER_PASSWORD" 2>/dev/null)
+        if [[ $? -eq 0 && -n "$hashed_password" ]]; then
+            log_info "Successfully generated SHA-512 hash with mkpasswd"
+        else
+            log_warning "mkpasswd -m sha-512 failed, trying -5 option..."
+            hashed_password=$(mkpasswd -5 "$USER_PASSWORD" 2>/dev/null)
+            if [[ $? -eq 0 && -n "$hashed_password" ]]; then
+                log_info "Successfully generated hash with mkpasswd -5"
+            else
+                log_error "mkpasswd failed. Trying openssl as fallback..."
+                hashed_password=$(echo -n "$USER_PASSWORD" | openssl passwd -6 -stdin 2>/dev/null)
+                if [[ $? -eq 0 && -n "$hashed_password" ]]; then
+                    log_info "Successfully generated hash with openssl"
+                else
+                    log_error "All password hashing methods failed."
+                    exit 1
+                fi
+            fi
         fi
     fi
 
