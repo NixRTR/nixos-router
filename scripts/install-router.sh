@@ -316,8 +316,7 @@ setup_secrets() {
     else
         log_info "Generating new Age key"
         # Generate Age key
-        nix run nixpkgs#age --extra-experimental-features nix-command\
-            --extra-experimental-features flakes -- --output /mnt/var/lib/sops-nix/key.txt generate-keypair
+        nix shell --experimental-features nix-command --extra-experimental-features flakes nixpkgs#age -c age-keygen -o /mnt/var/lib/sops-nix/key.txt
     fi
 
     # Copy Age key for root user
