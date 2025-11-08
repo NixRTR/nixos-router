@@ -323,8 +323,8 @@ setup_secrets() {
     cp /mnt/var/lib/sops-nix/key.txt /mnt/root/.config/sops/age/keys.txt
     chmod 400 /mnt/root/.config/sops/age/keys.txt
 
-    # Get public key for user
-    AGE_PUBKEY=$(nix shell --experimental-features nix-command --extra-experimental-features flakes nixpkgs#age -c age --public-key < /mnt/var/lib/sops-nix/key.txt)
+    # Get public key for user (extract from the private key file comments)
+    AGE_PUBKEY=$(grep "# public key:" /mnt/var/lib/sops-nix/key.txt | cut -d' ' -f4)
 
     log_success "Age keys configured"
     log_warning "IMPORTANT: Save this public key for encrypting secrets:"
