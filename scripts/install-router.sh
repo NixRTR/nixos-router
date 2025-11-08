@@ -316,32 +316,30 @@ create_and_encrypt_secrets() {
     log_info "Creating and encrypting secrets"
 
     # Create temporary plaintext secrets file
-    local temp_secrets="/tmp/secrets-plain.yaml"
+    local secrets_yaml="/tmp/secrets-plain.yaml"
 
-    cat > "$temp_secrets" << EOF
+    cat > "$secrets_yaml" << EOF
 # Router secrets - encrypted with Age
 EOF
 
     # Include PPPoE credentials if provided
     if [[ -n "$PPPOE_USER" && -n "$PPPOE_PASS" ]]; then
-        cat >> "$temp_secrets" << EOF
+        cat >> "$secrets_yaml" << EOF
 pppoe-username: "$PPPOE_USER"
 pppoe-password: "$PPPOE_PASS"
 EOF
     fi
 
     # Store plain text password (will be hashed at runtime)
-    cat >> "$temp_secrets" << EOF
+    cat >> "$secrets_yaml" << EOF
 password: "$USER_PASSWORD"
 EOF
 
     # Encrypt the secrets file
     log_info "Encrypting secrets with Age key"
     nix shell --experimental-features nix-command --extra-experimental-features flakes nixpkgs#sops -c \
-        sops --encrypt --age $(grep -o 'age1[0-9a-z]*' /mnt/var/lib/sops-nix/key.txt | head -1) "$temp_secrets" > /mnt/etc/nixos/secrets/secrets.yaml
+        sops --encrypt --age $(grep -o 'age1[0-9a-z]*' /mnt/var/lib/sops-nix/key.txt | head -1) --in-place $secrets_yaml
 
-    # Clean up temporary file
-    rm -f "$temp_secrets"
 
     log_success "Secrets encrypted and saved to /mnt/etc/nixos/secrets/secrets.yaml"
     log_info "Your secrets are now securely encrypted with your Age key"
