@@ -336,7 +336,8 @@ EOF
     # Encrypt the secrets file
     log_info "Encrypting secrets with Age key"
     export SOPS_AGE_KEY_FILE="/mnt/var/lib/sops-nix/key.txt"
-    nix shell --experimental-features nix-command --extra-experimental-features flakes nixpkgs#sops -c sops --encrypt "$temp_secrets" > /mnt/etc/nixos/secrets/secrets.yaml
+    nix shell --experimental-features nix-command --extra-experimental-features flakes nixpkgs#sops -c \
+        sops --encrypt "$temp_secrets" > /mnt/etc/nixos/secrets/secrets.yaml
 
     # Clean up temporary file
     rm -f "$temp_secrets"
