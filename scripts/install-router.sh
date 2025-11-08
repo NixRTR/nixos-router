@@ -168,6 +168,29 @@ format_partitions() {
     # Format root partition with Btrfs (force overwrite any existing filesystem)
     mkfs.btrfs -f -L nixos "${DISK}2"
 
+    # Ensure partitions are recognized and have UUIDs
+    partprobe "$DISK" || true
+    sleep 2
+
+    # Verify UUIDs are available
+    local root_uuid efi_uuid
+    root_uuid=$(blkid -s UUID -o value "${DISK}2" 2>/dev/null)
+    efi_uuid=$(blkid -s UUID -o value "${DISK}1" 2>/dev/null)
+
+    if [[ -z "$root_uuid" || -z "$efi_uuid" ]]; then
+        log_warning "UUIDs not immediately available, waiting longer..."
+        sleep 3
+        root_uuid=$(blkid -s UUID -o value "${DISK}2" 2>/dev/null)
+        efi_uuid=$(blkid -s UUID -o value "${DISK}1" 2>/dev/null)
+    fi
+
+    if [[ -n "$root_uuid" && -n "$efi_uuid" ]]; then
+        log_info "Root UUID: $root_uuid"
+        log_info "EFI UUID: $efi_uuid"
+    else
+        log_warning "UUIDs still not available - system may have boot issues"
+    fi
+
     log_success "Partitions formatted"
 }
 
@@ -175,12 +198,28 @@ format_partitions() {
 mount_filesystems() {
     log_info "Mounting filesystems"
 
-    # Mount root partition
-    mount "${DISK}2" /mnt
+    # Ensure partitions are recognized
+    partprobe "$DISK" || true
+    sleep 1
 
-    # Create and mount EFI partition
-    mkdir -p /mnt/boot
-    mount "${DISK}1" /mnt/boot
+    # Get UUIDs for stable mounting
+    local root_uuid
+    local efi_uuid
+
+    root_uuid=$(blkid -s UUID -o value "${DISK}2" 2>/dev/null)
+    efi_uuid=$(blkid -s UUID -o value "${DISK}1" 2>/dev/null)
+
+    if [[ -n "$root_uuid" && -n "$efi_uuid" ]]; then
+        log_info "Mounting by UUID for stability"
+        mount "UUID=$root_uuid" /mnt
+        mkdir -p /mnt/boot
+        mount "UUID=$efi_uuid" /mnt/boot
+    else
+        log_warning "UUIDs not available, mounting by device name"
+        mount "${DISK}2" /mnt
+        mkdir -p /mnt/boot
+        mount "${DISK}1" /mnt/boot
+    fi
 
     log_success "Filesystems mounted"
 }
@@ -189,8 +228,22 @@ mount_filesystems() {
 generate_config() {
     log_info "Generating NixOS configuration"
 
+    # Ensure filesystems are properly detected
+    partprobe "$DISK" || true
+    sleep 1
+
     # Generate hardware configuration
     nixos-generate-config --root /mnt
+
+    # Verify hardware configuration was generated correctly
+    if [[ -f /mnt/etc/nixos/hardware-configuration.nix ]]; then
+        log_info "Hardware configuration generated successfully"
+        # Show the relevant filesystem entries
+        grep -A5 -B5 "fileSystems" /mnt/etc/nixos/hardware-configuration.nix || true
+    else
+        log_error "Hardware configuration generation failed"
+        exit 1
+    fi
 
     log_success "NixOS configuration generated"
 }
@@ -205,6 +258,23 @@ setup_router_config() {
     # Copy configuration files
     cp -r /mnt/etc/nixos/router-config/* /mnt/etc/nixos/
     rm -rf /mnt/etc/nixos/router-config  # Remove the cloned repo, keep only contents
+
+    # Update hardware-configuration.nix for correct filesystem type
+    log_info "Updating hardware configuration for Btrfs filesystem"
+    if [[ -f /mnt/etc/nixos/hardware-configuration.nix ]]; then
+        log_info "Original hardware config filesystem entries:"
+        grep -A3 -B3 "fsType\|fileSystems" /mnt/etc/nixos/hardware-configuration.nix || true
+
+        # Replace ext4 with btrfs in filesystem configuration
+        sed -i 's|"ext4"|"btrfs"|g' /mnt/etc/nixos/hardware-configuration.nix
+        sed -i 's|fsType = "ext4"|fsType = "btrfs"|g' /mnt/etc/nixos/hardware-configuration.nix
+
+        log_info "Updated hardware config filesystem entries:"
+        grep -A3 -B3 "fsType\|fileSystems" /mnt/etc/nixos/hardware-configuration.nix || true
+        log_info "Updated filesystem type to Btrfs in hardware configuration"
+    else
+        log_warning "Hardware configuration file not found"
+    fi
 
     # Generate router configuration file
     log_info "Generating router configuration file"
