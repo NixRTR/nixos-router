@@ -316,7 +316,8 @@ setup_secrets() {
     else
         log_info "Generating new Age key"
         # Generate Age key
-        nix run nixpkgs#age --extra-experimental-features nix-command -- generate-keypair \
+        nix run nixpkgs#age --extra-experimental-features nix-command\
+            --extra-experimental-features flakes -- generate-keypair \
             --output /mnt/var/lib/sops-nix/key.txt
     fi
 
