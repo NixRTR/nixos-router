@@ -2,11 +2,12 @@
 # your system.  Help is available in the configuration.nix(5) man page
 # and in the NixOS manual (accessible by running 'nixos-help').
 
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 
 let
   # Import router configuration variables
   routerConfig = import ./router-config.nix;
+  pppoeEnabled = routerConfig.wan.type == "pppoe";
 in
 
 {
@@ -27,7 +28,7 @@ in
     wan = {
        type = routerConfig.wan.type;
        interface = routerConfig.wan.interface;
-    } // (if routerConfig.wan.type == "pppoe" then {
+    } // (if pppoeEnabled then {
       pppoe = {
         passwordFile = config.sops.secrets."pppoe-password".path;
         user = config.sops.secrets."pppoe-username".path;
@@ -87,19 +88,8 @@ in
       keyFile = "/var/lib/sops-nix/key.txt";
       generateKey = true;
     };
-    secrets = {
-      "pppoe-password" = {
-        path = "/run/secrets/pppoe-password";
-        owner = "root";
-        group = "root";
-        mode = "0400";
-      };
-      "pppoe-username" = {
-        path = "/run/secrets/pppoe-username";
-        owner = "root";
-        group = "root";
-        mode = "0400";
-      };
+    secrets =
+      {
       "password" = {
         path = "/run/secrets/password";
         owner = "root";
@@ -107,7 +97,21 @@ in
         mode = "0400";
         neededForUsers = true;
       };
-    };
+      }
+      // lib.optionalAttrs pppoeEnabled {
+        "pppoe-password" = {
+          path = "/run/secrets/pppoe-password";
+          owner = "root";
+          group = "root";
+          mode = "0400";
+        };
+        "pppoe-username" = {
+          path = "/run/secrets/pppoe-username";
+          owner = "root";
+          group = "root";
+          mode = "0400";
+        };
+      };
   };
 
   # Set your time zone.
