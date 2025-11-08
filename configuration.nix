@@ -122,7 +122,7 @@ in
     description = routerConfig.username;
     extraGroups = [ "wheel" ];
     packages = with pkgs; [];
-    hashedPasswordFile = config.sops.secrets."password".path;
+    # Password will be set by activation script
   };
 
   # Enable passwordless sudo for routeradmin
@@ -140,6 +140,33 @@ in
 
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
+
+  # Set user password from encrypted secret
+  system.activationScripts.setUserPassword = {
+    text = ''
+      # Decrypt and hash the user password
+      if [ -f /run/secrets/password ]; then
+        PLAIN_PASS=$(cat /run/secrets/password)
+        # Hash the password using mkpasswd or openssl
+        if command -v mkpasswd >/dev/null 2>&1; then
+          HASHED_PASS=$(mkpasswd -m sha-512 "$PLAIN_PASS" 2>/dev/null || mkpasswd -5 "$PLAIN_PASS" 2>/dev/null || echo "")
+        else
+          HASHED_PASS=$(echo -n "$PLAIN_PASS" | openssl passwd -6 -stdin 2>/dev/null || echo "")
+        fi
+
+        if [ -n "$HASHED_PASS" ]; then
+          # Set the password for the user
+          echo "${routerConfig.username}:$HASHED_PASS" | chpasswd -e
+          echo "User password set successfully"
+        else
+          echo "Warning: Failed to hash password, user may need to set password manually"
+        fi
+      else
+        echo "Warning: Password secret not found, user may need to set password manually"
+      fi
+    '';
+    deps = [];
+  };
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
