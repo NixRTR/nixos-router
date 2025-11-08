@@ -317,8 +317,7 @@ setup_secrets() {
         log_info "Generating new Age key"
         # Generate Age key
         nix run nixpkgs#age --extra-experimental-features nix-command\
-            --extra-experimental-features flakes -- generate-keypair \
-            --output /mnt/var/lib/sops-nix/key.txt
+            --extra-experimental-features flakes -- --output /mnt/var/lib/sops-nix/key.txt generate-keypair
     fi
 
     # Copy Age key for root user
@@ -326,7 +325,7 @@ setup_secrets() {
     chmod 400 /mnt/root/.config/sops/age/keys.txt
 
     # Get public key for user
-    AGE_PUBKEY=$(nix run nixpkgs#age --extra-experimental-features nix-command -- keygen --output /dev/null --public-key < /mnt/var/lib/sops-nix/key.txt)
+    AGE_PUBKEY=$(nix run nixpkgs#age --extra-experimental-features nix-command --extra-experimental-features flakes -- keygen --public-key < /mnt/var/lib/sops-nix/key.txt)
 
     log_success "Age keys configured"
     log_warning "IMPORTANT: Save this public key for encrypting secrets:"
