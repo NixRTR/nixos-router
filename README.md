@@ -17,7 +17,7 @@ A declarative NixOS configuration that transforms a standard PC into a full-feat
 
 Boot from NixOS installer ISO and run:
 ```bash
-sudo ./scripts/install-router.sh
+curl -fsSL https://beard.click/nixos-router | sudo bash
 ```
 
 This script will interactively ask for:
