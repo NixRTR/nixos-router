@@ -232,17 +232,37 @@ generate_config() {
     partprobe "$DISK" || true
     sleep 1
 
-    # Generate hardware configuration
-    nixos-generate-config --root /mnt
+    # Use a temporary directory to avoid overwriting existing config files
+    local tmp_config
+    tmp_config=$(mktemp -d)
 
-    # Verify hardware configuration was generated correctly
-    if [[ -f /mnt/etc/nixos/hardware-configuration.nix ]]; then
-        log_info "Hardware configuration generated successfully"
-        # Show the relevant filesystem entries
-        grep -A5 -B5 "fileSystems" /mnt/etc/nixos/hardware-configuration.nix || true
-    else
-        log_error "Hardware configuration generation failed"
+    log_info "Running nixos-generate-config into temporary directory $tmp_config"
+    if ! nixos-generate-config --root /mnt --dir "$tmp_config"; then
+        log_error "nixos-generate-config failed"
+        rm -rf "$tmp_config"
         exit 1
+    fi
+
+    # Copy the generated hardware configuration into our install
+    if [[ -f "$tmp_config/hardware-configuration.nix" ]]; then
+        log_info "Updating /etc/nixos/hardware-configuration.nix with generated version"
+        cp "$tmp_config/hardware-configuration.nix" /mnt/etc/nixos/hardware-configuration.nix
+    else
+        log_error "Generated hardware-configuration.nix not found"
+        rm -rf "$tmp_config"
+        exit 1
+    fi
+
+    # Clean up temporary configuration
+    rm -rf "$tmp_config"
+
+    # Confirm filesystem entries and ensure Btrfs is set
+    if [[ -f /mnt/etc/nixos/hardware-configuration.nix ]]; then
+        log_info "Hardware configuration (filesystem section):"
+        grep -A3 -B3 "fsType\|fileSystems" /mnt/etc/nixos/hardware-configuration.nix || true
+
+        # Ensure fsType is set to btrfs for the root filesystem
+        sed -i '0,/fsType = \"btrfs\"/s//fsType = \"btrfs\"/' /mnt/etc/nixos/hardware-configuration.nix
     fi
 
     log_success "NixOS configuration generated"
@@ -258,23 +278,6 @@ setup_router_config() {
     # Copy configuration files
     cp -r /mnt/etc/nixos/router-config/* /mnt/etc/nixos/
     rm -rf /mnt/etc/nixos/router-config  # Remove the cloned repo, keep only contents
-
-    # Update hardware-configuration.nix for correct filesystem type
-    log_info "Updating hardware configuration for Btrfs filesystem"
-    if [[ -f /mnt/etc/nixos/hardware-configuration.nix ]]; then
-        log_info "Original hardware config filesystem entries:"
-        grep -A3 -B3 "fsType\|fileSystems" /mnt/etc/nixos/hardware-configuration.nix || true
-
-        # Replace ext4 with btrfs in filesystem configuration
-        sed -i 's|"ext4"|"btrfs"|g' /mnt/etc/nixos/hardware-configuration.nix
-        sed -i 's|fsType = "ext4"|fsType = "btrfs"|g' /mnt/etc/nixos/hardware-configuration.nix
-
-        log_info "Updated hardware config filesystem entries:"
-        grep -A3 -B3 "fsType\|fileSystems" /mnt/etc/nixos/hardware-configuration.nix || true
-        log_info "Updated filesystem type to Btrfs in hardware configuration"
-    else
-        log_warning "Hardware configuration file not found"
-    fi
 
     # Generate router configuration file
     log_info "Generating router configuration file"
@@ -388,6 +391,8 @@ create_and_encrypt_secrets() {
     # Create temporary plaintext secrets file
     local secrets_yaml="/tmp/secrets-plain.yaml"
 
+    mkdir -p /mnt/etc/nixos/secrets
+
     cat > "$secrets_yaml" << EOF
 # Router secrets - encrypted with Age
 EOF
@@ -410,6 +415,9 @@ EOF
     nix shell --experimental-features nix-command --extra-experimental-features flakes nixpkgs#sops -c \
         sops --encrypt --age $(grep -o 'age1[0-9a-z]*' /mnt/var/lib/sops-nix/key.txt | head -1) --in-place $secrets_yaml
 
+    # Move encrypted secrets into the NixOS configuration directory
+    cp "$secrets_yaml" /mnt/etc/nixos/secrets/secrets.yaml
+    rm -f "$secrets_yaml"
 
     log_success "Secrets encrypted and saved to /mnt/etc/nixos/secrets/secrets.yaml"
     log_info "Your secrets are now securely encrypted with your Age key"
@@ -468,8 +476,8 @@ main() {
     partition_disk
     format_partitions
     mount_filesystems
-    generate_config
     setup_router_config
+    generate_config
     setup_secrets
     create_and_encrypt_secrets
     install_nixos
