@@ -8,9 +8,26 @@
 
 ## Quick Start
 
+### Option 1: Automated Installation (Recommended)
+
+For fresh installations, boot from NixOS installer ISO:
+
+```bash
+# Download and run the installation script
+curl -fsSL https://raw.githubusercontent.com/beardedtek/nixos-router/main/scripts/install-router.sh | sudo bash
+```
+
+The script will interactively prompt for:
+- **Target disk** (displays available disks)
+- **Hostname** (default: nixos-router)
+- **Timezone** (default: America/Anchorage)
+- **Age key** (use existing or generate new)
+
+### Option 2: Manual Setup
+
 1. **Clone and enter the repository**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/williamhCode/nixos-router.git
    cd nixos-router
    nix develop  # Enter development shell
    ```

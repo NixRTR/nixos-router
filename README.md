@@ -13,6 +13,26 @@ A declarative NixOS configuration that transforms a standard PC into a full-feat
 
 ## Quick Start
 
+### Automated Installation (Recommended)
+
+Boot from NixOS installer ISO and run:
+```bash
+sudo ./scripts/install-router.sh
+```
+
+This script will interactively ask for:
+- **Target disk** (shows available disks)
+- **Hostname** (default: nixos-router)
+- **Timezone** (default: America/Anchorage)
+
+Then it will:
+- Partition and format your selected disk
+- Install NixOS with the router configuration
+- Set up Age keys (generate new or use existing)
+- Set up the basic router system
+
+### Manual Installation
+
 1. **Install NixOS** with flakes enabled
 2. **Clone this repository**
 3. **Generate Age key** for encryption:

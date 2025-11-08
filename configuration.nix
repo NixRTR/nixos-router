@@ -121,6 +121,19 @@
     hashedPasswordFile = config.sops.secrets."password".path;
   };
 
+  # Enable passwordless sudo for routeradmin
+  security.sudo.extraRules = [
+    {
+      users = [ "routeradmin" ];
+      commands = [
+        {
+          command = "ALL";
+          options = [ "NOPASSWD" ];
+        }
+      ];
+    }
+  ];
+
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
 
