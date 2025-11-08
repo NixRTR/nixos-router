@@ -108,8 +108,16 @@ check_installer() {
 partition_disk() {
     log_info "Partitioning disk: $DISK"
 
-    # Wipe existing partition table
+    # Unmount any existing mounts on the disk
+    for part in "${DISK}"[0-9]*; do
+        if mountpoint -q "$part" 2>/dev/null; then
+            umount "$part" || true
+        fi
+    done
+
+    # Wipe existing partition table and filesystem signatures
     wipefs -a "$DISK"
+    sgdisk --zap-all "$DISK" || true
 
     # Create GPT partition table
     parted "$DISK" -- mklabel gpt
@@ -121,6 +129,10 @@ partition_disk() {
     # Create root partition (remaining space)
     parted "$DISK" -- mkpart primary 512MiB 100%
 
+    # Wait for kernel to recognize new partitions
+    partprobe "$DISK" || true
+    sleep 2
+
     log_success "Disk partitioned successfully"
 }
 
@@ -131,8 +143,8 @@ format_partitions() {
     # Format EFI partition
     mkfs.fat -F 32 -n EFI "${DISK}1"
 
-    # Format root partition with Btrfs
-    mkfs.btrfs -L nixos "${DISK}2"
+    # Format root partition with Btrfs (force overwrite any existing filesystem)
+    mkfs.btrfs -f -L nixos "${DISK}2"
 
     log_success "Partitions formatted"
 }
