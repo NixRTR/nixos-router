@@ -24,6 +24,12 @@ This script will interactively ask for:
 - **Target disk** (shows available disks)
 - **Hostname** (default: nixos-router)
 - **Timezone** (default: America/Anchorage)
+- **WAN interface** (shows available interfaces)
+- **WAN connection type** (DHCP or PPPoE)
+- **LAN IP address** and subnet
+- **DHCP range** for clients
+- **LAN bridge interfaces**
+- **Age key** (use existing or generate new)
 
 Then it will:
 - Partition and format your selected disk

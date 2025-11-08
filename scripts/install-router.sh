@@ -22,6 +22,48 @@ HOSTNAME="${HOSTNAME_INPUT:-nixos-router}"
 read -p "Enter timezone [America/Anchorage]: " TIMEZONE_INPUT
 TIMEZONE="${TIMEZONE_INPUT:-America/Anchorage}"
 
+# Network configuration
+echo
+echo "Network Configuration:"
+echo "Available network interfaces:"
+ip link show | grep -E "^[0-9]+:" | awk '{print $2}' | sed 's/://' | grep -v lo
+echo
+
+read -p "Enter WAN interface [eno1]: " WAN_INTERFACE_INPUT
+WAN_INTERFACE="${WAN_INTERFACE_INPUT:-eno1}"
+
+echo "WAN connection types:"
+echo "1) DHCP (most home networks)"
+echo "2) PPPoE (some ISPs)"
+read -p "Enter WAN type (1 or 2) [1]: " WAN_TYPE_CHOICE
+case ${WAN_TYPE_CHOICE:-1} in
+    1) WAN_TYPE="dhcp" ;;
+    2) WAN_TYPE="pppoe" ;;
+    *) WAN_TYPE="dhcp" ;;
+esac
+
+if [[ "$WAN_TYPE" == "pppoe" ]]; then
+    read -p "Enter PPPoE username: " PPPOE_USER
+    read -s -p "Enter PPPoE password: " PPPOE_PASS
+    echo
+fi
+
+read -p "Enter LAN IP address [192.168.4.1]: " LAN_IP_INPUT
+LAN_IP="${LAN_IP_INPUT:-192.168.4.1}"
+
+read -p "Enter LAN subnet prefix length [24]: " LAN_PREFIX_INPUT
+LAN_PREFIX="${LAN_PREFIX_INPUT:-24}"
+
+read -p "Enter DHCP range start [192.168.4.100]: " DHCP_START_INPUT
+DHCP_START="${DHCP_START_INPUT:-192.168.4.100}"
+
+read -p "Enter DHCP range end [192.168.4.200]: " DHCP_END_INPUT
+DHCP_END="${DHCP_END_INPUT:-192.168.4.200}"
+
+echo "Available interfaces for LAN bridge (space-separated):"
+read -p "Enter LAN bridge interfaces [enp4s0 enp5s0 enp6s0 enp7s0]: " LAN_INTERFACES_INPUT
+LAN_INTERFACES="${LAN_INTERFACES_INPUT:-enp4s0 enp5s0 enp6s0 enp7s0}"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -134,6 +176,31 @@ setup_router_config() {
     sed -i "s/networking.hostName = \".*\";/networking.hostName = \"$HOSTNAME\";/g" /mnt/etc/nixos/configuration.nix
     sed -i "s/time.timeZone = \".*\";/time.timeZone = \"$TIMEZONE\";/g" /mnt/etc/nixos/configuration.nix
 
+    # Update network configuration
+    sed -i "s/interface = \"eno1\";/interface = \"$WAN_INTERFACE\";/g" /mnt/etc/nixos/configuration.nix
+
+    if [[ "$WAN_TYPE" == "pppoe" ]]; then
+        # Switch to PPPoE configuration
+        sed -i 's/      type = "dhcp";/      type = "pppoe";/g' /mnt/etc/nixos/configuration.nix
+        sed -i 's/#      type = "pppoe";/       type = "pppoe";/g' /mnt/etc/nixos/configuration.nix
+        sed -i 's/#      pppoe = {/       pppoe = {/g' /mnt/etc/nixos/configuration.nix
+        sed -i 's/#        passwordFile = config.sops.secrets."pppoe-password".path;/         passwordFile = config.sops.secrets."pppoe-password".path;/g' /mnt/etc/nixos/configuration.nix
+        sed -i 's/#        user = config.sops.secrets."pppoe-username".path;/         user = config.sops.secrets."pppoe-username".path;/g' /mnt/etc/nixos/configuration.nix
+        sed -i 's/#        service = null;/         service = null;/g' /mnt/etc/nixos/configuration.nix
+        sed -i 's/#        ipv6 = false;/         ipv6 = false;/g' /mnt/etc/nixos/configuration.nix
+    fi
+
+    # Update LAN configuration
+    sed -i "s/address = \"192\.168\.4\.1\";/address = \"$LAN_IP\";/g" /mnt/etc/nixos/configuration.nix
+    sed -i "s/prefixLength = 24;/prefixLength = $LAN_PREFIX;/g" /mnt/etc/nixos/configuration.nix
+    sed -i "s/rangeStart = \"192\.168\.4\.100\";/rangeStart = \"$DHCP_START\";/g" /mnt/etc/nixos/configuration.nix
+    sed -i "s/rangeEnd = \"192\.168\.4\.200\";/rangeEnd = \"$DHCP_END\";/g" /mnt/etc/nixos/configuration.nix
+
+    # Update LAN interfaces - this is more complex as it's an array
+    # Convert space-separated string to Nix array format
+    LAN_INTERFACES_NIX=$(echo "$LAN_INTERFACES" | sed 's/ /" "/g' | sed 's/^/[/g' | sed 's/$/"];/g')
+    sed -i "s/bridge\.interfaces = \[ \"enp4s0\" \"enp5s0\" \"enp6s0\" \"enp7s0\" \];/bridge.interfaces = $LAN_INTERFACES_NIX/g" /mnt/etc/nixos/configuration.nix
+
     log_success "Router configuration copied and customized"
 }
 
@@ -202,9 +269,22 @@ create_secrets_template() {
     cat > /mnt/etc/nixos/secrets/secrets.yaml << EOF
 # Example secrets - replace with your actual values
 # Encrypt this file with: sops --encrypt --age $AGE_PUBKEY secrets.yaml
+EOF
 
-pppoe-username: "your-isp-username"
-pppoe-password: "your-isp-password"
+    if [[ "$WAN_TYPE" == "pppoe" ]]; then
+        cat >> /mnt/etc/nixos/secrets/secrets.yaml << EOF
+pppoe-username: "$PPPOE_USER"
+pppoe-password: "$PPPOE_PASS"
+EOF
+    else
+        cat >> /mnt/etc/nixos/secrets/secrets.yaml << EOF
+# PPPoE credentials (only needed if using PPPoE WAN)
+# pppoe-username: "your-isp-username"
+# pppoe-password: "your-isp-password"
+EOF
+    fi
+
+    cat >> /mnt/etc/nixos/secrets/secrets.yaml << EOF
 password: "$(mkpasswd -m sha512)"
 EOF
 

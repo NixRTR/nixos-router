@@ -21,6 +21,11 @@ The script will interactively prompt for:
 - **Target disk** (displays available disks)
 - **Hostname** (default: nixos-router)
 - **Timezone** (default: America/Anchorage)
+- **WAN interface** (shows available interfaces)
+- **WAN connection type** (DHCP or PPPoE)
+- **LAN IP address** and subnet
+- **DHCP range** for clients
+- **LAN bridge interfaces**
 - **Age key** (use existing or generate new)
 
 ### Option 2: Manual Setup
