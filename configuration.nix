@@ -183,6 +183,9 @@ in
   # Enable the OpenSSH daemon.
   services.openssh.enable = true;
 
+  # Auto-login on the primary console
+  services.getty.autologinUser = routerConfig.username;
+
   system.stateVersion = "25.05"; # Did you read the comment?
 
 }
