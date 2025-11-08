@@ -264,15 +264,28 @@ setup_router_config() {
     # Convert space-separated string to Nix array format
     LAN_INTERFACES_NIX=$(echo "$LAN_INTERFACES" | sed 's/ /" "/g' | sed 's/^/[/g' | sed 's/$/"];/g')
     log_info "Updating LAN interfaces to: $LAN_INTERFACES_NIX"
-    awk -v lan_interfaces="$LAN_INTERFACES_NIX" '
-        /^      bridge\.interfaces = \[ \"enp4s0\" \"enp5s0\" \"enp6s0\" \"enp7s0\" \];$/ {
-            print "      bridge.interfaces = " lan_interfaces
-            next
-        }
-        { print }
-    ' /mnt/etc/nixos/configuration.nix > /tmp/configuration.nix.tmp && mv /tmp/configuration.nix.tmp /mnt/etc/nixos/configuration.nix
+    # Verify the replacement will work
+    if grep -q 'bridge\.interfaces = \[ "enp4s0" "enp5s0" "enp6s0" "enp7s0" \];' /mnt/etc/nixos/configuration.nix; then
+        awk -v lan_interfaces="$LAN_INTERFACES_NIX" '
+            /^      bridge\.interfaces = \[ \"enp4s0\" \"enp5s0\" \"enp6s0\" \"enp7s0\" \];$/ {
+                print "      bridge.interfaces = " lan_interfaces
+                next
+            }
+            { print }
+        ' /mnt/etc/nixos/configuration.nix > /tmp/configuration.nix.tmp && mv /tmp/configuration.nix.tmp /mnt/etc/nixos/configuration.nix
+    else
+        log_warning "LAN interfaces pattern not found, skipping replacement"
+    fi
 
     log_success "Router configuration copied and customized"
+    log_info "Validating Nix syntax..."
+    if nix-instantiate --parse /mnt/etc/nixos/configuration.nix > /dev/null 2>&1; then
+        log_success "Nix syntax validation passed"
+    else
+        log_error "Nix syntax validation failed! Checking configuration..."
+        nix-instantiate --parse /mnt/etc/nixos/configuration.nix
+        exit 1
+    fi
 }
 
 # Setup Age keys and secrets
