@@ -20,19 +20,21 @@
   router = {
     enable = true;
     wan = {
-      type = "pppoe";
-      interface = "en0";
-      pppoe = {
-        passwordFile = config.sops.secrets."pppoe-password".path;
-        user = config.sops.secrets."pppoe-username".path;
-        service = null;
-        ipv6 = false;
-      };
+       type = "dhcp";
+       interface = "eno1";
+#      type = "pppoe";
+#      interface = "eno1";
+#      pppoe = {
+#        passwordFile = config.sops.secrets."pppoe-password".path;
+#        user = config.sops.secrets."pppoe-username".path;
+#        service = null;
+#        ipv6 = false;
+#      };
     };
     lan = {
       bridge.interfaces = [ "enp4s0" "enp5s0" "enp6s0" "enp7s0" ];
       ipv4 = {
-        address = "192.168.2.1";
+        address = "192.168.4.1";
         prefixLength = 24;
       };
       ipv6 = {
@@ -40,13 +42,12 @@
       };
     };
     firewall = {
-      allowedTCPPorts = [ ];
-      allowedUDPPorts = [ ];
+      allowedTCPPorts = [ 80 443 22000 4242];
+      allowedUDPPorts = [ 80 443 22000 4242];
     };
     dnsmasq = {
-      rangeStart = "192.168.2.100";
-      rangeEnd = "192.168.2.200";
-      leaseTime = "5m";
+      rangeStart = "192.168.4.100";
+      rangeEnd = "192.168.4.200";
     };
     portForwards = [
       {

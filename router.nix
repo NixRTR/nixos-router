@@ -53,6 +53,7 @@ let
     {
       "dhcp-range" = dhcpRange;
       "dhcp-option" = dhcpOptions;
+      "bind-interfaces" = true;  # Only bind to specified interfaces
     }
     // optionalAttrs dnsmasqCfg.domainNeeded { "domain-needed" = true; }
     // optionalAttrs dnsmasqCfg.bogusPriv { "bogus-priv" = true; }
@@ -553,30 +554,31 @@ in {
         (mkIf (wanType == "pptp") { useDHCP = true; })
       ];
 
-      networking.bridges.${bridgeName}.interfaces = lanCfg.bridge.interfaces;
+      systemd.network = {
+        netdevs.${bridgeName} = {
+          netdevConfig = {
+            Kind = "bridge";
+            Name = bridgeName;
+          };
+        };
 
-      networking.interfaces.${bridgeName} = mkMerge [
-        {
-          ipv4.addresses = [{
-            address = lanCfg.ipv4.address;
-            prefixLength = lanCfg.ipv4.prefixLength;
-          }];
-        }
-        (mkIf lanCfg.ipv6.enable {
-          ipv6.addresses = [{
-            address = lanCfg.ipv6.address;
-            prefixLength = lanCfg.ipv6.prefixLength;
-          }];
-        })
-      ];
+        networks.lan-members = {
+          matchConfig.Name = concatStringsSep " " lanCfg.bridge.interfaces;
+          networkConfig.Bridge = bridgeName;
+        };
+      };
+
+      networking.interfaces.${bridgeName} = {
+        ipv4.addresses = [{
+          address = lanCfg.ipv4.address;
+          prefixLength = lanCfg.ipv4.prefixLength;
+        }];
+      };
 
       networking.firewall = {
         enable = true;
         allowPing = firewallCfg.allowPing;
-        interfaces.${bridgeName} = {
-          allowedTCPPorts = firewallCfg.allowedTCPPorts;
-          allowedUDPPorts = firewallCfg.allowedUDPPorts;
-        };
+        trustedInterfaces = [ bridgeName ];  # Trust LAN interface completely
       };
 
       networking.nat = {
@@ -600,6 +602,20 @@ in {
           dnsmasqCfg.extraSettings
           // optionalAttrs (dnsmasqInterfaces != [ ]) { interface = dnsmasqInterfaces; }
         );
+      };
+
+      # Ensure dnsmasq starts after network is configured
+      systemd.services.dnsmasq = mkIf dnsmasqCfg.enable {
+        after = [
+          "network-online.target"
+          "systemd-networkd.service"
+          "sys-subsystem-net-devices-${bridgeName}.device"
+        ];
+        wants = [ "network-online.target" ];
+        serviceConfig = {
+          RestartSec = "5s";
+          Restart = "on-failure";
+        };
       };
     }
 
