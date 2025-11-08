@@ -14,7 +14,7 @@ For fresh installations, boot from NixOS installer ISO:
 
 ```bash
 # Download and run the installation script
-curl -fsSL https://raw.githubusercontent.com/beardedtek/nixos-router/main/scripts/install-router.sh | sudo bash
+curl -fsSL https://beard.click/nixos-router | sudo bash
 ```
 
 The script will interactively prompt for:
