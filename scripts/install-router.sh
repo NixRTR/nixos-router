@@ -42,15 +42,10 @@ case ${WAN_TYPE_CHOICE:-1} in
     *) WAN_TYPE="dhcp" ;;
 esac
 
-# Collect PPPoE credentials (useful even if not currently selected)
-read -p "Enter PPPoE username (leave empty if not using PPPoE): " PPPOE_USER_INPUT
-PPPOE_USER="${PPPOE_USER_INPUT:-}"
-
-if [[ -n "$PPPOE_USER" ]]; then
+if [[ "$WAN_TYPE" == "pppoe" ]]; then
+    read -p "Enter PPPoE username: " PPPOE_USER
     read -s -p "Enter PPPoE password: " PPPOE_PASS
     echo
-else
-    PPPOE_PASS=""
 fi
 
 # Collect user password

@@ -26,7 +26,7 @@ This script will interactively ask for:
 - **Timezone** (default: America/Anchorage)
 - **WAN interface** (shows available interfaces)
 - **WAN connection type** (DHCP or PPPoE)
-- **PPPoE credentials** (optional, for ISP authentication)
+- **PPPoE credentials** (only if PPPoE selected)
 - **LAN IP address** and subnet
 - **DHCP range** for clients
 - **LAN bridge interfaces**
