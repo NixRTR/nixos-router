@@ -42,10 +42,32 @@ case ${WAN_TYPE_CHOICE:-1} in
     *) WAN_TYPE="dhcp" ;;
 esac
 
-if [[ "$WAN_TYPE" == "pppoe" ]]; then
-    read -p "Enter PPPoE username: " PPPOE_USER
+# Collect PPPoE credentials (useful even if not currently selected)
+read -p "Enter PPPoE username (leave empty if not using PPPoE): " PPPOE_USER_INPUT
+PPPOE_USER="${PPPOE_USER_INPUT:-}"
+
+if [[ -n "$PPPOE_USER" ]]; then
     read -s -p "Enter PPPoE password: " PPPOE_PASS
     echo
+else
+    PPPOE_PASS=""
+fi
+
+# Collect user password
+read -s -p "Enter password for routeradmin user: " USER_PASSWORD
+echo
+read -s -p "Confirm password for routeradmin user: " USER_PASSWORD_CONFIRM
+echo
+
+# Verify passwords match
+if [[ "$USER_PASSWORD" != "$USER_PASSWORD_CONFIRM" ]]; then
+    log_error "Passwords do not match!"
+    exit 1
+fi
+
+if [[ -z "$USER_PASSWORD" ]]; then
+    log_error "Password cannot be empty!"
+    exit 1
 fi
 
 read -p "Enter LAN IP address [192.168.4.1]: " LAN_IP_INPUT
@@ -285,39 +307,47 @@ setup_secrets() {
     AGE_PUBKEY=$(grep "# public key:" /mnt/var/lib/sops-nix/key.txt | cut -d' ' -f4)
 
     log_success "Age keys configured"
-    log_warning "IMPORTANT: Save this public key for encrypting secrets:"
-    echo "$AGE_PUBKEY"
-    log_warning "You will need it to encrypt your secrets.yaml file"
+    log_info "Age public key: $AGE_PUBKEY"
+    log_info "Keys are ready for encrypting secrets"
 }
 
-# Create initial secrets template
-create_secrets_template() {
-    log_info "Creating secrets template"
+# Create and encrypt secrets
+create_and_encrypt_secrets() {
+    log_info "Creating and encrypting secrets"
 
-    cat > /mnt/etc/nixos/secrets/secrets.yaml << EOF
-# Example secrets - replace with your actual values
-# Encrypt this file with: sops --encrypt --age $AGE_PUBKEY secrets.yaml
+    # Create temporary plaintext secrets file
+    local temp_secrets="/tmp/secrets-plain.yaml"
+
+    cat > "$temp_secrets" << EOF
+# Router secrets - encrypted with Age
 EOF
 
-    if [[ "$WAN_TYPE" == "pppoe" ]]; then
-        cat >> /mnt/etc/nixos/secrets/secrets.yaml << EOF
+    # Include PPPoE credentials if provided
+    if [[ -n "$PPPOE_USER" && -n "$PPPOE_PASS" ]]; then
+        cat >> "$temp_secrets" << EOF
 pppoe-username: "$PPPOE_USER"
 pppoe-password: "$PPPOE_PASS"
 EOF
-    else
-        cat >> /mnt/etc/nixos/secrets/secrets.yaml << EOF
-# PPPoE credentials (only needed if using PPPoE WAN)
-# pppoe-username: "your-isp-username"
-# pppoe-password: "your-isp-password"
-EOF
     fi
 
-    cat >> /mnt/etc/nixos/secrets/secrets.yaml << EOF
-password: "$(mkpasswd -m sha512)"
+    # Generate hashed password for the user
+    local hashed_password
+    hashed_password=$(mkpasswd -m sha512 "$USER_PASSWORD")
+
+    cat >> "$temp_secrets" << EOF
+password: "$hashed_password"
 EOF
 
-    log_warning "Created secrets template at /mnt/etc/nixos/secrets/secrets.yaml"
-    log_warning "You MUST encrypt this file with your Age public key before booting"
+    # Encrypt the secrets file
+    log_info "Encrypting secrets with Age key"
+    export SOPS_AGE_KEY_FILE="/mnt/var/lib/sops-nix/key.txt"
+    nix shell --experimental-features nix-command --extra-experimental-features flakes nixpkgs#sops -c sops --encrypt "$temp_secrets" > /mnt/etc/nixos/secrets/secrets.yaml
+
+    # Clean up temporary file
+    rm -f "$temp_secrets"
+
+    log_success "Secrets encrypted and saved to /mnt/etc/nixos/secrets/secrets.yaml"
+    log_info "Your secrets are now securely encrypted with your Age key"
 }
 
 # Install NixOS
@@ -376,7 +406,7 @@ main() {
     generate_config
     setup_router_config
     setup_secrets
-    create_secrets_template
+    create_and_encrypt_secrets
     install_nixos
     post_install_message
 }
