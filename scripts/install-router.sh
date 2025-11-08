@@ -185,11 +185,33 @@ setup_router_config() {
     rm -rf /mnt/etc/nixos/router-config  # Remove the cloned repo, keep only contents
 
     # Update hostname and timezone in configuration.nix
-    sed -i "s/networking.hostName = \".*\";/networking.hostName = \"$HOSTNAME\";/g" /mnt/etc/nixos/configuration.nix
-    sed -i "s/time.timeZone = \".*\";/time.timeZone = \"$TIMEZONE\";/g" /mnt/etc/nixos/configuration.nix
+    log_info "Updating hostname to: $HOSTNAME"
+    awk -v hostname="$HOSTNAME" '
+        /^networking\.hostName = ".*";$/ {
+            print "networking.hostName = \"" hostname "\";"
+            next
+        }
+        { print }
+    ' /mnt/etc/nixos/configuration.nix > /tmp/configuration.nix.tmp && mv /tmp/configuration.nix.tmp /mnt/etc/nixos/configuration.nix
+
+    log_info "Updating timezone to: $TIMEZONE"
+    awk -v timezone="$TIMEZONE" '
+        /^time\.timeZone = ".*";$/ {
+            print "time.timeZone = \"" timezone "\";"
+            next
+        }
+        { print }
+    ' /mnt/etc/nixos/configuration.nix > /tmp/configuration.nix.tmp && mv /tmp/configuration.nix.tmp /mnt/etc/nixos/configuration.nix
 
     # Update network configuration
-    sed -i "s/interface = \"eno1\";/interface = \"$WAN_INTERFACE\";/g" /mnt/etc/nixos/configuration.nix
+    log_info "Updating WAN interface to: $WAN_INTERFACE"
+    awk -v wan_iface="$WAN_INTERFACE" '
+        /^      interface = "eno1";$/ {
+            print "      interface = \"" wan_iface "\";"
+            next
+        }
+        { print }
+    ' /mnt/etc/nixos/configuration.nix > /tmp/configuration.nix.tmp && mv /tmp/configuration.nix.tmp /mnt/etc/nixos/configuration.nix
 
     if [[ "$WAN_TYPE" == "pppoe" ]]; then
         # Switch to PPPoE configuration
@@ -203,15 +225,52 @@ setup_router_config() {
     fi
 
     # Update LAN configuration
-    sed -i "s/address = \"192\.168\.4\.1\";/address = \"$LAN_IP\";/g" /mnt/etc/nixos/configuration.nix
-    sed -i "s/prefixLength = 24;/prefixLength = $LAN_PREFIX;/g" /mnt/etc/nixos/configuration.nix
-    sed -i "s/rangeStart = \"192\.168\.4\.100\";/rangeStart = \"$DHCP_START\";/g" /mnt/etc/nixos/configuration.nix
-    sed -i "s/rangeEnd = \"192\.168\.4\.200\";/rangeEnd = \"$DHCP_END\";/g" /mnt/etc/nixos/configuration.nix
+    log_info "Updating LAN IP to: $LAN_IP"
+    awk -v lan_ip="$LAN_IP" '
+        /^      address = "192\.168\.4\.1";$/ {
+            print "      address = \"" lan_ip "\";"
+            next
+        }
+        { print }
+    ' /mnt/etc/nixos/configuration.nix > /tmp/configuration.nix.tmp && mv /tmp/configuration.nix.tmp /mnt/etc/nixos/configuration.nix
+
+    log_info "Updating LAN prefix to: $LAN_PREFIX"
+    awk -v lan_prefix="$LAN_PREFIX" '
+        /^      prefixLength = 24;$/ {
+            print "      prefixLength = " lan_prefix ";"
+            next
+        }
+        { print }
+    ' /mnt/etc/nixos/configuration.nix > /tmp/configuration.nix.tmp && mv /tmp/configuration.nix.tmp /mnt/etc/nixos/configuration.nix
+
+    log_info "Updating DHCP range: $DHCP_START - $DHCP_END"
+    awk -v dhcp_start="$DHCP_START" '
+        /^      rangeStart = "192\.168\.4\.100";$/ {
+            print "      rangeStart = \"" dhcp_start "\";"
+            next
+        }
+        { print }
+    ' /mnt/etc/nixos/configuration.nix > /tmp/configuration.nix.tmp && mv /tmp/configuration.nix.tmp /mnt/etc/nixos/configuration.nix
+
+    awk -v dhcp_end="$DHCP_END" '
+        /^      rangeEnd = "192\.168\.4\.200";$/ {
+            print "      rangeEnd = \"" dhcp_end "\";"
+            next
+        }
+        { print }
+    ' /mnt/etc/nixos/configuration.nix > /tmp/configuration.nix.tmp && mv /tmp/configuration.nix.tmp /mnt/etc/nixos/configuration.nix
 
     # Update LAN interfaces - this is more complex as it's an array
     # Convert space-separated string to Nix array format
     LAN_INTERFACES_NIX=$(echo "$LAN_INTERFACES" | sed 's/ /" "/g' | sed 's/^/[/g' | sed 's/$/"];/g')
-    sed -i "s/bridge\.interfaces = \[ \"enp4s0\" \"enp5s0\" \"enp6s0\" \"enp7s0\" \];/bridge.interfaces = $LAN_INTERFACES_NIX/g" /mnt/etc/nixos/configuration.nix
+    log_info "Updating LAN interfaces to: $LAN_INTERFACES_NIX"
+    awk -v lan_interfaces="$LAN_INTERFACES_NIX" '
+        /^      bridge\.interfaces = \[ \"enp4s0\" \"enp5s0\" \"enp6s0\" \"enp7s0\" \];$/ {
+            print "      bridge.interfaces = " lan_interfaces
+            next
+        }
+        { print }
+    ' /mnt/etc/nixos/configuration.nix > /tmp/configuration.nix.tmp && mv /tmp/configuration.nix.tmp /mnt/etc/nixos/configuration.nix
 
     log_success "Router configuration copied and customized"
 }
