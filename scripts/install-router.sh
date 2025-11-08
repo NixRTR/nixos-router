@@ -165,8 +165,8 @@ format_partitions() {
     # Format EFI partition
     mkfs.fat -F 32 -n EFI "${DISK}1"
 
-    # Format root partition with Btrfs (force overwrite any existing filesystem)
-    mkfs.btrfs -f -L nixos "${DISK}2"
+    # Format root partition with ext4 (force overwrite any existing filesystem)
+    mkfs.ext4 -F -L nixos "${DISK}2"
 
     # Ensure partitions are recognized and have UUIDs
     partprobe "$DISK" || true
@@ -261,8 +261,8 @@ generate_config() {
         log_info "Hardware configuration (filesystem section):"
         grep -A3 -B3 "fsType\|fileSystems" /mnt/etc/nixos/hardware-configuration.nix || true
 
-        # Ensure fsType is set to btrfs for the root filesystem
-        sed -i '0,/fsType = \"btrfs\"/s//fsType = \"btrfs\"/' /mnt/etc/nixos/hardware-configuration.nix
+        # Ensure fsType is set to ext4 for the root filesystem
+        sed -i '0,/fsType = \"ext4\"/s//fsType = \"ext4\"/' /mnt/etc/nixos/hardware-configuration.nix
     fi
 
     log_success "NixOS configuration generated"
