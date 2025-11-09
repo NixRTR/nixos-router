@@ -199,25 +199,21 @@ EOF
 echo
 echo "router-config.nix updated."
 
-if command -v sops >/dev/null 2>&1; then
-    if [[ -f "$SECRETS_PATH" ]]; then
+if [[ -f "$SECRETS_PATH" ]]; then
+    echo
+    read -p "View decrypted secrets from $(realpath "$SECRETS_PATH")? [y/N]: " VIEW_SECRETS
+    if [[ $VIEW_SECRETS =~ ^[Yy]$ ]]; then
         echo
-        read -p "View decrypted secrets from $(realpath "$SECRETS_PATH")? [y/N]: " VIEW_SECRETS
-        if [[ $VIEW_SECRETS =~ ^[Yy]$ ]]; then
-            echo
-            nix shell --extra-experimental-features "nix-command flakes" nixpkgs#sops --command sops -d "$SECRETS_PATH"
-            echo
-        fi
+        nix shell --extra-experimental-features "nix-command flakes" nixpkgs#sops --command sops -d "$SECRETS_PATH"
+        echo
+    fi
 
-        read -p "Edit secrets with sops now? [y/N]: " EDIT_SECRETS
-        if [[ $EDIT_SECRETS =~ ^[Yy]$ ]]; then
-            nix shell --extra-experimental-features "nix-command flakes" nixpkgs#sops --command sops "$SECRETS_PATH"
-        fi
-    else
-        echo "warning: secrets file not found at $SECRETS_PATH"
+    read -p "Edit secrets with sops now? [y/N]: " EDIT_SECRETS
+    if [[ $EDIT_SECRETS =~ ^[Yy]$ ]]; then
+        nix shell --extra-experimental-features "nix-command flakes" nixpkgs#sops --command sops "$SECRETS_PATH"
     fi
 else
-    echo "warning: 'sops' command not found; skipping secrets update."
+    echo "warning: secrets file not found at $SECRETS_PATH"
 fi
 
 if [[ $wan_type == "pppoe" ]]; then
