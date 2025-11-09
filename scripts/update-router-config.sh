@@ -157,7 +157,7 @@ cat >"$CONFIG_PATH" <<EOF
   dhcp = {
     start = "$dhcp_start";
     end = "$dhcp_end";
-    leaseTime = "$dhcp_lease";
+    leaseTime = ${dhcp_lease@Q};
   };
 }
 EOF
