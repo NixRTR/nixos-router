@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
 
-# Interactive helper to update router-config.nix, manage PPPoE secrets, and rebuild the system.
+# Interactive helper to update router-config.nix, optionally edit secrets, and rebuild.
 
 set -euo pipefail
 
 if [[ $EUID -ne 0 ]]; then
     echo "error: this script must be run as root" >&2
-    exit 1
-fi
-
-if ! command -v nix >/dev/null 2>&1; then
-    echo "error: nix executable not found in PATH" >&2
     exit 1
 fi
 
@@ -28,80 +23,62 @@ if [[ ! -f "$CONFIG_PATH" ]]; then
     exit 1
 fi
 
-NIX_FLAGS=(
-    --extra-experimental-features nix-command
-    --extra-experimental-features flakes
-    --impure
+CONFIG_JSON=$(python - <<'PY' "$CONFIG_PATH" || true
+import json, sys, re
+import pathlib
+path = pathlib.Path(sys.argv[1])
+data = path.read_text()
+data = re.sub(r'#.*', '', data)
+data = re.sub(r'([a-zA-Z0-9_]+)\s*=', r'"\1":', data)
+data = re.sub(r';', ',', data)
+data = data.replace('{', '{"').replace('}', '"}')
+data = data.replace('""', '"')
+data = data.replace('" "', '"')
+data = data.replace(',"', ', "')
+print(json.dumps(eval(data), indent=2))
+PY
 )
 
-nix_has_attr() {
-    local attr=$1
-    nix eval "${NIX_FLAGS[@]}" --raw --expr "
-      let cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; });
-      in builtins.hasAttr \"$attr\" cfg
-    "
+json_get() {
+    local key=$1
+    local default=$2
+    python - <<'PY' "$CONFIG_JSON" "$key" "$default"
+import json, sys
+cfg = json.loads(sys.argv[1])
+key = sys.argv[2]
+default = sys.argv[3]
+value = cfg
+try:
+    for part in key.split('.'):
+        value = value[part]
+except Exception:
+    print(default)
+    sys.exit()
+if isinstance(value, list):
+    print(" ".join(str(x) for x in value))
+else:
+    print(value)
+PY
 }
 
-nix_eval_raw() {
-    local attr=$1
-    local default=$2
-    if [[ $(nix_has_attr "$attr") == "true" ]]; then
-        nix eval "${NIX_FLAGS[@]}" --raw --expr "
-          let cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; });
-          in builtins.toString (cfg.${attr})
-        "
-    else
-        echo "$default"
-    fi
-}
-
-nix_eval_nested() {
-    local attr_path=$1
-    local default=$2
-    if [[ $(nix eval "${NIX_FLAGS[@]}" --raw --expr "
-        let cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; });
-        in builtins.hasAttr \"${attr_path%.*}\" cfg && builtins.hasAttr \"${attr_path##*.}\" cfg.${attr_path%.*}
-    ") == "true" ]]; then
-        nix eval "${NIX_FLAGS[@]}" --raw --expr "
-          let cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; });
-          in builtins.toString (cfg.${attr_path})
-        "
-    else
-        echo "$default"
-    fi
-}
-
-nix_eval_list() {
-    local attr=$1
-    local default=$2
-    if [[ $(nix_has_attr "$attr") == "true" ]]; then
-        nix eval "${NIX_FLAGS[@]}" --raw --expr "
-          let
-            cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; });
-            value = cfg.${attr};
-          in if builtins.isList value
-             then builtins.concatStringsSep \" \" (map builtins.toString value)
-             else builtins.toString value
-        "
-    else
-        echo "$default"
-    fi
+json_get_list() {
+    json_get "$1" "$2"
 }
 
 echo "Updating router configuration at $CONFIG_PATH"
 echo
 
-current_hostname=$(nix_eval_raw "hostname" "nixos-router")
-current_timezone=$(nix_eval_raw "timezone" "America/Anchorage")
-current_username=$(nix_eval_raw "username" "routeradmin")
-current_wan_type=$(nix_eval_raw "wan.type" "dhcp")
-current_wan_iface=$(nix_eval_raw "wan.interface" "eno1")
-current_lan_interfaces=$(nix_eval_list "lan.interfaces" "")
-current_lan_ip=$(nix_eval_raw "lan.ip" "192.168.4.1")
-current_lan_prefix=$(nix_eval_raw "lan.prefix" "24")
-current_dhcp_start=$(nix_eval_nested "dhcp.start" "192.168.4.100")
-current_dhcp_end=$(nix_eval_nested "dhcp.end" "192.168.4.200")
-current_dhcp_lease=$(nix_eval_nested "dhcp.leaseTime" "24h")
+current_hostname=$(json_get 'hostname' 'nixos-router')
+current_timezone=$(json_get 'timezone' 'America/Anchorage')
+current_username=$(json_get 'username' 'routeradmin')
+current_wan_type=$(json_get 'wan.type' 'dhcp')
+current_wan_iface=$(json_get 'wan.interface' 'eno1')
+current_lan_interfaces=$(json_get_list 'lan.interfaces' '')
+current_lan_ip=$(json_get 'lan.ip' '192.168.4.1')
+current_lan_prefix=$(json_get 'lan.prefix' '24')
+current_dhcp_start=$(json_get 'dhcp.start' '192.168.4.100')
+current_dhcp_end=$(json_get 'dhcp.end' '192.168.4.200')
+current_dhcp_lease=$(json_get 'dhcp.leaseTime' '24h')
 
 read -p "Hostname [$current_hostname]: " HOSTNAME_INPUT
 hostname=${HOSTNAME_INPUT:-$current_hostname}
@@ -201,7 +178,7 @@ cat >"$CONFIG_PATH" <<EOF
   dhcp = {
     start = "$dhcp_start";
     end = "$dhcp_end";
-    leaseTime = "${dhcp_lease}";
+    leaseTime = "$dhcp_lease";
   };
 }
 EOF
