@@ -21,10 +21,10 @@ pppoe-password: "your-isp-password"
 
 ### System User Password
 ```yaml
-password: "$6$rounds=1000000$salt$hashed-password"
+password: "routeradmin-password"
 ```
 
-Generate with: `mkpasswd -m sha-512`
+The plaintext password is hashed during the activation script that runs on each deployment. This keeps the secret simple to manage while still storing only the hashed value in `/etc/shadow`.
 
 ## Key Management
 
@@ -143,11 +143,11 @@ ls -la /run/secrets/
 
 ### User password not working
 ```bash
-# Verify password format (should start with $6$)
+# Verify plaintext secret exists
 head -1 /run/secrets/password
 
-# Check it's a valid hash
-mkpasswd --test < /run/secrets/password
+# Confirm the hashed password was applied
+sudo getent shadow routeradmin
 ```
 
 ## Migration from Other Systems

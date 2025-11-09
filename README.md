@@ -6,7 +6,7 @@ A declarative NixOS configuration that transforms a standard PC into a full-feat
 
 - **Multiple WAN types**: DHCP, PPPoE, static IP, and PPTP support
 - **LAN bridging**: Combine multiple Ethernet ports into one network
-- **DHCP & DNS**: Automatic IP assignment and name resolution with dnsmasq
+- **DHCP & DNS**: Technitium DNS Server with integrated DHCP (DoH/DoT optional)
 - **NAT & firewall**: Automatic network address translation and basic security
 - **Port forwarding**: Configurable forwarding rules for internal services
 - **Secrets management**: Encrypted secrets with sops-nix and Age
@@ -28,7 +28,7 @@ This script will interactively ask for:
 - **WAN connection type** (DHCP or PPPoE)
 - **PPPoE credentials** (only if PPPoE selected)
 - **LAN IP address** and subnet
-- **DHCP range** for clients
+- **DHCP range** and lease time for clients
 - **LAN bridge interfaces**
 - **Router admin password** (for system access)
 - **Age key** (use existing or generate new)
@@ -48,16 +48,26 @@ Then it will:
    sudo ./scripts/install-age-key.sh
    ```
 4. **Create secrets** (see [docs/secrets.md](docs/secrets.md))
-5. **Configure router** in `configuration.nix`
+5. **Configure router** in `router-config.nix` (and adjust `configuration.nix` if you need additional tweaks)
 6. **Deploy**:
    ```bash
    sudo nixos-rebuild switch --flake .#router
    ```
 
+## Upgrading Existing Installations
+
+To apply the latest configuration on an already-installed router, run:
+
+```bash
+sudo /etc/nixos/scripts/update-router.sh
+```
+
+The script backs up `/etc/nixos`, syncs the repository (preserving `hardware-configuration.nix`, `router-config.nix`, and `secrets/secrets.yaml`), then executes `nixos-rebuild switch --flake /etc/nixos#router`.
+
 ## Documentation
 
-- **[Setup Guide](docs/setup.md)** - Installation and initial configuration
-- **[Router Config](docs/router.md)** - WAN/LAN setup, firewall, port forwarding
+- **[Setup Guide](docs/setup.md)** - Installation, upgrades, and initial configuration
+- **[Router Config](docs/router.md)** - WAN/LAN setup, Technitium DNS/DHCP, firewall, port forwarding
 - **[Secrets Management](docs/secrets.md)** - sops-nix usage and key management
 - **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
 - **[Development](docs/development.md)** - Contributing and development guide

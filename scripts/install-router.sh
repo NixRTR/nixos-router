@@ -82,6 +82,9 @@ DHCP_START="${DHCP_START_INPUT:-192.168.4.100}"
 read -p "Enter DHCP range end [192.168.4.200]: " DHCP_END_INPUT
 DHCP_END="${DHCP_END_INPUT:-192.168.4.200}"
 
+read -p "Enter DHCP lease time [24h]: " DHCP_LEASE_INPUT
+DHCP_LEASE="${DHCP_LEASE_INPUT:-24h}"
+
 echo "Available interfaces for LAN bridge (space-separated):"
 read -p "Enter LAN bridge interfaces [enp4s0 enp5s0 enp6s0 enp7s0]: " LAN_INTERFACES_INPUT
 LAN_INTERFACES="${LAN_INTERFACES_INPUT:-enp4s0 enp5s0 enp6s0 enp7s0}"
@@ -313,6 +316,7 @@ setup_router_config() {
   dhcp = {
     start = "$DHCP_START";
     end = "$DHCP_END";
+    leaseTime = "$DHCP_LEASE";
   };
 }
 EOF
@@ -322,7 +326,7 @@ EOF
     echo "  Timezone: $TIMEZONE"
     echo "  WAN: $WAN_INTERFACE ($WAN_TYPE)"
     echo "  LAN: $LAN_IP/$LAN_PREFIX"
-    echo "  DHCP: $DHCP_START - $DHCP_END"
+    echo "  DHCP: $DHCP_START - $DHCP_END (lease $DHCP_LEASE)"
     echo "  Interfaces: $LAN_INTERFACES"
 
     log_success "Router configuration file generated"

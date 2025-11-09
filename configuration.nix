@@ -15,6 +15,7 @@ in
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
       ./router.nix
+      ./technitium.nix
     ];
 
   # Bootloader.
@@ -51,8 +52,18 @@ in
       allowedUDPPorts = [ 80 443 22000 4242];
     };
     dnsmasq = {
+      enable = false;
       rangeStart = routerConfig.dhcp.start;
       rangeEnd = routerConfig.dhcp.end;
+      leaseTime = routerConfig.dhcp.leaseTime or "24h";
+    };
+    technitium = {
+      enable = true;
+      useSystemResolver = true;
+      dhcp = {
+        dnsServers = [ routerConfig.lan.ip ];
+        leaseTime = routerConfig.dhcp.leaseTime or "24h";
+      };
     };
     portForwards = [
       {

@@ -25,7 +25,7 @@ The script will interactively prompt for:
 - **WAN connection type** (DHCP or PPPoE)
 - **PPPoE credentials** (only if PPPoE selected)
 - **LAN IP address** and subnet
-- **DHCP range** for clients
+- **DHCP range** and lease time for clients
 - **LAN bridge interfaces**
 - **Router admin password** (for system access)
 - **Age key** (use existing or generate new)
@@ -48,12 +48,12 @@ The script will interactively prompt for:
 
 3. **Create secrets**
    ```bash
-   # Create plaintext secrets
-   cat > /tmp/secrets.yaml << EOF
-   pppoe-password: "your-isp-password"
-   pppoe-username: "your-isp-username"
-   password: "$(mkpasswd -m sha-512)"
-   EOF
+# Create plaintext secrets
+cat > /tmp/secrets.yaml << EOF
+pppoe-password: "your-isp-password"   # Only if using PPPoE
+pppoe-username: "your-isp-username"   # Only if using PPPoE
+password: "routeradmin-password"      # Plain text; hashed at activation
+EOF
 
    # Encrypt them
    sops --encrypt --age $(age-keygen -y ~/.config/sops/age/keys.txt) \
@@ -64,10 +64,11 @@ The script will interactively prompt for:
    ```
 
 4. **Configure router**
-   Edit `configuration.nix` to match your network setup:
+   Edit `router-config.nix` (or re-run the installer script to regenerate it) to match your network setup:
    - Update interface names
    - Set IP ranges
    - Configure WAN type (DHCP/PPPoE/static)
+   - Adjust Technitium DNS/DHCP options if needed (`router.technitium` in `configuration.nix`)
 
 5. **Deploy**
    ```bash
@@ -85,11 +86,11 @@ chmod 400 ~/.config/sops/age/keys.txt
 
 ## Network Configuration
 
-Before deploying, update these settings in `configuration.nix`:
+Before deploying, update these settings in `router-config.nix` (and adjust `configuration.nix` if you need additional customization):
 
 - **WAN interface**: Physical interface connected to your ISP
 - **LAN interfaces**: Ethernet ports for your local network
-- **IP ranges**: DHCP pool and router IP
+- **IP ranges**: DHCP pool, lease time, and router IP
 - **WAN credentials**: PPPoE username/password or static IP settings
 
 ## Post-Installation
@@ -99,7 +100,17 @@ After successful deployment:
 1. Check router status: `systemctl status router-*`
 2. Verify secrets: `ls -la /run/secrets/`
 3. Test connectivity: `ping 8.8.8.8`
-4. Check DHCP leases: `journalctl -u dnsmasq`
+4. Check DHCP leases: `journalctl -u technitium-dns-server`
+
+## Upgrading Existing Systems
+
+To pull the latest repository configuration onto an installed router:
+
+```bash
+sudo /etc/nixos/scripts/update-router.sh
+```
+
+The script backs up `/etc/nixos`, syncs repository changes (preserving `hardware-configuration.nix`, `router-config.nix`, and `secrets/secrets.yaml`), then runs `nixos-rebuild switch --flake /etc/nixos#router`.
 
 ## Development Shell
 

@@ -84,14 +84,14 @@ ls: cannot access '/run/secrets/': No such file or directory
 - Router shows no DHCP leases
 
 **Checks:**
-1. Verify dnsmasq is running:
+1. Verify Technitium is running:
    ```bash
-   systemctl status dnsmasq
+   systemctl status technitium-dns-server
    ```
 
-2. Check dnsmasq logs:
+2. Check Technitium logs:
    ```bash
-   journalctl -u dnsmasq -f
+   journalctl -u technitium-dns-server -f
    ```
 
 3. Verify bridge configuration:
@@ -181,7 +181,7 @@ dig @8.8.8.8 google.com
 ```bash
 # Router services
 systemctl status router-*
-systemctl status dnsmasq
+systemctl status technitium-dns-server
 systemctl status pppd
 
 # System services
@@ -189,7 +189,7 @@ systemctl status systemd-networkd
 systemctl status sops-nix
 
 # Logs
-journalctl -u dnsmasq -f
+journalctl -u technitium-dns-server -f
 journalctl -u pppd -f
 journalctl -u systemd-networkd -f
 ```
@@ -233,7 +233,7 @@ done
 ### Reset Network Configuration
 ```bash
 # Stop all network services
-systemctl stop systemd-networkd dnsmasq pppd
+systemctl stop systemd-networkd technitium-dns-server pppd
 
 # Reset interfaces
 ip link set br0 down
@@ -263,7 +263,7 @@ ip addr show
 ip route show
 
 # Manually start services
-systemctl start dnsmasq
+systemctl start technitium-dns-server
 systemctl start systemd-networkd
 ```
 
@@ -310,7 +310,7 @@ When asking for help, include:
 
 5. **Service status:**
    ```bash
-   systemctl status --all | grep -E "(router|dnsmasq|pppd|networkd|sops)"
+   systemctl status --all | grep -E "(router|technitium|pppd|networkd|sops)"
    ```
 
 ### Community Resources

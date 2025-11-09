@@ -6,7 +6,7 @@ This NixOS module transforms a standard PC into a full-featured network router w
 
 - **WAN connectivity**: DHCP, PPPoE, static IP, or PPTP
 - **LAN bridging**: Multiple Ethernet ports combined into one network
-- **DHCP & DNS**: dnsmasq for automatic IP assignment and name resolution
+- **DHCP & DNS**: Technitium DNS Server with integrated DHCP service
 - **NAT & firewall**: Automatic masquerading and basic security rules
 - **Port forwarding**: Configurable port forwarding rules
 
@@ -77,17 +77,52 @@ router = {
 };
 ```
 
-### DHCP Configuration
+## DNS & DHCP (Technitium)
+
+Technitium DNS Server replaces dnsmasq and provides both DNS resolution and DHCP leases. By default the module binds to the LAN bridge address and serves the DHCP range defined in `router-config.nix`.
+
+### Basic Configuration
 ```nix
 router = {
-  dnsmasq = {
+  technitium = {
     enable = true;
-    rangeStart = "192.168.1.100";  # First IP in DHCP pool
-    rangeEnd = "192.168.1.200";    # Last IP in DHCP pool
-    leaseTime = "24h";             # Lease duration
+    upstreamServers = [ "1.1.1.1" "1.0.0.1" ];
+    dhcp = {
+      dnsServers = [ "192.168.1.1" ];
+      leaseTime = "24h";
+    };
   };
 };
 ```
+
+### Advanced Options
+```nix
+router = {
+  technitium = {
+    enableDoT = true;
+    enableDoH = true;
+    enableHttps = true;
+    ports = {
+      web = 5380;
+      webTls = 53443;
+      dot = 853;
+      doh = 5443;
+    };
+    listenAddresses = [ "192.168.1.1" "127.0.0.1" ];
+    upstreamServers = [ "8.8.8.8" "9.9.9.9" ];
+    dhcp = {
+      interfaces = [ "br0" ];
+      dnsServers = [ "192.168.1.1" "8.8.8.8" ];
+      leaseTime = "12h";
+    };
+    extraSettings = {
+      "EnableSecureDns" = true;
+    };
+  };
+};
+```
+
+Technitium exposes a web console on `http://<router-ip>:5380` by default (HTTPS and DoH endpoints require enabling `enableHttps`/`enableDoH`). You can use the UI to manage static DHCP leases and additional DNS features.
 
 ## Firewall & Security
 
@@ -122,34 +157,6 @@ router = {
 };
 ```
 
-## Advanced Features
-
-### Static DHCP Leases
-```nix
-router = {
-  dnsmasq = {
-    staticLeases = [
-      {
-        mac = "aa:bb:cc:dd:ee:ff";
-        ip = "192.168.1.50";
-        hostname = "server";  # Optional
-      }
-    ];
-  };
-};
-```
-
-### Custom dnsmasq Settings
-```nix
-router = {
-  dnsmasq = {
-    extraSettings = {
-      "log-queries" = true;
-      "local" = "/local/";
-    };
-  };
-};
-```
 
 ## Interface Naming
 
@@ -174,7 +181,7 @@ ip addr show
 ip route show
 
 # DHCP leases
-journalctl -u dnsmasq -f
+journalctl -u technitium-dns-server -f
 
 # PPPoE connection
 systemctl status pppd
@@ -191,9 +198,9 @@ ip addr show ppp0
    - Check routes: `ip route`
 
 2. **Clients can't get IP addresses**
-   - Verify dnsmasq is running: `systemctl status dnsmasq`
+   - Verify Technitium is running: `systemctl status technitium-dns-server`
    - Check bridge configuration: `brctl show`
-   - Review DHCP range in configuration
+   - Review DHCP range in `router-config.nix` or in the Technitium UI
 
 3. **Port forwarding not working**
    - Verify NAT is enabled: `iptables -t nat -L`
