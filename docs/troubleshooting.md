@@ -84,23 +84,29 @@ ls: cannot access '/run/secrets/': No such file or directory
 - Router shows no DHCP leases
 
 **Checks:**
-1. Verify Technitium is running:
+1. Verify blocky is running:
    ```bash
-   systemctl status technitium-dns-server
+   systemctl status blocky
    ```
 
-2. Check Technitium logs:
+2. Check blocky logs:
    ```bash
-   journalctl -u technitium-dns-server -f
+   journalctl -u blocky -f
    ```
 
-3. Verify bridge configuration:
+3. Ensure dhcpd4 is active:
+   ```bash
+   systemctl status dhcpd4
+   journalctl -u dhcpd4 -f
+   ```
+
+4. Verify bridge configuration:
    ```bash
    brctl show br0
    ip addr show br0
    ```
 
-4. Test DHCP manually:
+5. Test DHCP manually:
    ```bash
    dhcpcd -T br0  # Test DHCP on bridge
    ```
@@ -181,7 +187,8 @@ dig @8.8.8.8 google.com
 ```bash
 # Router services
 systemctl status router-*
-systemctl status technitium-dns-server
+systemctl status blocky
+systemctl status dhcpd4
 systemctl status pppd
 
 # System services
@@ -189,7 +196,8 @@ systemctl status systemd-networkd
 systemctl status sops-nix
 
 # Logs
-journalctl -u technitium-dns-server -f
+journalctl -u blocky -f
+journalctl -u dhcpd4 -f
 journalctl -u pppd -f
 journalctl -u systemd-networkd -f
 ```
@@ -233,7 +241,7 @@ done
 ### Reset Network Configuration
 ```bash
 # Stop all network services
-systemctl stop systemd-networkd technitium-dns-server pppd
+systemctl stop systemd-networkd dhcpd4 blocky pppd
 
 # Reset interfaces
 ip link set br0 down
@@ -263,7 +271,8 @@ ip addr show
 ip route show
 
 # Manually start services
-systemctl start technitium-dns-server
+systemctl start dhcpd4
+systemctl start blocky
 systemctl start systemd-networkd
 ```
 
@@ -310,7 +319,7 @@ When asking for help, include:
 
 5. **Service status:**
    ```bash
-   systemctl status --all | grep -E "(router|technitium|pppd|networkd|sops)"
+   systemctl status --all | grep -E "(router|blocky|dhcpd4|pppd|networkd|sops)"
    ```
 
 ### Community Resources

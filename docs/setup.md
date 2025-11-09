@@ -68,7 +68,7 @@ EOF
    - Update interface names
    - Set IP ranges
    - Configure WAN type (DHCP/PPPoE/static)
-   - Adjust Technitium DNS/DHCP options if needed (`router.technitium` in `configuration.nix`)
+   - Adjust Blocky DNS or DHCP options in `configuration.nix` if needed
 
 5. **Deploy**
    ```bash
@@ -100,7 +100,8 @@ After successful deployment:
 1. Check router status: `systemctl status router-*`
 2. Verify secrets: `ls -la /run/secrets/`
 3. Test connectivity: `ping 8.8.8.8`
-4. Check DHCP leases: `journalctl -u technitium-dns-server`
+4. Check DHCP leases: `journalctl -u dhcpd4`
+5. Monitor DNS resolver: `journalctl -u blocky -f`
 
 ## Upgrading Existing Systems
 

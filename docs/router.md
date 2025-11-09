@@ -6,7 +6,8 @@ This NixOS module transforms a standard PC into a full-featured network router w
 
 - **WAN connectivity**: DHCP, PPPoE, static IP, or PPTP
 - **LAN bridging**: Multiple Ethernet ports combined into one network
-- **DHCP & DNS**: Technitium DNS Server with integrated DHCP service
+- **DNS**: Blocky recursive/forwarding resolver with caching
+- **DHCP**: ISC dhcpd4 handed out over the LAN bridge
 - **NAT & firewall**: Automatic masquerading and basic security rules
 - **Port forwarding**: Configurable port forwarding rules
 
@@ -77,52 +78,60 @@ router = {
 };
 ```
 
-## DNS & DHCP (Technitium)
+## DNS (Blocky)
 
-Technitium DNS Server replaces dnsmasq and provides both DNS resolution and DHCP leases. By default the module binds to the LAN bridge address and serves the DHCP range defined in `router-config.nix`.
+Blocky runs as a dedicated DNS resolver/forwarder. The configuration is declarative and rendered to YAML automatically:
 
-### Basic Configuration
 ```nix
-router = {
-  technitium = {
-    enable = true;
-    upstreamServers = [ "1.1.1.1" "1.0.0.1" ];
-    dhcp = {
-      dnsServers = [ "192.168.1.1" ];
-      leaseTime = "24h";
+services.blocky = {
+  enable = true;
+  settings = {
+    ports.dns = [
+      "192.168.4.1:53"
+      "127.0.0.1:53"
+    ];
+    upstreams.groups.default = [
+      "tcp+udp:1.1.1.1"
+      "tcp+udp:8.8.8.8"
+    ];
+    bootstrapDns = [
+      "tcp+udp:1.1.1.1"
+      "tcp+udp:8.8.8.8"
+    ];
+    caching = {
+      minTime = "5m";
+      maxTime = "30m";
     };
+    log.level = "info";
   };
 };
 ```
 
-### Advanced Options
+Adjust the upstream servers or add Blocky features (blocking lists, conditional forwarding, metrics) by extending the `settings` attribute. The service listens on the router’s LAN IP so clients can use it directly.
+
+## DHCP (ISC dhcpd4)
+
+DHCP is served by ISC dhcpd4. The configuration is rendered into the classic `dhcpd.conf` format with the range defined in `router-config.nix`:
+
 ```nix
-router = {
-  technitium = {
-    enableDoT = true;
-    enableDoH = true;
-    enableHttps = true;
-    ports = {
-      web = 5380;
-      webTls = 53443;
-      dot = 853;
-      doh = 5443;
-    };
-    listenAddresses = [ "192.168.1.1" "127.0.0.1" ];
-    upstreamServers = [ "8.8.8.8" "9.9.9.9" ];
-    dhcp = {
-      interfaces = [ "br0" ];
-      dnsServers = [ "192.168.1.1" "8.8.8.8" ];
-      leaseTime = "12h";
-    };
-    extraSettings = {
-      "EnableSecureDns" = true;
-    };
-  };
+services.dhcpd4 = {
+  enable = true;
+  interfaces = [ "br0" ];
+  extraConfig = ''
+    default-lease-time 86400;
+    max-lease-time 172800;
+    authoritative;
+    subnet 192.168.4.0 netmask 255.255.255.0 {
+      range 192.168.4.100 192.168.4.200;
+      option routers 192.168.4.1;
+      option subnet-mask 255.255.255.0;
+      option domain-name-servers 192.168.4.1;
+    }
+  '';
 };
 ```
 
-Technitium exposes a web console on `http://<router-ip>:5380` by default (HTTPS and DoH endpoints require enabling `enableHttps`/`enableDoH`). You can use the UI to manage static DHCP leases and additional DNS features.
+If you change the LAN subnet or DHCP range, re-run the installer or update `router-config.nix` and rebuild. Static reservations can be added with additional `host` blocks inside the `subnet` stanza.
 
 ## Firewall & Security
 
@@ -180,8 +189,11 @@ systemctl status router-*
 ip addr show
 ip route show
 
+# DNS logs
+journalctl -u blocky -f
+
 # DHCP leases
-journalctl -u technitium-dns-server -f
+journalctl -u dhcpd4 -f
 
 # PPPoE connection
 systemctl status pppd
@@ -198,9 +210,9 @@ ip addr show ppp0
    - Check routes: `ip route`
 
 2. **Clients can't get IP addresses**
-   - Verify Technitium is running: `systemctl status technitium-dns-server`
+   - Verify blocky is running: `systemctl status blocky`
    - Check bridge configuration: `brctl show`
-   - Review DHCP range in `router-config.nix` or in the Technitium UI
+   - Review DHCP range in `router-config.nix` or inspect `dhcpd.conf`
 
 3. **Port forwarding not working**
    - Verify NAT is enabled: `iptables -t nat -L`

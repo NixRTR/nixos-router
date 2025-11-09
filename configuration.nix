@@ -8,6 +8,53 @@ let
   # Import router configuration variables
   routerConfig = import ./router-config.nix;
   pppoeEnabled = routerConfig.wan.type == "pppoe";
+  bridgeName = config.router.lan.bridge.name;
+
+  splitIPv4 = ip: map (x: lib.toInt x) (lib.splitString "." ip);
+
+  prefixToOctets = prefix:
+    let
+      fullOctets = prefix / 8;
+      remainder = prefix - fullOctets * 8;
+    in map (idx:
+      if idx < fullOctets then 255
+      else if idx == fullOctets then
+        if remainder == 0 then 0 else 256 - builtins.pow 2 (8 - remainder)
+      else 0
+    ) (lib.range 0 3);
+
+  netmaskOctets = prefixToOctets routerConfig.lan.prefix;
+  netmaskString = lib.concatStringsSep "." (map toString netmaskOctets);
+
+  networkOctets =
+    lib.zipListsWith (a: b: builtins.bitAnd a b)
+      (splitIPv4 routerConfig.lan.ip)
+      netmaskOctets;
+
+  networkAddress = lib.concatStringsSep "." (map toString networkOctets);
+
+  leaseToSeconds =
+    let
+      lease = routerConfig.dhcp.leaseTime or "24h";
+      numeric = builtins.match "^[0-9]+$" lease;
+      unitMatch = builtins.match "^([0-9]+)([smhd])$" lease;
+      multiplier = unit:
+        if unit == "s" then 1
+        else if unit == "m" then 60
+        else if unit == "h" then 3600
+        else if unit == "d" then 86400
+        else 1;
+    in if lease == null then 86400
+       else if numeric != null then lib.toInt lease
+       else if unitMatch != null then
+         let
+           num = lib.toInt (builtins.elemAt unitMatch 0);
+           unit = builtins.elemAt unitMatch 1;
+         in num * multiplier unit
+       else 86400;
+
+  dhcpDefaultLease = leaseToSeconds;
+  dhcpMaxLease = dhcpDefaultLease * 2;
 in
 
 {
@@ -15,7 +62,6 @@ in
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
       ./router.nix
-      ./technitium.nix
     ];
 
   # Bootloader.
@@ -50,20 +96,6 @@ in
     firewall = {
       allowedTCPPorts = [ 80 443 22000 4242];
       allowedUDPPorts = [ 80 443 22000 4242];
-    };
-    dnsmasq = {
-      enable = false;
-      rangeStart = routerConfig.dhcp.start;
-      rangeEnd = routerConfig.dhcp.end;
-      leaseTime = routerConfig.dhcp.leaseTime or "24h";
-    };
-    technitium = {
-      enable = true;
-      useSystemResolver = true;
-      dhcp = {
-        dnsServers = [ routerConfig.lan.ip ];
-        leaseTime = routerConfig.dhcp.leaseTime or "24h";
-      };
     };
     portForwards = [
       {
@@ -155,6 +187,50 @@ in
 
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
+
+  services.blocky = {
+    enable = true;
+    settings = {
+      ports.dns = [
+        "${routerConfig.lan.ip}:53"
+        "127.0.0.1:53"
+      ];
+      upstreams.groups.default = [
+        "tcp+udp:1.1.1.1"
+        "tcp+udp:8.8.8.8"
+      ];
+      bootstrapDns = [
+        "tcp+udp:1.1.1.1"
+        "tcp+udp:8.8.8.8"
+      ];
+      caching = {
+        minTime = "5m";
+        maxTime = "30m";
+      };
+      log = {
+        level = "info";
+      };
+    };
+  };
+
+  services.dhcpd4 = {
+    enable = true;
+    interfaces = [ bridgeName ];
+    extraConfig = ''
+      default-lease-time ${toString dhcpDefaultLease};
+      max-lease-time ${toString dhcpMaxLease};
+      authoritative;
+      subnet ${networkAddress} netmask ${netmaskString} {
+        range ${routerConfig.dhcp.start} ${routerConfig.dhcp.end};
+        option routers ${routerConfig.lan.ip};
+        option subnet-mask ${netmaskString};
+        option domain-name-servers ${routerConfig.lan.ip};
+      }
+    '';
+  };
+
+  networking.firewall.allowedUDPPorts = lib.mkAfter [ 53 67 ];
+  networking.firewall.allowedTCPPorts = lib.mkAfter [ 53 ];
 
   # Set user password from encrypted secret
   system.activationScripts.setUserPassword = {

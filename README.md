@@ -6,7 +6,8 @@ A declarative NixOS configuration that transforms a standard PC into a full-feat
 
 - **Multiple WAN types**: DHCP, PPPoE, static IP, and PPTP support
 - **LAN bridging**: Combine multiple Ethernet ports into one network
-- **DHCP & DNS**: Technitium DNS Server with integrated DHCP (DoH/DoT optional)
+- **DNS**: Blocky resolver with upstream forwarding and caching
+- **DHCP**: ISC dhcpd4 serving the bridged LAN
 - **NAT & firewall**: Automatic network address translation and basic security
 - **Port forwarding**: Configurable forwarding rules for internal services
 - **Secrets management**: Encrypted secrets with sops-nix and Age
@@ -73,7 +74,7 @@ sudo /etc/nixos/scripts/update-router.sh
 ## Documentation
 
 - **[Setup Guide](docs/setup.md)** - Installation, upgrades, and initial configuration
-- **[Router Config](docs/router.md)** - WAN/LAN setup, Technitium DNS/DHCP, firewall, port forwarding
+- **[Router Config](docs/router.md)** - WAN/LAN setup, Blocky DNS, dhcpd4, firewall, port forwarding
 - **[Secrets Management](docs/secrets.md)** - sops-nix usage and key management
 - **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
 - **[Development](docs/development.md)** - Contributing and development guide

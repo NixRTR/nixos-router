@@ -13,70 +13,10 @@ let
   lanCfg = cfg.lan;
   firewallCfg = cfg.firewall;
   natCfg = cfg.nat;
-  dnsmasqCfg = cfg.dnsmasq;
 
   bridgeName = lanCfg.bridge.name;
 
   routerIPv4 = lanCfg.ipv4.address;
-
-  dhcpRange =
-    "${dnsmasqCfg.rangeStart},${dnsmasqCfg.rangeEnd},${dnsmasqCfg.leaseTime}";
-
-  dnsServers =
-    if dnsmasqCfg.dnsServers != [ ]
-    then dnsmasqCfg.dnsServers
-    else [ routerIPv4 ];
-
-  dhcpOptions =
-    [ "option:router,${routerIPv4}" ]
-    ++ map (server: "option:dns-server,${server}") dnsServers
-    ++ dnsmasqCfg.dhcpOptionsExtra;
-
-  staticLeaseEntries =
-    map (lease:
-      let
-        base = [ lease.mac ]
-          ++ optional (lease.hostname != null) lease.hostname;
-      in
-        concatStringsSep "," (base ++ [ lease.ip ])
-    ) dnsmasqCfg.staticLeases;
-
-  pxeBootComponents =
-    [ dnsmasqCfg.pxe.filename ]
-    ++ optional (dnsmasqCfg.pxe.serverHostname != null) dnsmasqCfg.pxe.serverHostname
-    ++ optional (dnsmasqCfg.pxe.serverAddress != null) dnsmasqCfg.pxe.serverAddress;
-
-  pxeBootValue =
-    concatStringsSep "," (filter (entry: entry != "") pxeBootComponents);
-
-  dnsmasqBaseSettings =
-    {
-      "dhcp-range" = dhcpRange;
-      "dhcp-option" = dhcpOptions;
-      "bind-interfaces" = true;  # Only bind to specified interfaces
-    }
-    // optionalAttrs dnsmasqCfg.domainNeeded { "domain-needed" = true; }
-    // optionalAttrs dnsmasqCfg.bogusPriv { "bogus-priv" = true; }
-    // optionalAttrs (dnsmasqCfg.domain != null) {
-      domain = dnsmasqCfg.domain;
-      "expand-hosts" = dnsmasqCfg.expandHosts;
-    }
-    // optionalAttrs (dnsmasqCfg.authoritative) { "dhcp-authoritative" = true; }
-    // optionalAttrs (dnsmasqCfg.listenAddresses != [ ]) {
-      "listen-address" = dnsmasqCfg.listenAddresses;
-    }
-    // optionalAttrs (dnsmasqCfg.tftpRoot != null) {
-      "enable-tftp" = true;
-      "tftp-root" = dnsmasqCfg.tftpRoot;
-    }
-    // optionalAttrs (dnsmasqCfg.pxe.enable && pxeBootValue != "") {
-      "dhcp-boot" = pxeBootValue;
-    }
-    // optionalAttrs (staticLeaseEntries != [ ]) {
-      "dhcp-host" = staticLeaseEntries;
-    };
-
-  dnsmasqInterfaces = unique ([ bridgeName ] ++ dnsmasqCfg.extraInterfaces);
 
   natExternalInterface =
     if natCfg.externalInterface != null then natCfg.externalInterface
@@ -392,132 +332,6 @@ in {
       };
     };
 
-    dnsmasq = {
-      enable = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Enable dnsmasq for DHCP and DNS.";
-      };
-      resolveLocalQueries = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Let dnsmasq resolve local hostnames.";
-      };
-      rangeStart = mkOption {
-        type = types.str;
-        default = "192.168.1.100";
-        description = "Starting address for the DHCP range.";
-      };
-      rangeEnd = mkOption {
-        type = types.str;
-        default = "192.168.1.200";
-        description = "Ending address for the DHCP range.";
-      };
-      leaseTime = mkOption {
-        type = types.str;
-        default = "24h";
-        description = "DHCP lease duration.";
-      };
-      domainNeeded = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Never forward plain names without dots.";
-      };
-      bogusPriv = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Filter reverse lookups for RFC1918 ranges.";
-      };
-      domain = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "Local domain served by dnsmasq.";
-      };
-      expandHosts = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Automatically append the local domain to simple hostnames.";
-      };
-      authoritative = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Make dnsmasq authoritative for the configured subnet.";
-      };
-      dnsServers = mkOption {
-        type = types.listOf types.str;
-        default = [ ];
-        description = "DNS servers advertised to DHCP clients (defaults to the router itself).";
-      };
-      dhcpOptionsExtra = mkOption {
-        type = types.listOf types.str;
-        default = [ ];
-        description = "Additional raw dhcp-option lines.";
-      };
-      listenAddresses = mkOption {
-        type = types.listOf types.str;
-        default = [ ];
-        description = "Specific IP addresses dnsmasq should bind to.";
-      };
-      extraInterfaces = mkOption {
-        type = types.listOf types.str;
-        default = [ ];
-        description = "Additional interfaces for dnsmasq to listen on.";
-      };
-      tftpRoot = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "Enable dnsmasq's TFTP server with this root directory.";
-      };
-      pxe = {
-        enable = mkOption {
-          type = types.bool;
-          default = false;
-          description = "Enable PXE boot advertisement.";
-        };
-        filename = mkOption {
-          type = types.str;
-          default = "pxelinux.0";
-          description = "PXE boot filename.";
-        };
-        serverHostname = mkOption {
-          type = types.nullOr types.str;
-          default = null;
-          description = "Hostname of the PXE server.";
-        };
-        serverAddress = mkOption {
-          type = types.nullOr types.str;
-          default = null;
-          description = "IP address of the PXE server.";
-        };
-      };
-      staticLeases = mkOption {
-        type = types.listOf (types.submodule ({ ... }: {
-          options = {
-            mac = mkOption {
-              type = types.str;
-              description = "Client MAC address.";
-            };
-            ip = mkOption {
-              type = types.str;
-              description = "Static IP address to hand out.";
-            };
-            hostname = mkOption {
-              type = types.nullOr types.str;
-              default = null;
-              description = "Optional hostname tied to the lease.";
-            };
-          };
-        }));
-        default = [ ];
-        description = "Static DHCP reservations.";
-      };
-      extraSettings = mkOption {
-        type = types.attrsOf types.anything;
-        default = { };
-        description = "Additional dnsmasq configuration options.";
-      };
-    };
-
     portForwards = mkOption {
       type = types.listOf portForwardModule;
       default = [ ];
@@ -595,28 +409,7 @@ in {
         "net.ipv6.conf.all.forwarding" = 1;
       };
 
-      services.dnsmasq = mkIf dnsmasqCfg.enable {
-        enable = true;
-        resolveLocalQueries = dnsmasqCfg.resolveLocalQueries;
-        settings = recursiveUpdate dnsmasqBaseSettings (
-          dnsmasqCfg.extraSettings
-          // optionalAttrs (dnsmasqInterfaces != [ ]) { interface = dnsmasqInterfaces; }
-        );
-      };
-
-      # Ensure dnsmasq starts after network is configured
-      systemd.services.dnsmasq = mkIf dnsmasqCfg.enable {
-        after = [
-          "network-online.target"
-          "systemd-networkd.service"
-          "sys-subsystem-net-devices-${bridgeName}.device"
-        ];
-        wants = [ "network-online.target" ];
-        serviceConfig = {
-          RestartSec = "5s";
-          Restart = "on-failure";
-        };
-      };
+      # DNS and DHCP services configured elsewhere (e.g., blocky + dhcpd4)
     }
 
     (mkIf (wanType == "static" && staticCfg.dnsServers != [ ]) {
