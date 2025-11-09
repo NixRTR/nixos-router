@@ -80,7 +80,7 @@ router = {
 
 ## DNS (Blocky)
 
-Blocky runs as a dedicated DNS resolver/forwarder. The configuration is declarative and rendered to YAML automatically:
+Blocky runs as the local DNS resolver/forwarder. The configuration is rendered to YAML automatically:
 
 ```nix
 services.blocky = {
@@ -107,31 +107,44 @@ services.blocky = {
 };
 ```
 
-Adjust the upstream servers or add Blocky features (blocking lists, conditional forwarding, metrics) by extending the `settings` attribute. The service listens on the router’s LAN IP so clients can use it directly.
+Adjust upstream resolvers or add features (blocking lists, conditional forwarding, metrics) by extending `settings`.
 
-## DHCP (ISC dhcpd4)
+## DHCP (Kea DHCP4)
 
-DHCP is served by ISC dhcpd4. The configuration is rendered into the classic `dhcpd.conf` format with the range defined in `router-config.nix`:
+DHCP is served by ISC Kea. The configuration is rendered to JSON and written to `/etc/kea/dhcp4-server.conf` automatically:
 
 ```nix
-services.dhcpd4 = {
+services.kea.dhcp4 = {
   enable = true;
-  interfaces = [ "br0" ];
-  extraConfig = ''
-    default-lease-time 86400;
-    max-lease-time 172800;
-    authoritative;
-    subnet 192.168.4.0 netmask 255.255.255.0 {
-      range 192.168.4.100 192.168.4.200;
-      option routers 192.168.4.1;
-      option subnet-mask 255.255.255.0;
-      option domain-name-servers 192.168.4.1;
-    }
-  '';
+  settings = {
+    interfaces-config.interfaces = [ "br0" ];
+    lease-database = {
+      type = "memfile";
+      persist = true;
+      name = "/var/lib/kea/dhcp4.leases";
+    };
+    valid-lifetime = 86400;
+    renew-timer = 43200;
+    rebind-timer = 64800;
+    option-data = [
+      { name = "routers"; data = "192.168.4.1"; }
+      { name = "domain-name-servers"; data = "192.168.4.1"; }
+      { name = "subnet-mask"; data = "255.255.255.0"; }
+    ];
+    subnet4 = [
+      {
+        id = 1;
+        subnet = "192.168.4.0/24";
+        pools = [
+          { pool = "192.168.4.100 - 192.168.4.200"; }
+        ];
+      }
+    ];
+  };
 };
 ```
 
-If you change the LAN subnet or DHCP range, re-run the installer or update `router-config.nix` and rebuild. Static reservations can be added with additional `host` blocks inside the `subnet` stanza.
+If you change the LAN subnet or DHCP range, re-run the installer or update `router-config.nix` and rebuild. Static reservations can be defined by appending entries to `subnet4.[].reservations` in `services.kea.dhcp4.settings`.
 
 ## Firewall & Security
 
@@ -184,6 +197,8 @@ Check router status with these commands:
 ```bash
 # Router services
 systemctl status router-*
+systemctl status blocky
+systemctl status kea-dhcp4-server
 
 # Network interfaces
 ip addr show
@@ -193,7 +208,7 @@ ip route show
 journalctl -u blocky -f
 
 # DHCP leases
-journalctl -u dhcpd4 -f
+journalctl -u kea-dhcp4-server -f
 
 # PPPoE connection
 systemctl status pppd
@@ -210,11 +225,16 @@ ip addr show ppp0
    - Check routes: `ip route`
 
 2. **Clients can't get IP addresses**
-   - Verify blocky is running: `systemctl status blocky`
+   - Verify Kea is running: `systemctl status kea-dhcp4-server`
    - Check bridge configuration: `brctl show`
-   - Review DHCP range in `router-config.nix` or inspect `dhcpd.conf`
+   - Review DHCP range in `router-config.nix` or inspect `/etc/kea/dhcp4-server.conf`
 
-3. **Port forwarding not working**
+3. **DNS not resolving**
+   - Verify Blocky is running: `systemctl status blocky`
+   - Review logs: `journalctl -u blocky -f`
+   - Inspect generated config: `cat /etc/blocky/config.yml`
+
+4. **Port forwarding not working**
    - Verify NAT is enabled: `iptables -t nat -L`
    - Check destination host firewall
    - Confirm external port is open in firewall config

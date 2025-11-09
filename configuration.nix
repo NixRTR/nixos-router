@@ -207,26 +207,50 @@ in
         minTime = "5m";
         maxTime = "30m";
       };
-      log = {
-        level = "info";
-      };
+      log.level = "info";
     };
   };
 
-  services.dhcpd4 = {
+  services.kea.dhcp4 = {
     enable = true;
-    interfaces = [ bridgeName ];
-    extraConfig = ''
-      default-lease-time ${toString dhcpDefaultLease};
-      max-lease-time ${toString dhcpMaxLease};
-      authoritative;
-      subnet ${networkAddress} netmask ${netmaskString} {
-        range ${routerConfig.dhcp.start} ${routerConfig.dhcp.end};
-        option routers ${routerConfig.lan.ip};
-        option subnet-mask ${netmaskString};
-        option domain-name-servers ${routerConfig.lan.ip};
-      }
-    '';
+    settings = {
+      interfaces-config = {
+        interfaces = [ bridgeName ];
+      };
+      lease-database = {
+        type = "memfile";
+        persist = true;
+        name = "/var/lib/kea/dhcp4.leases";
+      };
+      option-data = [
+        {
+          name = "routers";
+          data = routerConfig.lan.ip;
+        }
+        {
+          name = "domain-name-servers";
+          data = routerConfig.lan.ip;
+        }
+        {
+          name = "subnet-mask";
+          data = netmaskString;
+        }
+      ];
+      valid-lifetime = dhcpDefaultLease;
+      renew-timer = dhcpDefaultLease / 2;
+      rebind-timer = (dhcpDefaultLease * 3) / 4;
+      subnet4 = [
+        {
+          id = 1;
+          subnet = "${networkAddress}/${toString routerConfig.lan.prefix}";
+          pools = [
+            {
+              pool = "${routerConfig.dhcp.start} - ${routerConfig.dhcp.end}";
+            }
+          ];
+        }
+      ];
+    };
   };
 
   networking.firewall.allowedUDPPorts = lib.mkAfter [ 53 67 ];

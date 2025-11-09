@@ -100,7 +100,7 @@ After successful deployment:
 1. Check router status: `systemctl status router-*`
 2. Verify secrets: `ls -la /run/secrets/`
 3. Test connectivity: `ping 8.8.8.8`
-4. Check DHCP leases: `journalctl -u dhcpd4`
+4. Check DHCP leases: `journalctl -u kea-dhcp4-server -f`
 5. Monitor DNS resolver: `journalctl -u blocky -f`
 
 ## Upgrading Existing Systems

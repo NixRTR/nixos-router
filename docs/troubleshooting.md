@@ -84,20 +84,19 @@ ls: cannot access '/run/secrets/': No such file or directory
 - Router shows no DHCP leases
 
 **Checks:**
-1. Verify blocky is running:
+1. Verify Kea is running:
    ```bash
-   systemctl status blocky
+   systemctl status kea-dhcp4-server
    ```
 
-2. Check blocky logs:
+2. Check Kea logs:
    ```bash
-   journalctl -u blocky -f
+   journalctl -u kea-dhcp4-server -f
    ```
 
-3. Ensure dhcpd4 is active:
+3. Inspect generated config:
    ```bash
-   systemctl status dhcpd4
-   journalctl -u dhcpd4 -f
+   cat /etc/kea/dhcp4-server.conf
    ```
 
 4. Verify bridge configuration:
@@ -109,6 +108,33 @@ ls: cannot access '/run/secrets/': No such file or directory
 5. Test DHCP manually:
    ```bash
    dhcpcd -T br0  # Test DHCP on bridge
+   ```
+
+### DNS Not Resolving
+
+**Symptoms:**
+- Clients can obtain addresses but fail to resolve names
+- `dig`/`nslookup` time out when pointing at the router
+
+**Checks:**
+1. Verify Blocky is running:
+   ```bash
+   systemctl status blocky
+   ```
+
+2. Tail Blocky logs:
+   ```bash
+   journalctl -u blocky -f
+   ```
+
+3. Inspect the generated configuration:
+   ```bash
+   cat /etc/blocky/config.yml
+   ```
+
+4. Test upstream reachability from the router:
+   ```bash
+   dig @1.1.1.1 example.com
    ```
 
 ### Firewall Blocking Traffic
@@ -188,7 +214,7 @@ dig @8.8.8.8 google.com
 # Router services
 systemctl status router-*
 systemctl status blocky
-systemctl status dhcpd4
+systemctl status kea-dhcp4-server
 systemctl status pppd
 
 # System services
@@ -197,7 +223,7 @@ systemctl status sops-nix
 
 # Logs
 journalctl -u blocky -f
-journalctl -u dhcpd4 -f
+journalctl -u kea-dhcp4-server -f
 journalctl -u pppd -f
 journalctl -u systemd-networkd -f
 ```
@@ -241,7 +267,7 @@ done
 ### Reset Network Configuration
 ```bash
 # Stop all network services
-systemctl stop systemd-networkd dhcpd4 blocky pppd
+systemctl stop systemd-networkd kea-dhcp4-server blocky pppd
 
 # Reset interfaces
 ip link set br0 down
@@ -271,7 +297,7 @@ ip addr show
 ip route show
 
 # Manually start services
-systemctl start dhcpd4
+systemctl start kea-dhcp4-server
 systemctl start blocky
 systemctl start systemd-networkd
 ```
@@ -319,7 +345,7 @@ When asking for help, include:
 
 5. **Service status:**
    ```bash
-   systemctl status --all | grep -E "(router|blocky|dhcpd4|pppd|networkd|sops)"
+   systemctl status --all | grep -E "(router|blocky|kea|pppd|networkd|sops)"
    ```
 
 ### Community Resources
