@@ -34,40 +34,58 @@ NIX_FLAGS=(
     --impure
 )
 
-nix_eval_raw() {
-    local expr=$1
+nix_has_attr() {
+    local attr=$1
     nix eval "${NIX_FLAGS[@]}" --raw --expr "
       let cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; });
-      in builtins.toString (cfg.${expr})
+      in builtins.hasAttr \"$attr\" cfg
     "
 }
 
+nix_eval_raw() {
+    local attr=$1
+    local default=$2
+    if [[ $(nix_has_attr "$attr") == "true" ]]; then
+        nix eval "${NIX_FLAGS[@]}" --raw --expr "
+          let cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; });
+          in builtins.toString cfg.${attr}
+        "
+    else
+        echo "$default"
+    fi
+}
+
 nix_eval_list() {
-    local expr=$1
-    nix eval "${NIX_FLAGS[@]}" --raw --expr "
-      let
-        cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; });
-        values = cfg.${expr};
-      in if builtins.isList values
-         then builtins.concatStringsSep \" \" (map builtins.toString values)
-         else builtins.toString values
-    "
+    local attr=$1
+    local default=$2
+    if [[ $(nix_has_attr "$attr") == "true" ]]; then
+        nix eval "${NIX_FLAGS[@]}" --raw --expr "
+          let
+            cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; });
+            value = cfg.${attr};
+          in if builtins.isList value
+             then builtins.concatStringsSep \" \" (map builtins.toString value)
+             else builtins.toString value
+        "
+    else
+        echo "$default"
+    fi
 }
 
 echo "Updating router configuration at $CONFIG_PATH"
 echo
 
-current_hostname=$(nix_eval_raw "hostname")
-current_timezone=$(nix_eval_raw "timezone")
-current_username=$(nix_eval_raw "username")
-current_wan_type=$(nix_eval_raw "wan.type")
-current_wan_iface=$(nix_eval_raw "wan.interface")
-current_lan_interfaces=$(nix_eval_list "lan.interfaces")
-current_lan_ip=$(nix_eval_raw "lan.ip")
-current_lan_prefix=$(nix_eval_raw "lan.prefix")
-current_dhcp_start=$(nix_eval_raw "dhcp.start")
-current_dhcp_end=$(nix_eval_raw "dhcp.end")
-current_dhcp_lease=$(nix_eval_raw "(if dhcp ? leaseTime then dhcp.leaseTime else \"24h\")")
+current_hostname=$(nix_eval_raw "hostname" "nixos-router")
+current_timezone=$(nix_eval_raw "timezone" "America/Anchorage")
+current_username=$(nix_eval_raw "username" "routeradmin")
+current_wan_type=$(nix_eval_raw "wan.type" "dhcp")
+current_wan_iface=$(nix_eval_raw "wan.interface" "eno1")
+current_lan_interfaces=$(nix_eval_list "lan.interfaces" "")
+current_lan_ip=$(nix_eval_raw "lan.ip" "192.168.4.1")
+current_lan_prefix=$(nix_eval_raw "lan.prefix" "24")
+current_dhcp_start=$(nix_eval_raw "dhcp.start" "192.168.4.100")
+current_dhcp_end=$(nix_eval_raw "dhcp.end" "192.168.4.200")
+current_dhcp_lease=$(nix_eval_raw "dhcp.leaseTime" "24h")
 
 read -p "Hostname [$current_hostname]: " HOSTNAME_INPUT
 hostname=${HOSTNAME_INPUT:-$current_hostname}
