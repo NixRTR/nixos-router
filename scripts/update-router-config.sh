@@ -36,12 +36,22 @@ NIX_FLAGS=(
 
 nix_eval_raw() {
     local expr=$1
-    nix eval "${NIX_FLAGS[@]}" --raw --expr "let cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; }); in cfg.${expr}"
+    nix eval "${NIX_FLAGS[@]}" --raw --expr "
+      let cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; });
+      in builtins.toString (cfg.${expr})
+    "
 }
 
 nix_eval_list() {
     local expr=$1
-    nix eval "${NIX_FLAGS[@]}" --raw --expr "let cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; }); in builtins.concatStringsSep \" \" (cfg.${expr})"
+    nix eval "${NIX_FLAGS[@]}" --raw --expr "
+      let
+        cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; });
+        values = cfg.${expr};
+      in if builtins.isList values
+         then builtins.concatStringsSep \" \" (map builtins.toString values)
+         else builtins.toString values
+    "
 }
 
 echo "Updating router configuration at $CONFIG_PATH"
@@ -96,9 +106,6 @@ dhcp_end=${DHCP_END_INPUT:-$current_dhcp_end}
 
 read -p "DHCP lease time [$current_dhcp_lease]: " DHCP_LEASE_INPUT
 dhcp_lease=${DHCP_LEASE_INPUT:-$current_dhcp_lease}
-if [[ $dhcp_lease =~ ^[0-9]+$ ]]; then
-    dhcp_lease="${dhcp_lease}s"
-fi
 
 echo
 echo "Summary of changes:"
