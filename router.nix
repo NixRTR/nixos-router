@@ -385,11 +385,12 @@ in {
       systemd.network.netdevs."10-pppoe" = {
         netdevConfig = {
           Name = pppoeCfg.logicalInterface;
-          Kind = "pppoe";
+          Kind = "ppp";
         };
-        pppoeConfig = {
-          Link = wanInterface;
-        };
+        extraConfig = ''
+          [PPP]
+          Physical=${wanInterface}
+        '';
       };
 
       systemd.network.networks."40-${wanInterface}" = {
