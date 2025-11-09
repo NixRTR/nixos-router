@@ -1,0 +1,490 @@
+{ config, lib, pkgs, ... }:
+
+with lib;
+
+let
+  cfg = config.router.dashboard;
+  routerCfg = config.router;
+in
+
+{
+  options.router.dashboard = {
+    enable = mkEnableOption "Grafana dashboard for router monitoring";
+
+    grafanaPort = mkOption {
+      type = types.port;
+      default = 3000;
+      description = "Port for Grafana web interface";
+    };
+
+    prometheusPort = mkOption {
+      type = types.port;
+      default = 9090;
+      description = "Port for Prometheus";
+    };
+
+    nodeExporterPort = mkOption {
+      type = types.port;
+      default = 9100;
+      description = "Port for Node Exporter";
+    };
+  };
+
+  config = mkIf cfg.enable {
+    # Prometheus - metrics collection
+    services.prometheus = {
+      enable = true;
+      port = cfg.prometheusPort;
+
+      exporters.node = {
+        enable = true;
+        enabledCollectors = [
+          "systemd"      # Service status
+          "netdev"       # Network interfaces
+          "netstat"      # Network statistics
+          "conntrack"    # Connection tracking
+          "cpu"          # CPU stats
+          "diskstats"    # Disk I/O
+          "filesystem"   # Filesystem usage
+          "loadavg"      # System load
+          "meminfo"      # Memory info
+          "vmstat"       # Virtual memory stats
+        ];
+        port = cfg.nodeExporterPort;
+      };
+
+      scrapeConfigs = [
+        {
+          job_name = "router";
+          static_configs = [{
+            targets = [ "localhost:${toString cfg.nodeExporterPort}" ];
+            labels = {
+              alias = config.networking.hostName;
+              role = "router";
+            };
+          }];
+          scrape_interval = "5s";
+        }
+      ];
+    };
+
+    # Grafana - visualization
+    services.grafana = {
+      enable = true;
+      settings = {
+        server = {
+          http_addr = "0.0.0.0";
+          http_port = cfg.grafanaPort;
+          domain = config.networking.hostName;
+          root_url = "http://%(domain)s:${toString cfg.grafanaPort}/";
+        };
+        security = {
+          admin_user = "admin";
+          admin_password = "admin";  # Change on first login
+        };
+        analytics.reporting_enabled = false;
+        analytics.check_for_updates = false;
+      };
+
+      provision = {
+        enable = true;
+
+        # Auto-configure Prometheus data source
+        datasources.settings = {
+          apiVersion = 1;
+          datasources = [{
+            name = "Prometheus";
+            type = "prometheus";
+            access = "proxy";
+            url = "http://localhost:${toString cfg.prometheusPort}";
+            isDefault = true;
+            jsonData = {
+              timeInterval = "5s";
+            };
+          }];
+        };
+
+        # Auto-load router dashboard
+        dashboards.settings = {
+          apiVersion = 1;
+          providers = [{
+            name = "Router Dashboards";
+            type = "file";
+            disableDeletion = false;
+            updateIntervalSeconds = 10;
+            allowUiUpdates = true;
+            options.path = "/etc/grafana-dashboards";
+          }];
+        };
+      };
+    };
+
+    # Create dashboard file
+    environment.etc."grafana-dashboards/router-monitoring.json" = {
+      text = builtins.toJSON {
+        dashboard = {
+          title = "Router Monitoring";
+          uid = "router-main";
+          tags = [ "router" "network" "system" ];
+          timezone = "browser";
+          schemaVersion = 16;
+          version = 1;
+          refresh = "5s";
+
+          panels = [
+            # WAN Interface Status
+            {
+              id = 1;
+              title = "WAN Interface - ${routerCfg.wan.interface}";
+              type = "graph";
+              gridPos = { x = 0; y = 0; w = 12; h = 8; };
+              targets = [
+                {
+                  expr = ''rate(node_network_receive_bytes_total{device="${routerCfg.wan.interface}"}[1m]) * 8'';
+                  legendFormat = "Download";
+                  refId = "A";
+                }
+                {
+                  expr = ''rate(node_network_transmit_bytes_total{device="${routerCfg.wan.interface}"}[1m]) * 8'';
+                  legendFormat = "Upload";
+                  refId = "B";
+                }
+              ];
+              yaxes = [
+                { format = "bps"; label = "Bandwidth"; }
+                { format = "short"; }
+              ];
+              legend.show = true;
+              nullPointMode = "null";
+            }
+
+            # LAN Bridge Status
+            {
+              id = 2;
+              title = "LAN Bridge - ${routerCfg.lan.bridge.name}";
+              type = "graph";
+              gridPos = { x = 12; y = 0; w = 12; h = 8; };
+              targets = [
+                {
+                  expr = ''rate(node_network_receive_bytes_total{device="${routerCfg.lan.bridge.name}"}[1m]) * 8'';
+                  legendFormat = "Download";
+                  refId = "A";
+                }
+                {
+                  expr = ''rate(node_network_transmit_bytes_total{device="${routerCfg.lan.bridge.name}"}[1m]) * 8'';
+                  legendFormat = "Upload";
+                  refId = "B";
+                }
+              ];
+              yaxes = [
+                { format = "bps"; label = "Bandwidth"; }
+                { format = "short"; }
+              ];
+              legend.show = true;
+              nullPointMode = "null";
+            }
+
+            # Network Interface Status
+            {
+              id = 3;
+              title = "Interface Status";
+              type = "stat";
+              gridPos = { x = 0; y = 8; w = 6; h = 4; };
+              targets = [{
+                expr = ''node_network_up{device=~"${routerCfg.wan.interface}|${routerCfg.lan.bridge.name}|ppp0"}'';
+                legendFormat = "{{device}}";
+                refId = "A";
+              }];
+              options = {
+                reduceOptions = {
+                  values = false;
+                  calcs = [ "lastNotNull" ];
+                };
+                textMode = "auto";
+                colorMode = "value";
+              };
+              fieldConfig = {
+                defaults = {
+                  mappings = [
+                    { type = "value"; options = { "0" = { text = "Down"; color = "red"; }; }; }
+                    { type = "value"; options = { "1" = { text = "Up"; color = "green"; }; }; }
+                  ];
+                  thresholds = {
+                    mode = "absolute";
+                    steps = [
+                      { value = null; color = "red"; }
+                      { value = 1; color = "green"; }
+                    ];
+                  };
+                };
+              };
+            }
+
+            # CPU Usage
+            {
+              id = 4;
+              title = "CPU Usage";
+              type = "gauge";
+              gridPos = { x = 6; y = 8; w = 6; h = 4; };
+              targets = [{
+                expr = ''100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)'';
+                legendFormat = "CPU %";
+                refId = "A";
+              }];
+              options = {
+                showThresholdLabels = false;
+                showThresholdMarkers = true;
+              };
+              fieldConfig = {
+                defaults = {
+                  unit = "percent";
+                  min = 0;
+                  max = 100;
+                  thresholds = {
+                    mode = "absolute";
+                    steps = [
+                      { value = null; color = "green"; }
+                      { value = 70; color = "yellow"; }
+                      { value = 90; color = "red"; }
+                    ];
+                  };
+                };
+              };
+            }
+
+            # Memory Usage
+            {
+              id = 5;
+              title = "Memory Usage";
+              type = "gauge";
+              gridPos = { x = 12; y = 8; w = 6; h = 4; };
+              targets = [{
+                expr = ''(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100'';
+                legendFormat = "Memory %";
+                refId = "A";
+              }];
+              options = {
+                showThresholdLabels = false;
+                showThresholdMarkers = true;
+              };
+              fieldConfig = {
+                defaults = {
+                  unit = "percent";
+                  min = 0;
+                  max = 100;
+                  thresholds = {
+                    mode = "absolute";
+                    steps = [
+                      { value = null; color = "green"; }
+                      { value = 80; color = "yellow"; }
+                      { value = 95; color = "red"; }
+                    ];
+                  };
+                };
+              };
+            }
+
+            # System Load
+            {
+              id = 6;
+              title = "System Load";
+              type = "stat";
+              gridPos = { x = 18; y = 8; w = 6; h = 4; };
+              targets = [{
+                expr = "node_load1";
+                legendFormat = "1m";
+                refId = "A";
+              }];
+              options = {
+                reduceOptions = {
+                  values = false;
+                  calcs = [ "lastNotNull" ];
+                };
+                textMode = "auto";
+                colorMode = "value";
+              };
+              fieldConfig = {
+                defaults = {
+                  decimals = 2;
+                  thresholds = {
+                    mode = "absolute";
+                    steps = [
+                      { value = null; color = "green"; }
+                      { value = 2; color = "yellow"; }
+                      { value = 4; color = "red"; }
+                    ];
+                  };
+                };
+              };
+            }
+
+            # Packet Errors/Drops
+            {
+              id = 7;
+              title = "Network Errors & Drops";
+              type = "graph";
+              gridPos = { x = 0; y = 12; w = 12; h = 6; };
+              targets = [
+                {
+                  expr = ''rate(node_network_receive_errs_total{device="${routerCfg.wan.interface}"}[1m])'';
+                  legendFormat = "WAN RX Errors";
+                  refId = "A";
+                }
+                {
+                  expr = ''rate(node_network_transmit_errs_total{device="${routerCfg.wan.interface}"}[1m])'';
+                  legendFormat = "WAN TX Errors";
+                  refId = "B";
+                }
+                {
+                  expr = ''rate(node_network_receive_drop_total{device="${routerCfg.wan.interface}"}[1m])'';
+                  legendFormat = "WAN RX Drops";
+                  refId = "C";
+                }
+              ];
+              yaxes = [
+                { format = "pps"; label = "Packets/sec"; }
+                { format = "short"; }
+              ];
+              legend.show = true;
+            }
+
+            # System Services Status
+            {
+              id = 8;
+              title = "Service Status";
+              type = "stat";
+              gridPos = { x = 12; y = 12; w = 12; h = 6; };
+              targets = [
+                {
+                  expr = ''node_systemd_unit_state{name=~"blocky.service|kea-dhcp4-server.service|pppd-.*.service",state="active"}'';
+                  legendFormat = "{{name}}";
+                  refId = "A";
+                }
+              ];
+              options = {
+                reduceOptions = {
+                  values = false;
+                  calcs = [ "lastNotNull" ];
+                };
+                textMode = "name";
+                colorMode = "background";
+              };
+              fieldConfig = {
+                defaults = {
+                  mappings = [
+                    { type = "value"; options = { "0" = { text = "Inactive"; color = "red"; }; }; }
+                    { type = "value"; options = { "1" = { text = "Active"; color = "green"; }; }; }
+                  ];
+                  thresholds = {
+                    mode = "absolute";
+                    steps = [
+                      { value = null; color = "red"; }
+                      { value = 1; color = "green"; }
+                    ];
+                  };
+                };
+              };
+            }
+
+            # System Uptime
+            {
+              id = 9;
+              title = "System Uptime";
+              type = "stat";
+              gridPos = { x = 0; y = 18; w = 8; h = 3; };
+              targets = [{
+                expr = "time() - node_boot_time_seconds";
+                legendFormat = "Uptime";
+                refId = "A";
+              }];
+              options = {
+                reduceOptions = {
+                  values = false;
+                  calcs = [ "lastNotNull" ];
+                };
+                textMode = "auto";
+                colorMode = "none";
+              };
+              fieldConfig = {
+                defaults = {
+                  unit = "s";
+                };
+              };
+            }
+
+            # Disk Usage
+            {
+              id = 10;
+              title = "Disk Usage";
+              type = "gauge";
+              gridPos = { x = 8; y = 18; w = 8; h = 3; };
+              targets = [{
+                expr = ''100 - ((node_filesystem_avail_bytes{mountpoint="/",fstype!="rootfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="rootfs"}) * 100)'';
+                legendFormat = "Root FS";
+                refId = "A";
+              }];
+              options = {
+                showThresholdLabels = false;
+                showThresholdMarkers = true;
+              };
+              fieldConfig = {
+                defaults = {
+                  unit = "percent";
+                  min = 0;
+                  max = 100;
+                  thresholds = {
+                    mode = "absolute";
+                    steps = [
+                      { value = null; color = "green"; }
+                      { value = 80; color = "yellow"; }
+                      { value = 95; color = "red"; }
+                    ];
+                  };
+                };
+              };
+            }
+
+            # Active Connections
+            {
+              id = 11;
+              title = "Active Network Connections";
+              type = "stat";
+              gridPos = { x = 16; y = 18; w = 8; h = 3; };
+              targets = [{
+                expr = "node_netstat_Tcp_CurrEstab";
+                legendFormat = "TCP Connections";
+                refId = "A";
+              }];
+              options = {
+                reduceOptions = {
+                  values = false;
+                  calcs = [ "lastNotNull" ];
+                };
+                textMode = "auto";
+                colorMode = "value";
+              };
+              fieldConfig = {
+                defaults = {
+                  thresholds = {
+                    mode = "absolute";
+                    steps = [
+                      { value = null; color = "green"; }
+                      { value = 1000; color = "yellow"; }
+                      { value = 5000; color = "red"; }
+                    ];
+                  };
+                };
+              };
+            }
+          ];
+        };
+        overwrite = true;
+      };
+      mode = "0644";
+    };
+
+    # Open firewall for Grafana
+    networking.firewall.allowedTCPPorts = [ cfg.grafanaPort ];
+  };
+}
+

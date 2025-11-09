@@ -62,6 +62,7 @@ in
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
       ./router.nix
+      ./dashboard.nix
     ];
 
   nix.settings.experimental-features = [
@@ -128,6 +129,7 @@ in
         destinationPort = 4242;
       }
     ];
+    dashboard.enable = true;
   };
 
   sops = {

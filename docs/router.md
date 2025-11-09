@@ -238,3 +238,62 @@ ip addr show ppp0
    - Verify NAT is enabled: `iptables -t nat -L`
    - Check destination host firewall
    - Confirm external port is open in firewall config
+
+## Monitoring Dashboard
+
+The router includes an optional Grafana + Prometheus monitoring dashboard that provides real-time visibility into:
+
+### Enabling the Dashboard
+
+Add to your `configuration.nix`:
+
+```nix
+router.dashboard.enable = true;
+```
+
+### Accessing the Dashboard
+
+After rebuilding, access Grafana at:
+- URL: `http://<router-lan-ip>:3000`
+- Default credentials: `admin` / `admin`
+- Change the password on first login
+
+### Dashboard Panels
+
+The pre-configured "Router Monitoring" dashboard includes:
+
+**Network Monitoring:**
+- WAN interface bandwidth (upload/download)
+- LAN bridge bandwidth
+- Interface status (up/down)
+- Network errors and packet drops
+- Active TCP connections
+
+**System Resources:**
+- CPU usage gauge
+- Memory usage gauge
+- Disk usage gauge
+- System load average
+- System uptime
+
+**Service Status:**
+- Blocky DNS status
+- Kea DHCP4 status
+- PPPoE connection status (when applicable)
+
+### Customization
+
+The dashboard configuration is in `dashboard.nix` and can be customized:
+
+```nix
+router.dashboard = {
+  enable = true;
+  grafanaPort = 3000;       # Change web UI port
+  prometheusPort = 9090;    # Change Prometheus port
+  nodeExporterPort = 9100;  # Change Node Exporter port
+};
+```
+
+### Data Retention
+
+Prometheus stores metrics in memory by default. For long-term storage, consider configuring persistent storage in `dashboard.nix`.
