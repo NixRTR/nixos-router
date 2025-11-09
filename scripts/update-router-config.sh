@@ -1,32 +1,47 @@
 #!/usr/bin/env bash
 
-# Interactive helper to update router-config.nix after installation.
+# Interactive helper to update router-config.nix, manage PPPoE secrets, and rebuild the system.
 
 set -euo pipefail
 
-SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)
-DEFAULT_CONFIG_PATH="$(cd "$SCRIPT_DIR/.." && pwd)/router-config.nix"
-CONFIG_PATH="${1:-$DEFAULT_CONFIG_PATH}"
-
-if [[ ! -f "$CONFIG_PATH" ]]; then
-    echo "error: router-config file not found at $CONFIG_PATH" >&2
-    echo "Usage: $0 [/path/to/router-config.nix]" >&2
+if [[ $EUID -ne 0 ]]; then
+    echo "error: this script must be run as root" >&2
     exit 1
 fi
 
-SECRETS_DEFAULT_PATH="$(cd "$SCRIPT_DIR/.." && pwd)/secrets/secrets.yaml"
-SECRETS_PATH="${SECRETS_DEFAULT_PATH}"
+if ! command -v nix >/dev/null 2>&1; then
+    echo "error: nix executable not found in PATH" >&2
+    exit 1
+fi
 
-NIX_FLAGS=(--extra-experimental-features nix-command --extra-experimental-features flakes)
+DEFAULT_CONFIG_PATH="/etc/nixos/router-config.nix"
+DEFAULT_SECRETS_PATH="/etc/nixos/secrets/secrets.yaml"
+DEFAULT_FLAKE_PATH="/etc/nixos"
+
+CONFIG_PATH="${1:-$DEFAULT_CONFIG_PATH}"
+SECRETS_PATH="${2:-$DEFAULT_SECRETS_PATH}"
+FLAKE_PATH="${3:-$DEFAULT_FLAKE_PATH}"
+
+if [[ ! -f "$CONFIG_PATH" ]]; then
+    echo "error: router-config file not found at $CONFIG_PATH" >&2
+    echo "Usage: $0 [router-config.nix] [secrets.yaml] [flake-directory]" >&2
+    exit 1
+fi
+
+NIX_FLAGS=(
+    --extra-experimental-features nix-command
+    --extra-experimental-features flakes
+    --impure
+)
 
 nix_eval_raw() {
     local expr=$1
-    nix eval "${NIX_FLAGS[@]}" --raw --expr "with import \"$CONFIG_PATH\"; $expr"
+    nix eval "${NIX_FLAGS[@]}" --raw --expr "let cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; }); in cfg.${expr}"
 }
 
 nix_eval_list() {
     local expr=$1
-    nix eval "${NIX_FLAGS[@]}" --raw --expr "with import \"$CONFIG_PATH\"; builtins.concatStringsSep \" \" ($expr)"
+    nix eval "${NIX_FLAGS[@]}" --raw --expr "let cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; }); in builtins.concatStringsSep \" \" (cfg.${expr})"
 }
 
 echo "Updating router configuration at $CONFIG_PATH"
@@ -53,8 +68,9 @@ timezone=${TIMEZONE_INPUT:-$current_timezone}
 echo "WAN connection types:"
 echo "  1) DHCP"
 echo "  2) PPPoE"
-read -p "Select WAN type (1/2) [$( [[ $current_wan_type == pppoe ]] && echo 2 || echo 1 )]: " WAN_TYPE_CHOICE
-case ${WAN_TYPE_CHOICE:-$( [[ $current_wan_type == pppoe ]] && echo 2 || echo 1 )} in
+default_choice=$( [[ $current_wan_type == "pppoe" ]] && echo 2 || echo 1 )
+read -p "Select WAN type (1/2) [$default_choice]: " WAN_TYPE_CHOICE
+case ${WAN_TYPE_CHOICE:-$default_choice} in
     1) wan_type="dhcp" ;;
     2) wan_type="pppoe" ;;
     *) wan_type="dhcp" ;;
@@ -107,8 +123,12 @@ lan_interfaces_array=()
 if [[ -n "$lan_interfaces" ]]; then
     read -ra lan_interfaces_array <<<"$lan_interfaces"
 fi
-lan_interfaces_nix="[ $(printf '"%s" ' "${lan_interfaces_array[@]}") ]"
-lan_interfaces_nix="${lan_interfaces_nix% }"
+if [[ ${#lan_interfaces_array[@]} -eq 0 ]]; then
+    lan_interfaces_nix="[ ]"
+else
+    lan_interfaces_nix="[ $(printf '"%s" ' "${lan_interfaces_array[@]}") ]"
+    lan_interfaces_nix="${lan_interfaces_nix% }"
+fi
 
 cat >"$CONFIG_PATH" <<EOF
 # Router configuration variables
@@ -169,5 +189,13 @@ fi
 if [[ $wan_type == "pppoe" ]]; then
     echo "Reminder: ensure PPPoE credentials in your SOPS secrets are up to date."
 fi
-echo "Run 'sudo nixos-rebuild switch --flake .#router' to apply the new settings."
+
+echo
+read -p "Run 'nixos-rebuild switch --flake ${FLAKE_PATH}#router' now? [y/N]: " RUN_REBUILD
+if [[ $RUN_REBUILD =~ ^[Yy]$ ]]; then
+    echo
+    nixos-rebuild switch --flake "${FLAKE_PATH}#router"
+fi
+
+echo "Done."
 
