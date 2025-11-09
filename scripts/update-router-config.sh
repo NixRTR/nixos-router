@@ -48,7 +48,23 @@ nix_eval_raw() {
     if [[ $(nix_has_attr "$attr") == "true" ]]; then
         nix eval "${NIX_FLAGS[@]}" --raw --expr "
           let cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; });
-          in builtins.toString cfg.${attr}
+          in builtins.toString (cfg.${attr})
+        "
+    else
+        echo "$default"
+    fi
+}
+
+nix_eval_nested() {
+    local attr_path=$1
+    local default=$2
+    if [[ $(nix eval "${NIX_FLAGS[@]}" --raw --expr "
+        let cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; });
+        in builtins.hasAttr \"${attr_path%.*}\" cfg && builtins.hasAttr \"${attr_path##*.}\" cfg.${attr_path%.*}
+    ") == "true" ]]; then
+        nix eval "${NIX_FLAGS[@]}" --raw --expr "
+          let cfg = import (builtins.path { path = \"$CONFIG_PATH\"; name = \"router-config\"; });
+          in builtins.toString (cfg.${attr_path})
         "
     else
         echo "$default"
@@ -83,9 +99,9 @@ current_wan_iface=$(nix_eval_raw "wan.interface" "eno1")
 current_lan_interfaces=$(nix_eval_list "lan.interfaces" "")
 current_lan_ip=$(nix_eval_raw "lan.ip" "192.168.4.1")
 current_lan_prefix=$(nix_eval_raw "lan.prefix" "24")
-current_dhcp_start=$(nix_eval_raw "dhcp.start" "192.168.4.100")
-current_dhcp_end=$(nix_eval_raw "dhcp.end" "192.168.4.200")
-current_dhcp_lease=$(nix_eval_raw "dhcp.leaseTime" "24h")
+current_dhcp_start=$(nix_eval_nested "dhcp.start" "192.168.4.100")
+current_dhcp_end=$(nix_eval_nested "dhcp.end" "192.168.4.200")
+current_dhcp_lease=$(nix_eval_nested "dhcp.leaseTime" "24h")
 
 read -p "Hostname [$current_hostname]: " HOSTNAME_INPUT
 hostname=${HOSTNAME_INPUT:-$current_hostname}
