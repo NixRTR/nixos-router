@@ -107,25 +107,25 @@ in
       {
         proto = "both";
         externalPort = 80;
-        destination = routerConfig.lan.ip;
+        destination = 192.168.3.33;
         destinationPort = 80;
       }
       {
         proto = "both";
         externalPort = 443;
-        destination = routerConfig.lan.ip;
+        destination = 192.168.3.33;
         destinationPort = 443;
       }
       {
         proto = "both";
         externalPort = 22000;
-        destination = routerConfig.lan.ip;
+        destination = 192.168.3.33;
         destinationPort = 22000;
       }
       {
         proto = "both";
         externalPort = 4242;
-        destination = routerConfig.lan.ip;
+        destination = 192.168.3.31;
         destinationPort = 4242;
       }
     ];
