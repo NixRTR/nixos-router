@@ -381,6 +381,9 @@ in {
     })
 
     (mkIf (wanType == "pppoe") {
+      # Install rp-pppoe package for the PPPoE plugin
+      environment.systemPackages = [ pkgs.rpPPPoE ];
+      
       # Setup PPPoE session using pppd
       # Based on: https://francis.begyn.be/blog/nixos-home-router
       services.pppd = {
