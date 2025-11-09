@@ -9,7 +9,6 @@ let
   wanInterface = wanCfg.interface;
   staticCfg = wanCfg.static;
   pppoeCfg = wanCfg.pppoe;
-  pptpCfg = wanCfg.pptp;
   lanCfg = cfg.lan;
   firewallCfg = cfg.firewall;
   natCfg = cfg.nat;
@@ -21,7 +20,6 @@ let
   natExternalInterface =
     if natCfg.externalInterface != null then natCfg.externalInterface
     else if wanType == "pppoe" then pppoeCfg.logicalInterface
-    else if wanType == "pptp" then pptpCfg.logicalInterface
     else wanInterface;
 
   portRangeType = types.submodule ({ ... }: {
@@ -101,7 +99,7 @@ in {
 
     wan = {
       type = mkOption {
-        type = types.enum [ "dhcp" "static" "pppoe" "pptp" ];
+        type = types.enum [ "dhcp" "static" "pppoe" ];
         default = "dhcp";
         description = "WAN connection type.";
       };
@@ -189,54 +187,6 @@ in {
           type = types.nullOr types.int;
           default = null;
           description = "Override MTU for the PPPoE session.";
-        };
-      };
-
-      pptp = {
-        logicalInterface = mkOption {
-          type = types.str;
-          default = "pptp0";
-          description = "Name of the PPTP interface exposed by systemd-networkd.";
-        };
-        server = mkOption {
-          type = types.str;
-          default = "";
-          description = "Remote PPTP server address (hostname or IP).";
-        };
-        user = mkOption {
-          type = types.str;
-          default = "";
-          description = "PPTP username credential.";
-        };
-        passwordFile = mkOption {
-          type = types.str;
-          default = "/etc/nixos/secrets/pptp-password";
-          description = "File containing the PPTP password.";
-        };
-        refuseEAP = mkOption {
-          type = types.bool;
-          default = false;
-          description = "Set RefuseEAP=yes for the PPTP connection.";
-        };
-        requireMPPE = mkOption {
-          type = types.bool;
-          default = true;
-          description = "Require MPPE encryption on the PPTP tunnel.";
-        };
-        mppeStateful = mkOption {
-          type = types.bool;
-          default = false;
-          description = "Enable stateful MPPE (MPPEStateful=yes).";
-        };
-        mtu = mkOption {
-          type = types.nullOr types.int;
-          default = null;
-          description = "Override MTU on the PPTP tunnel.";
-        };
-        extraConfig = mkOption {
-          type = types.attrsOf types.anything;
-          default = { };
-          description = "Additional settings merged into the PPTP netdev configuration.";
         };
       };
     };
@@ -347,6 +297,7 @@ in {
       networking.networkmanager.enable = false;
       networking.useNetworkd = true;
       systemd.network.enable = true;
+      systemd.network.wait-online.enable = false;
       networking.useDHCP = false;
 
       networking.interfaces.${wanInterface} = mkMerge [
@@ -365,7 +316,6 @@ in {
           }];
         })
         (mkIf (wanType == "pppoe") { useDHCP = false; })
-        (mkIf (wanType == "pptp") { useDHCP = true; })
       ];
 
       systemd.network = {
@@ -430,31 +380,31 @@ in {
       };
     })
 
-    (mkIf (wanType == "pptp") {
-      systemd.network.netdevs.${pptpCfg.logicalInterface} = {
-        netdevConfig = {
-          Kind = "pptp";
-          Name = pptpCfg.logicalInterface;
-        };
-        pptpConfig =
-          {
-            Remote = pptpCfg.server;
-            User = pptpCfg.user;
-            PasswordFile = pptpCfg.passwordFile;
-            PhysicalDevice = wanInterface;
-            RefuseEAP = pptpCfg.refuseEAP;
-            RequireMPPE = pptpCfg.requireMPPE;
-            MPPEStateful = pptpCfg.mppeStateful;
-          }
-          // optionalAttrs (pptpCfg.mtu != null) { MTU = pptpCfg.mtu; }
-          // pptpCfg.extraConfig;
-      };
-
-      systemd.network.networks.${pptpCfg.logicalInterface} = {
-        matchConfig.Name = pptpCfg.logicalInterface;
-        networkConfig = {
-          DHCP = "ipv4";
-          KeepConfiguration = "dhcp-on-stop";
+    (mkIf (wanType == "pppoe") {
+      services.pppd = {
+        enable = true;
+        peers.${wanInterface} = {
+          enable = true;
+          autostart = true;
+          config = ''
+            plugin rp-pppoe.so ${wanInterface}
+            name "${builtins.readFile pppoeCfg.user}"
+            ${optionalString (pppoeCfg.service != null) "rp_pppoe_service '${pppoeCfg.service}'"}
+            ${optionalString pppoeCfg.ipv6 "+ipv6"}
+            ${optionalString (pppoeCfg.mtu != null) "mtu ${toString pppoeCfg.mtu}"}
+            ${optionalString (pppoeCfg.mtu != null) "mru ${toString pppoeCfg.mtu}"}
+            noipdefault
+            defaultroute
+            replacedefaultroute
+            persist
+            maxfail 0
+            holdoff 5
+            lcp-echo-interval 15
+            lcp-echo-failure 3
+            usepeerdns
+            passwordfd 0
+          '';
+          passwordFile = pppoeCfg.passwordFile;
         };
       };
     })
