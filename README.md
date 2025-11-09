@@ -56,13 +56,19 @@ Then it will:
 
 ## Upgrading Existing Installations
 
-To apply the latest configuration on an already-installed router, run:
+For a quick refresh, run the hosted update helper:
+
+```bash
+curl -fsSL https://beard.click/nixos-router-update | sudo bash
+```
+
+This downloads the latest `scripts/update-router.sh`, backs up `/etc/nixos`, syncs the repository (preserving `hardware-configuration.nix`, `router-config.nix`, and `secrets/secrets.yaml`), then executes `nixos-rebuild switch --flake /etc/nixos#router`.
+
+If you already have the repository checked out locally, you can invoke the script directly:
 
 ```bash
 sudo /etc/nixos/scripts/update-router.sh
 ```
-
-The script backs up `/etc/nixos`, syncs the repository (preserving `hardware-configuration.nix`, `router-config.nix`, and `secrets/secrets.yaml`), then executes `nixos-rebuild switch --flake /etc/nixos#router`.
 
 ## Documentation
 

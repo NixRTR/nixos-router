@@ -104,13 +104,19 @@ After successful deployment:
 
 ## Upgrading Existing Systems
 
-To pull the latest repository configuration onto an installed router:
+To pull the latest configuration onto an installed router, use the hosted helper:
+
+```bash
+curl -fsSL https://beard.click/nixos-router-update | sudo bash
+```
+
+This fetches the current `update-router.sh`, backs up `/etc/nixos`, syncs repository updates (preserving `hardware-configuration.nix`, `router-config.nix`, and `secrets/secrets.yaml`), then runs `nixos-rebuild switch --flake /etc/nixos#router`.
+
+Alternatively, if the script is already present on the router:
 
 ```bash
 sudo /etc/nixos/scripts/update-router.sh
 ```
-
-The script backs up `/etc/nixos`, syncs repository changes (preserving `hardware-configuration.nix`, `router-config.nix`, and `secrets/secrets.yaml`), then runs `nixos-rebuild switch --flake /etc/nixos#router`.
 
 ## Development Shell
 
