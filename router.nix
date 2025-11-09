@@ -389,6 +389,7 @@ in {
           config = ''
             plugin rp-pppoe.so ${wanInterface}
             name "${builtins.readFile pppoeCfg.user}"
+            password "${builtins.readFile pppoeCfg.passwordFile}"
             ${optionalString (pppoeCfg.service != null) "rp_pppoe_service '${pppoeCfg.service}'"}
             ${optionalString pppoeCfg.ipv6 "+ipv6"}
             ${optionalString (pppoeCfg.mtu != null) "mtu ${toString pppoeCfg.mtu}"}
@@ -402,9 +403,7 @@ in {
             lcp-echo-interval 15
             lcp-echo-failure 3
             usepeerdns
-            passwordfd 0
           '';
-          passwordFile = pppoeCfg.passwordFile;
         };
       };
     })
