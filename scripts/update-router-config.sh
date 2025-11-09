@@ -23,62 +23,75 @@ if [[ ! -f "$CONFIG_PATH" ]]; then
     exit 1
 fi
 
-CONFIG_JSON=$(python - <<'PY' "$CONFIG_PATH" || true
-import json, sys, re
-import pathlib
-path = pathlib.Path(sys.argv[1])
-data = path.read_text()
-data = re.sub(r'#.*', '', data)
-data = re.sub(r'([a-zA-Z0-9_]+)\s*=', r'"\1":', data)
-data = re.sub(r';', ',', data)
-data = data.replace('{', '{"').replace('}', '"}')
-data = data.replace('""', '"')
-data = data.replace('" "', '"')
-data = data.replace(',"', ', "')
-print(json.dumps(eval(data), indent=2))
-PY
-)
-
-json_get() {
-    local key=$1
-    local default=$2
-    python - <<'PY' "$CONFIG_JSON" "$key" "$default"
-import json, sys
-cfg = json.loads(sys.argv[1])
-key = sys.argv[2]
-default = sys.argv[3]
-value = cfg
-try:
-    for part in key.split('.'):
-        value = value[part]
-except Exception:
-    print(default)
-    sys.exit()
-if isinstance(value, list):
-    print(" ".join(str(x) for x in value))
-else:
-    print(value)
-PY
+strip_value() {
+    local value=$1
+    value=${value%%;*}
+    value=${value//\"/}
+    value=${value//,/ }
+    value=$(echo "$value" | xargs)
+    echo "$value"
 }
 
-json_get_list() {
-    json_get "$1" "$2"
+extract_simple() {
+    local key=$1
+    local default=$2
+    local value
+    value=$(grep -E "^[[:space:]]*$key[[:space:]]*=" "$CONFIG_PATH" | head -n1 | cut -d= -f2-)
+    value=$(strip_value "${value:-}")
+    echo "${value:-$default}"
+}
+
+extract_block_value() {
+    local block=$1
+    local key=$2
+    local default=$3
+    local value
+    value=$(awk -v blk="$block" -v attr="$key" '
+        $0 ~ blk" =" {inside=1}
+        inside && $0 ~ attr" =" {
+            sub(/.*= */, "", $0)
+            print $0
+            exit
+        }
+        inside && $0 ~ /^}/ {inside=0}
+    ' "$CONFIG_PATH")
+    value=$(strip_value "${value:-}")
+    echo "${value:-$default}"
+}
+
+extract_block_list() {
+    local block=$1
+    local key=$2
+    local default=$3
+    local value
+    value=$(awk -v blk="$block" -v attr="$key" '
+        $0 ~ blk" =" {inside=1}
+        inside && $0 ~ attr" =" {
+            sub(/.*\[/, "", $0)
+            gsub(/\].*/, "", $0)
+            print $0
+            exit
+        }
+        inside && $0 ~ /^}/ {inside=0}
+    ' "$CONFIG_PATH")
+    value=$(strip_value "${value:-}")
+    echo "${value:-$default}"
 }
 
 echo "Updating router configuration at $CONFIG_PATH"
 echo
 
-current_hostname=$(json_get 'hostname' 'nixos-router')
-current_timezone=$(json_get 'timezone' 'America/Anchorage')
-current_username=$(json_get 'username' 'routeradmin')
-current_wan_type=$(json_get 'wan.type' 'dhcp')
-current_wan_iface=$(json_get 'wan.interface' 'eno1')
-current_lan_interfaces=$(json_get_list 'lan.interfaces' '')
-current_lan_ip=$(json_get 'lan.ip' '192.168.4.1')
-current_lan_prefix=$(json_get 'lan.prefix' '24')
-current_dhcp_start=$(json_get 'dhcp.start' '192.168.4.100')
-current_dhcp_end=$(json_get 'dhcp.end' '192.168.4.200')
-current_dhcp_lease=$(json_get 'dhcp.leaseTime' '24h')
+current_hostname=$(extract_simple 'hostname' 'nixos-router')
+current_timezone=$(extract_simple 'timezone' 'America/Anchorage')
+current_username=$(extract_simple 'username' 'routeradmin')
+current_wan_type=$(extract_block_value 'wan' 'type' 'dhcp')
+current_wan_iface=$(extract_block_value 'wan' 'interface' 'eno1')
+current_lan_interfaces=$(extract_block_list 'lan' 'interfaces' '')
+current_lan_ip=$(extract_block_value 'lan' 'ip' '192.168.4.1')
+current_lan_prefix=$(extract_block_value 'lan' 'prefix' '24')
+current_dhcp_start=$(extract_block_value 'dhcp' 'start' '192.168.4.100')
+current_dhcp_end=$(extract_block_value 'dhcp' 'end' '192.168.4.200')
+current_dhcp_lease=$(extract_block_value 'dhcp' 'leaseTime' '24h')
 
 read -p "Hostname [$current_hostname]: " HOSTNAME_INPUT
 hostname=${HOSTNAME_INPUT:-$current_hostname}
