@@ -69,7 +69,8 @@ in
           "loadavg"      # System load
           "meminfo"      # Memory info
           "vmstat"       # Virtual memory stats
-        ];
+        ] ++ optionals cfg.speedtest.enable [ "textfile" ];
+        extraFlags = optionals cfg.speedtest.enable [ "--collector.textfile.directory=/var/lib/speedtest" ];
         port = cfg.nodeExporterPort;
       };
 
@@ -150,12 +151,6 @@ in
         RandomizedDelaySec = "5min";
         Persistent = true;
       };
-    };
-
-    # Add textfile collector path to node_exporter
-    services.prometheus.exporters.node = mkIf cfg.speedtest.enable {
-      enabledCollectors = [ "textfile" ];
-      extraFlags = [ "--collector.textfile.directory=/var/lib/speedtest" ];
     };
 
     # Grafana - visualization
