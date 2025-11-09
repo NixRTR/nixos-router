@@ -38,13 +38,30 @@ require_root() {
 }
 
 check_dependencies() {
-    local deps=(git rsync nixos-rebuild)
-    for dep in "${deps[@]}"; do
-        if ! command -v "$dep" >/dev/null 2>&1; then
-            log_error "Missing required command: $dep"
-            exit 1
+    local -a missing=()
+    declare -A packages=(
+        [git]="git"
+        [rsync]="rsync"
+        [nixos-rebuild]="nixos-rebuild"
+    )
+
+    for cmd in "${!packages[@]}"; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing+=("nixpkgs#${packages[$cmd]}")
         fi
     done
+
+    if ((${#missing[@]} > 0)); then
+        if [[ -n "${NIX_SHELL_ACTIVE:-}" ]]; then
+            log_error "Required tools still missing inside nix shell: ${missing[*]}"
+            exit 1
+        fi
+
+        log_info "Fetching missing tools with nix shell: ${missing[*]}"
+        export NIX_SHELL_ACTIVE=1
+        exec nix --extra-experimental-features 'nix-command flakes' \
+            shell "${missing[@]}" --command "$0" "$@"
+    fi
 }
 
 backup_existing_config() {
@@ -84,7 +101,7 @@ apply_configuration() {
 
 main() {
     require_root
-    check_dependencies
+    check_dependencies "$@"
 
     if [[ ! -d "$TARGET_DIR" ]]; then
         log_error "Target directory ${TARGET_DIR} does not exist"
