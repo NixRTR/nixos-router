@@ -28,6 +28,26 @@ in
       default = 9100;
       description = "Port for Node Exporter";
     };
+
+    speedtest = {
+      enable = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Enable periodic speedtest measurements";
+      };
+
+      interval = mkOption {
+        type = types.str;
+        default = "hourly";
+        description = "How often to run speedtest (systemd timer format)";
+      };
+
+      exporterPort = mkOption {
+        type = types.port;
+        default = 9516;
+        description = "Port for speedtest exporter metrics";
+      };
+    };
   };
 
   config = mkIf cfg.enable {
@@ -65,7 +85,77 @@ in
           }];
           scrape_interval = "5s";
         }
+      ] ++ optionals cfg.speedtest.enable [
+        {
+          job_name = "speedtest";
+          static_configs = [{
+            targets = [ "localhost:${toString cfg.speedtest.exporterPort}" ];
+          }];
+          scrape_interval = "5m";  # Scrape frequently, but speedtest runs on schedule
+        }
       ];
+    };
+
+    # Speedtest service and exporter
+    systemd.services.speedtest = mkIf cfg.speedtest.enable {
+      description = "Speedtest bandwidth measurement";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = pkgs.writeShellScript "run-speedtest" ''
+          set -euo pipefail
+          
+          # Run speedtest and extract metrics
+          RESULT=$(${pkgs.speedtest-cli}/bin/speedtest-cli --simple --secure 2>&1 || echo "ERROR")
+          
+          if [[ "$RESULT" == "ERROR" ]] || [[ -z "$RESULT" ]]; then
+            echo "Speedtest failed"
+            exit 1
+          fi
+          
+          # Parse results (format: "Ping: X ms\nDownload: X Mbit/s\nUpload: X Mbit/s")
+          PING=$(echo "$RESULT" | grep "Ping:" | awk '{print $2}')
+          DOWNLOAD=$(echo "$RESULT" | grep "Download:" | awk '{print $2}')
+          UPLOAD=$(echo "$RESULT" | grep "Upload:" | awk '{print $2}')
+          
+          # Write metrics to textfile for node_exporter
+          METRICS_FILE="/var/lib/speedtest/metrics.prom"
+          mkdir -p /var/lib/speedtest
+          
+          cat > "$METRICS_FILE" <<EOF
+          # HELP speedtest_ping_ms Ping latency in milliseconds
+          # TYPE speedtest_ping_ms gauge
+          speedtest_ping_ms $PING
+          # HELP speedtest_download_mbps Download speed in Mbps
+          # TYPE speedtest_download_mbps gauge
+          speedtest_download_mbps $DOWNLOAD
+          # HELP speedtest_upload_mbps Upload speed in Mbps
+          # TYPE speedtest_upload_mbps gauge
+          speedtest_upload_mbps $UPLOAD
+          # HELP speedtest_timestamp Last speedtest run timestamp
+          # TYPE speedtest_timestamp gauge
+          speedtest_timestamp $(date +%s)
+          EOF
+          
+          echo "Speedtest complete: Down=$DOWNLOAD Mbps, Up=$UPLOAD Mbps, Ping=$PING ms"
+        '';
+        User = "root";
+      };
+    };
+
+    systemd.timers.speedtest = mkIf cfg.speedtest.enable {
+      description = "Speedtest timer";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnCalendar = cfg.speedtest.interval;
+        RandomizedDelaySec = "5min";
+        Persistent = true;
+      };
+    };
+
+    # Add textfile collector path to node_exporter
+    services.prometheus.exporters.node = mkIf cfg.speedtest.enable {
+      enabledCollectors = [ "textfile" ];
+      extraFlags = [ "--collector.textfile.directory=/var/lib/speedtest" ];
     };
 
     # Grafana - visualization
@@ -471,6 +561,105 @@ in
                       { value = null; color = "green"; }
                       { value = 1000; color = "yellow"; }
                       { value = 5000; color = "red"; }
+                    ];
+                  };
+                };
+              };
+            }
+          ] ++ optionals cfg.speedtest.enable [
+            # Speedtest Download Speed
+            {
+              id = 12;
+              title = "Speedtest - Download";
+              type = "gauge";
+              gridPos = { x = 0; y = 21; w = 8; h = 5; };
+              targets = [{
+                expr = "speedtest_download_mbps";
+                legendFormat = "Download";
+                refId = "A";
+              }];
+              options = {
+                showThresholdLabels = false;
+                showThresholdMarkers = true;
+              };
+              fieldConfig = {
+                defaults = {
+                  unit = "Mbits";
+                  min = 0;
+                  max = 1000;
+                  thresholds = {
+                    mode = "absolute";
+                    steps = [
+                      { value = null; color = "red"; }
+                      { value = 10; color = "yellow"; }
+                      { value = 50; color = "green"; }
+                    ];
+                  };
+                };
+              };
+            }
+
+            # Speedtest Upload Speed
+            {
+              id = 13;
+              title = "Speedtest - Upload";
+              type = "gauge";
+              gridPos = { x = 8; y = 21; w = 8; h = 5; };
+              targets = [{
+                expr = "speedtest_upload_mbps";
+                legendFormat = "Upload";
+                refId = "A";
+              }];
+              options = {
+                showThresholdLabels = false;
+                showThresholdMarkers = true;
+              };
+              fieldConfig = {
+                defaults = {
+                  unit = "Mbits";
+                  min = 0;
+                  max = 100;
+                  thresholds = {
+                    mode = "absolute";
+                    steps = [
+                      { value = null; color = "red"; }
+                      { value = 5; color = "yellow"; }
+                      { value = 20; color = "green"; }
+                    ];
+                  };
+                };
+              };
+            }
+
+            # Speedtest Ping
+            {
+              id = 14;
+              title = "Speedtest - Ping";
+              type = "stat";
+              gridPos = { x = 16; y = 21; w = 8; h = 5; };
+              targets = [{
+                expr = "speedtest_ping_ms";
+                legendFormat = "Ping";
+                refId = "A";
+              }];
+              options = {
+                reduceOptions = {
+                  values = false;
+                  calcs = [ "lastNotNull" ];
+                };
+                textMode = "value_and_name";
+                colorMode = "value";
+              };
+              fieldConfig = {
+                defaults = {
+                  unit = "ms";
+                  decimals = 1;
+                  thresholds = {
+                    mode = "absolute";
+                    steps = [
+                      { value = null; color = "green"; }
+                      { value = 50; color = "yellow"; }
+                      { value = 100; color = "red"; }
                     ];
                   };
                 };
