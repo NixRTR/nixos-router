@@ -95,12 +95,6 @@ in
       description = "Technitium DNS Server package to deploy.";
     };
 
-    dataDir = mkOption {
-      type = types.path;
-      default = "/var/lib/technitium";
-      description = "Persistent data directory for Technitium DNS Server.";
-    };
-
     listenAddresses = mkOption {
       type = types.listOf types.str;
       default = [ ];
@@ -211,7 +205,6 @@ in
     services.technitium-dns-server = {
       enable = true;
       package = technitiumCfg.package;
-      dataDir = technitiumCfg.dataDir;
       openFirewall = true;
       firewallTCPPorts =
         [ 53 technitiumCfg.ports.web ]
