@@ -67,7 +67,7 @@ current_lan_ip=$(nix_eval_raw "lan.ip")
 current_lan_prefix=$(nix_eval_raw "lan.prefix")
 current_dhcp_start=$(nix_eval_raw "dhcp.start")
 current_dhcp_end=$(nix_eval_raw "dhcp.end")
-current_dhcp_lease=$(nix_eval_raw "dhcp.leaseTime")
+current_dhcp_lease=$(nix_eval_raw "(if dhcp ? leaseTime then dhcp.leaseTime else \"24h\")")
 
 read -p "Hostname [$current_hostname]: " HOSTNAME_INPUT
 hostname=${HOSTNAME_INPUT:-$current_hostname}
