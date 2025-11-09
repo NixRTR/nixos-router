@@ -381,35 +381,51 @@ in {
     })
 
     (mkIf (wanType == "pppoe") {
-      # Use traditional networking.pppoe which works reliably
-      networking.pppoe = {
+      # Setup PPPoE session using pppd
+      # Based on: https://francis.begyn.be/blog/nixos-home-router
+      services.pppd = {
         enable = true;
-        interfaces.${wanInterface} = {
-          name = pppoeCfg.logicalInterface;
-          # Credentials will be loaded from secrets files at runtime
+        peers.${wanInterface} = {
+          enable = true;
+          autostart = true;
+          config = ''
+            plugin rp-pppoe.so ${wanInterface}
+            name "PPPOE_USERNAME_PLACEHOLDER"
+            password "PPPOE_PASSWORD_PLACEHOLDER"
+            ${optionalString (pppoeCfg.service != null) "rp_pppoe_service '${pppoeCfg.service}'"}
+            ${optionalString pppoeCfg.ipv6 "+ipv6"}
+            ${optionalString (pppoeCfg.mtu != null) "mtu ${toString pppoeCfg.mtu}"}
+            ${optionalString (pppoeCfg.mtu != null) "mru ${toString pppoeCfg.mtu}"}
+            persist
+            maxfail 0
+            holdoff 5
+            noipdefault
+            defaultroute
+            replacedefaultroute
+            lcp-echo-interval 15
+            lcp-echo-failure 3
+            usepeerdns
+          '';
         };
       };
 
-      # Create activation script to set up PPPoE credentials
-      system.activationScripts.setup-pppoe = {
+      # Inject actual credentials at activation time
+      system.activationScripts.setup-pppoe-credentials = {
         text = ''
-          mkdir -p /etc/ppp/peers
           if [ -f ${pppoeCfg.user} ] && [ -f ${pppoeCfg.passwordFile} ]; then
             USERNAME=$(cat ${pppoeCfg.user})
             PASSWORD=$(cat ${pppoeCfg.passwordFile})
             
-            # Update the peer file with actual credentials
-            if [ -f /etc/ppp/peers/${wanInterface} ]; then
-              ${pkgs.gnused}/bin/sed -i "s/^user .*/user \"$USERNAME\"/" /etc/ppp/peers/${wanInterface}
+            # Update peer config with actual credentials
+            PEER_FILE="/etc/ppp/peers/${wanInterface}"
+            if [ -f "$PEER_FILE" ]; then
+              ${pkgs.gnused}/bin/sed -i "s/PPPOE_USERNAME_PLACEHOLDER/$USERNAME/" "$PEER_FILE"
+              ${pkgs.gnused}/bin/sed -i "s/PPPOE_PASSWORD_PLACEHOLDER/$PASSWORD/" "$PEER_FILE"
+              chmod 600 "$PEER_FILE"
             fi
-            
-            # Create PAP and CHAP secrets
-            echo "\"$USERNAME\" * \"$PASSWORD\"" > /etc/ppp/pap-secrets
-            echo "\"$USERNAME\" * \"$PASSWORD\"" > /etc/ppp/chap-secrets
-            chmod 600 /etc/ppp/pap-secrets /etc/ppp/chap-secrets /etc/ppp/peers/${wanInterface}
           fi
         '';
-        deps = [ ];
+        deps = [];
       };
     })
   ]);
