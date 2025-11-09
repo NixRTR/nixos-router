@@ -392,7 +392,8 @@ in {
           enable = true;
           autostart = true;
           config = ''
-            plugin rp-pppoe.so ${wanInterface}
+            plugin ${pkgs.rpPPPoE}/lib/rp-pppoe.so
+            nic-${wanInterface}
             name "PPPOE_USERNAME_PLACEHOLDER"
             password "PPPOE_PASSWORD_PLACEHOLDER"
             ${optionalString (pppoeCfg.service != null) "rp_pppoe_service '${pppoeCfg.service}'"}
