@@ -400,6 +400,9 @@ in {
             ${optionalString pppoeCfg.ipv6 "+ipv6"}
             ${optionalString (pppoeCfg.mtu != null) "mtu ${toString pppoeCfg.mtu}"}
             ${optionalString (pppoeCfg.mtu != null) "mru ${toString pppoeCfg.mtu}"}
+            # Prefer CHAP authentication over PAP
+            require-chap
+            refuse-pap
             persist
             maxfail 0
             holdoff 5
