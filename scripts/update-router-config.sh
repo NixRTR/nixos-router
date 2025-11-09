@@ -96,6 +96,9 @@ dhcp_end=${DHCP_END_INPUT:-$current_dhcp_end}
 
 read -p "DHCP lease time [$current_dhcp_lease]: " DHCP_LEASE_INPUT
 dhcp_lease=${DHCP_LEASE_INPUT:-$current_dhcp_lease}
+if [[ $dhcp_lease =~ ^[0-9]+$ ]]; then
+    dhcp_lease="${dhcp_lease}s"
+fi
 
 echo
 echo "Summary of changes:"
@@ -157,7 +160,7 @@ cat >"$CONFIG_PATH" <<EOF
   dhcp = {
     start = "$dhcp_start";
     end = "$dhcp_end";
-    leaseTime = ${dhcp_lease@Q};
+    leaseTime = "${dhcp_lease}";
   };
 }
 EOF
