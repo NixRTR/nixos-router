@@ -388,8 +388,7 @@ in {
           autostart = true;
           config = ''
             plugin rp-pppoe.so ${wanInterface}
-            name "${builtins.readFile pppoeCfg.user}"
-            password "${builtins.readFile pppoeCfg.passwordFile}"
+            name PPPOE_USERNAME
             ${optionalString (pppoeCfg.service != null) "rp_pppoe_service '${pppoeCfg.service}'"}
             ${optionalString pppoeCfg.ipv6 "+ipv6"}
             ${optionalString (pppoeCfg.mtu != null) "mtu ${toString pppoeCfg.mtu}"}
@@ -404,6 +403,28 @@ in {
             lcp-echo-failure 3
             usepeerdns
           '';
+        };
+      };
+
+      # Inject username and password at runtime via systemd service override
+      systemd.services."pppd-${wanInterface}" = {
+        serviceConfig = {
+          ExecStartPre = [
+            "${pkgs.coreutils}/bin/mkdir -p /etc/ppp"
+            "+${pkgs.writeShellScript "setup-pppoe-secrets" ''
+              # Read username and password from sops secrets
+              USERNAME=$(cat ${pppoeCfg.user})
+              PASSWORD=$(cat ${pppoeCfg.passwordFile})
+              
+              # Update peer config with actual username
+              ${pkgs.gnused}/bin/sed -i "s/PPPOE_USERNAME/$USERNAME/" /etc/ppp/peers/${wanInterface}
+              
+              # Create PAP and CHAP secrets files
+              echo "\"$USERNAME\" * \"$PASSWORD\" *" > /etc/ppp/pap-secrets
+              echo "\"$USERNAME\" * \"$PASSWORD\" *" > /etc/ppp/chap-secrets
+              chmod 600 /etc/ppp/pap-secrets /etc/ppp/chap-secrets
+            ''}"
+          ];
         };
       };
     })
