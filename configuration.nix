@@ -107,25 +107,25 @@ in
       {
         proto = "both";
         externalPort = 80;
-        destination = 192.168.3.33;
+        destination = "192.168.2.33";  # Change to your target IP
         destinationPort = 80;
       }
       {
         proto = "both";
         externalPort = 443;
-        destination = 192.168.3.33;
+        destination = "192.168.2.33";  # Change to your target IP
         destinationPort = 443;
       }
       {
         proto = "both";
         externalPort = 22000;
-        destination = 192.168.3.33;
+        destination = "192.168.2.33";  # Change to your target IP
         destinationPort = 22000;
       }
       {
         proto = "both";
         externalPort = 4242;
-        destination = 192.168.3.31;
+        destination = "192.168.2.31";  # Change to your target IP
         destinationPort = 4242;
       }
     ];
