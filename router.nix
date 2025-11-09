@@ -381,13 +381,17 @@ in {
     })
 
     (mkIf (wanType == "pppoe") {
+      # Ensure ppp package with PPPoE support is available
+      environment.systemPackages = [ pkgs.ppp ];
+      
       services.pppd = {
         enable = true;
         peers.${wanInterface} = {
           enable = true;
           autostart = true;
           config = ''
-            plugin rp-pppoe.so ${wanInterface}
+            plugin ${pkgs.ppp}/lib/pppd/2.5.2/rp-pppoe.so
+            nic-${wanInterface}
             name PPPOE_USERNAME
             ${optionalString (pppoeCfg.service != null) "rp_pppoe_service '${pppoeCfg.service}'"}
             ${optionalString pppoeCfg.ipv6 "+ipv6"}
