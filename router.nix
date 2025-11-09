@@ -381,9 +381,6 @@ in {
     })
 
     (mkIf (wanType == "pppoe") {
-      # Install rp-pppoe package for PPPoE plugin
-      environment.systemPackages = [ pkgs.rp-pppoe ];
-
       services.pppd = {
         enable = true;
         peers.${wanInterface} = {
