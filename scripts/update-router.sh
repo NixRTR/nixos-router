@@ -37,31 +37,20 @@ require_root() {
     fi
 }
 
-check_dependencies() {
-    local -a missing=()
-    declare -A packages=(
-        [git]="git"
-        [rsync]="rsync"
-        [nixos-rebuild]="nixos-rebuild"
-    )
-
-    for cmd in "${!packages[@]}"; do
-        if ! command -v "$cmd" >/dev/null 2>&1; then
-            missing+=("nixpkgs#${packages[$cmd]}")
-        fi
-    done
-
-    if ((${#missing[@]} > 0)); then
-        if [[ -n "${NIX_SHELL_ACTIVE:-}" ]]; then
-            log_error "Required tools still missing inside nix shell: ${missing[*]}"
-            exit 1
-        fi
-
-        log_info "Fetching missing tools with nix shell: ${missing[*]}"
-        export NIX_SHELL_ACTIVE=1
-        exec nix --extra-experimental-features 'nix-command flakes' \
-            shell "${missing[@]}" --command "$0" "$@"
+ensure_git() {
+    if command -v git >/dev/null 2>&1; then
+        return
     fi
+
+    if [[ -n "${NIX_SHELL_ACTIVE:-}" ]]; then
+        log_error "git is still unavailable inside nix shell"
+        exit 1
+    fi
+
+    log_info "git not found; dropping into nix shell (nixpkgs#git)"
+    export NIX_SHELL_ACTIVE=1
+    exec nix --extra-experimental-features 'nix-command flakes' \
+        shell nixpkgs#git --command "$0" "$@"
 }
 
 backup_existing_config() {
@@ -101,7 +90,7 @@ apply_configuration() {
 
 main() {
     require_root
-    check_dependencies "$@"
+    ensure_git "$@"
 
     if [[ ! -d "$TARGET_DIR" ]]; then
         log_error "Target directory ${TARGET_DIR} does not exist"
