@@ -394,15 +394,9 @@ in {
           config = ''
             plugin ${pkgs.rpPPPoE}/lib/rp-pppoe.so
             nic-${wanInterface}
-            name "PPPOE_USERNAME_PLACEHOLDER"
-            password "PPPOE_PASSWORD_PLACEHOLDER"
-            ${optionalString (pppoeCfg.service != null) "rp_pppoe_service '${pppoeCfg.service}'"}
-            ${optionalString pppoeCfg.ipv6 "+ipv6"}
-            ${optionalString (pppoeCfg.mtu != null) "mtu ${toString pppoeCfg.mtu}"}
-            ${optionalString (pppoeCfg.mtu != null) "mru ${toString pppoeCfg.mtu}"}
-            # Prefer CHAP authentication over PAP
-            require-chap
-            refuse-pap
+            user PPPOE_USERNAME_PLACEHOLDER
+            password PPPOE_PASSWORD_PLACEHOLDER
+            noauth
             persist
             maxfail 0
             holdoff 5
@@ -412,6 +406,10 @@ in {
             lcp-echo-interval 15
             lcp-echo-failure 3
             usepeerdns
+            ${optionalString (pppoeCfg.service != null) "rp_pppoe_service '${pppoeCfg.service}'"}
+            ${optionalString pppoeCfg.ipv6 "+ipv6"}
+            ${optionalString (pppoeCfg.mtu != null) "mtu ${toString pppoeCfg.mtu}"}
+            ${optionalString (pppoeCfg.mtu != null) "mru ${toString pppoeCfg.mtu}"}
           '';
         };
       };
