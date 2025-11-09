@@ -192,13 +192,13 @@ if command -v sops >/dev/null 2>&1; then
         read -p "View decrypted secrets from $(realpath "$SECRETS_PATH")? [y/N]: " VIEW_SECRETS
         if [[ $VIEW_SECRETS =~ ^[Yy]$ ]]; then
             echo
-            sops -d "$SECRETS_PATH"
+            nix shell --extra-experimental-features "nix-command flakes" nixpkgs#sops --command sops -d "$SECRETS_PATH"
             echo
         fi
 
         read -p "Edit secrets with sops now? [y/N]: " EDIT_SECRETS
         if [[ $EDIT_SECRETS =~ ^[Yy]$ ]]; then
-            sops "$SECRETS_PATH"
+            nix shell --extra-experimental-features "nix-command flakes" nixpkgs#sops --command sops "$SECRETS_PATH"
         fi
     else
         echo "warning: secrets file not found at $SECRETS_PATH"
