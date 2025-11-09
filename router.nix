@@ -381,53 +381,36 @@ in {
     })
 
     (mkIf (wanType == "pppoe") {
-      # Use networkd-based PPPoE instead of pppd
-      systemd.network.netdevs."10-pppoe" = {
-        netdevConfig = {
-          Name = pppoeCfg.logicalInterface;
-          Kind = "ppp";
+      # Use traditional networking.pppoe which works reliably
+      networking.pppoe = {
+        enable = true;
+        interfaces.${wanInterface} = {
+          name = pppoeCfg.logicalInterface;
+          # Credentials will be loaded from secrets files at runtime
         };
-        extraConfig = ''
-          [PPP]
-          Physical=${wanInterface}
+      };
+
+      # Create activation script to set up PPPoE credentials
+      system.activationScripts.setup-pppoe = {
+        text = ''
+          mkdir -p /etc/ppp/peers
+          if [ -f ${pppoeCfg.user} ] && [ -f ${pppoeCfg.passwordFile} ]; then
+            USERNAME=$(cat ${pppoeCfg.user})
+            PASSWORD=$(cat ${pppoeCfg.passwordFile})
+            
+            # Update the peer file with actual credentials
+            if [ -f /etc/ppp/peers/${wanInterface} ]; then
+              ${pkgs.gnused}/bin/sed -i "s/^user .*/user \"$USERNAME\"/" /etc/ppp/peers/${wanInterface}
+            fi
+            
+            # Create PAP and CHAP secrets
+            echo "\"$USERNAME\" * \"$PASSWORD\"" > /etc/ppp/pap-secrets
+            echo "\"$USERNAME\" * \"$PASSWORD\"" > /etc/ppp/chap-secrets
+            chmod 600 /etc/ppp/pap-secrets /etc/ppp/chap-secrets /etc/ppp/peers/${wanInterface}
+          fi
         '';
+        deps = [ ];
       };
-
-      systemd.network.networks."40-${wanInterface}" = {
-        matchConfig.Name = wanInterface;
-        networkConfig = {
-          DHCP = "no";
-          PPPoE = pppoeCfg.logicalInterface;
-        };
-      };
-
-      systemd.network.networks."40-${pppoeCfg.logicalInterface}" = {
-        matchConfig.Name = pppoeCfg.logicalInterface;
-        networkConfig = {
-          DHCP = "no";
-          IPForward = "yes";
-        };
-        extraConfig = ''
-          [Link]
-          RequiredForOnline = yes
-          
-          [Network]
-          DefaultRoute = yes
-        '';
-      };
-
-      # Systemd-networkd will handle PPPoE authentication via pppd internally
-      # We just need to ensure the credentials are available
-      system.activationScripts.pppoe-secrets = ''
-        mkdir -p /etc/ppp
-        if [ -f ${pppoeCfg.user} ] && [ -f ${pppoeCfg.passwordFile} ]; then
-          USERNAME=$(cat ${pppoeCfg.user})
-          PASSWORD=$(cat ${pppoeCfg.passwordFile})
-          echo "\"$USERNAME\" * \"$PASSWORD\"" > /etc/ppp/pap-secrets
-          echo "\"$USERNAME\" * \"$PASSWORD\"" > /etc/ppp/chap-secrets
-          chmod 600 /etc/ppp/pap-secrets /etc/ppp/chap-secrets
-        fi
-      '';
     })
   ]);
 }
