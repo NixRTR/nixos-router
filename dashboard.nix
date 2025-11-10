@@ -5,8 +5,6 @@ with lib;
 let
   cfg = config.router.dashboard;
   routerCfg = config.router;
-  bridges = routerCfg.lan.bridges;
-  bridgeNames = map (b: b.name) bridges;
 in
 
 {
