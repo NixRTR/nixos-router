@@ -248,6 +248,38 @@ in {
           Bridges can still reach WAN and router services, but not each other.
         '';
       };
+
+      isolationExceptions = mkOption {
+        type = types.listOf (types.submodule {
+          options = {
+            source = mkOption {
+              type = types.str;
+              description = "Source IP address to allow through isolation.";
+              example = "192.168.3.50";
+            };
+            sourceBridge = mkOption {
+              type = types.str;
+              description = "Source bridge name.";
+              example = "br1";
+            };
+            destBridge = mkOption {
+              type = types.str;
+              description = "Destination bridge name.";
+              example = "br0";
+            };
+            description = mkOption {
+              type = types.str;
+              default = "";
+              description = "Optional description of this exception.";
+            };
+          };
+        });
+        default = [];
+        description = ''
+          List of exceptions to bridge isolation rules. Allows specific source IPs
+          to communicate with specific destination bridges despite isolation being enabled.
+        '';
+      };
     };
 
     firewall = {
@@ -319,6 +351,7 @@ in {
       bridges = lanCfg.bridges;
       bridgeNames = map (b: b.name) bridges;
       lanIsolation = lanCfg.isolation;
+      isolationExceptions = lanCfg.isolationExceptions;
 
       natExternalInterface =
         if natCfg.externalInterface != null then natCfg.externalInterface
@@ -389,12 +422,22 @@ in {
               map (j: { from = elemAt bridgeNames i; to = elemAt bridgeNames j; })
                 (range (i + 1) ((length bridgeNames) - 1))
             ) (range 0 ((length bridgeNames) - 2)));
+            
+            # Generate exception rules (must come BEFORE drop rules)
+            exceptionRules = concatMapStrings (ex: ''
+              # Exception: ${ex.description}
+              # Allow ${ex.source} (${ex.sourceBridge}) -> ${ex.destBridge}
+              iptables -I FORWARD -s ${ex.source} -i ${ex.sourceBridge} -o ${ex.destBridge} -j ACCEPT
+              # Allow return traffic from ${ex.destBridge} -> ${ex.source}
+              iptables -I FORWARD -d ${ex.source} -i ${ex.destBridge} -o ${ex.sourceBridge} -j ACCEPT
+            '') isolationExceptions;
           in
-            concatMapStrings (pair: ''
+            # Apply exceptions first, then blocking rules
+            exceptionRules + (concatMapStrings (pair: ''
               # Block ${pair.from} <-> ${pair.to}
-              iptables -I FORWARD -i ${pair.from} -o ${pair.to} -j DROP
-              iptables -I FORWARD -i ${pair.to} -o ${pair.from} -j DROP
-            '') bridgePairs
+              iptables -A FORWARD -i ${pair.from} -o ${pair.to} -j DROP
+              iptables -A FORWARD -i ${pair.to} -o ${pair.from} -j DROP
+            '') bridgePairs)
         );
         
         extraStopCommands = mkIf (lanIsolation && (length bridges) > 1) (
@@ -403,11 +446,17 @@ in {
               map (j: { from = elemAt bridgeNames i; to = elemAt bridgeNames j; })
                 (range (i + 1) ((length bridgeNames) - 1))
             ) (range 0 ((length bridgeNames) - 2)));
+            
+            # Clean up exception rules
+            cleanupExceptions = concatMapStrings (ex: ''
+              iptables -D FORWARD -s ${ex.source} -i ${ex.sourceBridge} -o ${ex.destBridge} -j ACCEPT || true
+              iptables -D FORWARD -d ${ex.source} -i ${ex.destBridge} -o ${ex.sourceBridge} -j ACCEPT || true
+            '') isolationExceptions;
           in
-            concatMapStrings (pair: ''
+            cleanupExceptions + (concatMapStrings (pair: ''
               iptables -D FORWARD -i ${pair.from} -o ${pair.to} -j DROP || true
               iptables -D FORWARD -i ${pair.to} -o ${pair.from} -j DROP || true
-            '') bridgePairs
+            '') bridgePairs)
         );
       };
 
@@ -418,11 +467,39 @@ in {
           if natCfg.internalInterfaces == [ ] then bridgeNames else natCfg.internalInterfaces;
         enableIPv6 = natCfg.enableIPv6;
         forwardPorts = natForwardEntries;
+        
+        # MSS clamping to fix MTU issues (prevents slow loading/fragmentation)
+        extraCommands = ''
+          iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+        '';
+        
+        extraStopCommands = ''
+          iptables -t mangle -D FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu || true
+        '';
       };
 
       boot.kernel.sysctl = {
         "net.ipv4.ip_forward" = 1;
         "net.ipv6.conf.all.forwarding" = 1;
+        
+        # TCP optimization for router performance
+        "net.ipv4.tcp_window_scaling" = 1;
+        "net.ipv4.tcp_timestamps" = 1;
+        "net.ipv4.tcp_sack" = 1;
+        "net.ipv4.tcp_no_metrics_save" = 1;
+        
+        # Increase TCP buffer sizes for better throughput
+        "net.core.rmem_max" = 134217728;  # 128 MB
+        "net.core.wmem_max" = 134217728;  # 128 MB
+        "net.ipv4.tcp_rmem" = "4096 87380 67108864";  # min default max
+        "net.ipv4.tcp_wmem" = "4096 65536 67108864";
+        
+        # Enable TCP Fast Open
+        "net.ipv4.tcp_fastopen" = 3;
+        
+        # Reduce TIME_WAIT connections
+        "net.ipv4.tcp_fin_timeout" = 30;
+        "net.ipv4.tcp_tw_reuse" = 1;
       };
 
       # DNS and DHCP services configured elsewhere (e.g., blocky + dhcpd4)

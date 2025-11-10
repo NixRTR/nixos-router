@@ -45,6 +45,17 @@
     # Block traffic between HOMELAB and LAN at the router level
     # (Hera and Triton have dual NICs and can bridge as needed)
     isolation = true;
+    
+    # Exception: Allow specific LAN devices to access HOMELAB
+    # Format: { source = "LAN IP"; sourceBridge = "br1"; destBridge = "br0"; }
+    isolationExceptions = [
+      {
+        source = "192.168.3.50";  # Your workstation IP
+        sourceBridge = "br1";      # LAN
+        destBridge = "br0";        # HOMELAB
+        description = "Workstation access to HOMELAB";
+      }
+    ];
   };
 
   # DHCP configuration - per network
