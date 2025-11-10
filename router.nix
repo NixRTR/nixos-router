@@ -561,14 +561,6 @@ in {
           address = (elemAt bridges 0).ipv6.address;
           prefixLength = (elemAt bridges 0).ipv6.prefixLength;
         }];
-        # Hardware offloading for bridge
-        ethtool.offload = {
-          rx = true;
-          tx = true;
-          tso = true;
-          gso = true;
-          gro = true;
-        };
       };
     }
 
@@ -583,14 +575,6 @@ in {
           address = (elemAt bridges 1).ipv6.address;
           prefixLength = (elemAt bridges 1).ipv6.prefixLength;
         }];
-        # Hardware offloading for bridge
-        ethtool.offload = {
-          rx = true;
-          tx = true;
-          tso = true;
-          gso = true;
-          gro = true;
-        };
       };
     }
 
