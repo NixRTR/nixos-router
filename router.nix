@@ -426,20 +426,7 @@ in {
         }) bridges));
       };
 
-      # Assign IP addresses to each bridge
-      networking.interfaces = listToAttrs (map (bridge: {
-        name = bridge.name;
-        value = {
-          ipv4.addresses = [{
-            address = bridge.ipv4.address;
-            prefixLength = bridge.ipv4.prefixLength;
-          }];
-          ipv6.addresses = optionals bridge.ipv6.enable [{
-            address = bridge.ipv6.address;
-            prefixLength = bridge.ipv6.prefixLength;
-          }];
-        };
-      }) bridges);
+      # Assign IP addresses to each bridge (done below in separate mkMerge blocks)
 
       networking.firewall = {
         enable = true;
@@ -492,6 +479,20 @@ in {
 
       # DNS and DHCP services configured elsewhere (e.g., blocky + dhcpd4)
     }
+
+    # Configure each bridge interface with its IP addresses
+  ] ++ (map (bridge: {
+    networking.interfaces.${bridge.name} = {
+      ipv4.addresses = [{
+        address = bridge.ipv4.address;
+        prefixLength = bridge.ipv4.prefixLength;
+      }];
+      ipv6.addresses = optionals bridge.ipv6.enable [{
+        address = bridge.ipv6.address;
+        prefixLength = bridge.ipv6.prefixLength;
+      }];
+    };
+  }) bridges) ++ [
 
     (mkIf (wanType == "static" && staticCfg.dnsServers != [ ]) {
       networking.nameservers = staticCfg.dnsServers;
