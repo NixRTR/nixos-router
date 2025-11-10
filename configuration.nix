@@ -36,50 +36,34 @@ let
        else 86400;
 
   # Build DHCP subnets from config
-  # Supports both old (single) and new (multi-network) formats
-  dhcpSubnets = 
-    if routerConfig.dhcp ? homelab && routerConfig.dhcp ? lan then
-      # New multi-network format
-      [
-        {
-          id = 1;
-          subnet = "${routerConfig.dhcp.homelab.network}/${toString routerConfig.dhcp.homelab.prefix}";
-          pools = [{
-            pool = "${routerConfig.dhcp.homelab.start} - ${routerConfig.dhcp.homelab.end}";
-          }];
-          option-data = [
-            { name = "routers"; data = routerConfig.dhcp.homelab.gateway; }
-            { name = "domain-name-servers"; data = routerConfig.dhcp.homelab.dns; }
-          ];
-          valid-lifetime = leaseToSeconds routerConfig.dhcp.homelab.leaseTime;
-        }
-        {
-          id = 2;
-          subnet = "${routerConfig.dhcp.lan.network}/${toString routerConfig.dhcp.lan.prefix}";
-          pools = [{
-            pool = "${routerConfig.dhcp.lan.start} - ${routerConfig.dhcp.lan.end}";
-          }];
-          option-data = [
-            { name = "routers"; data = routerConfig.dhcp.lan.gateway; }
-            { name = "domain-name-servers"; data = routerConfig.dhcp.lan.dns; }
-          ];
-          valid-lifetime = leaseToSeconds routerConfig.dhcp.lan.leaseTime;
-        }
-      ]
-    else
-      # Legacy single-network format (fallback for compatibility)
-      [{
-        id = 1;
-        subnet = "${routerConfig.lan.ip}/${toString routerConfig.lan.prefix}";
-        pools = [{
-          pool = "${routerConfig.dhcp.start} - ${routerConfig.dhcp.end}";
-        }];
-        option-data = [
-          { name = "routers"; data = routerConfig.lan.ip; }
-          { name = "domain-name-servers"; data = routerConfig.lan.ip; }
-        ];
-        valid-lifetime = leaseToSeconds (routerConfig.dhcp.leaseTime or "24h");
+  dhcpSubnets = [
+    # HOMELAB network
+    {
+      id = 1;
+      subnet = "${routerConfig.dhcp.homelab.network}/${toString routerConfig.dhcp.homelab.prefix}";
+      pools = [{
+        pool = "${routerConfig.dhcp.homelab.start} - ${routerConfig.dhcp.homelab.end}";
       }];
+      option-data = [
+        { name = "routers"; data = routerConfig.dhcp.homelab.gateway; }
+        { name = "domain-name-servers"; data = routerConfig.dhcp.homelab.dns; }
+      ];
+      valid-lifetime = leaseToSeconds routerConfig.dhcp.homelab.leaseTime;
+    }
+    # LAN network
+    {
+      id = 2;
+      subnet = "${routerConfig.dhcp.lan.network}/${toString routerConfig.dhcp.lan.prefix}";
+      pools = [{
+        pool = "${routerConfig.dhcp.lan.start} - ${routerConfig.dhcp.lan.end}";
+      }];
+      option-data = [
+        { name = "routers"; data = routerConfig.dhcp.lan.gateway; }
+        { name = "domain-name-servers"; data = routerConfig.dhcp.lan.dns; }
+      ];
+      valid-lifetime = leaseToSeconds routerConfig.dhcp.lan.leaseTime;
+    }
+  ];
 in
 
 {

@@ -13,21 +13,6 @@ let
   firewallCfg = cfg.firewall;
   natCfg = cfg.nat;
 
-  # Support both single bridge (legacy) and multiple bridges
-  bridges = if lanCfg.bridges != [] then lanCfg.bridges else [{
-    name = lanCfg.bridge.name;
-    interfaces = lanCfg.bridge.interfaces;
-    ipv4 = lanCfg.ipv4;
-    ipv6 = lanCfg.ipv6;
-  }];
-
-  bridgeNames = map (b: b.name) bridges;
-  
-  # Legacy single bridge name for backward compatibility
-  bridgeName = (builtins.head bridges).name;
-
-  routerIPv4 = (builtins.head bridges).ipv4.address;
-
   natExternalInterface =
     if natCfg.externalInterface != null then natCfg.externalInterface
     else if wanType == "pppoe" then pppoeCfg.logicalInterface
@@ -247,24 +232,25 @@ in {
     };
 
     lan = {
-      # New multi-bridge configuration
       bridges = mkOption {
         type = types.listOf bridgeModule;
         default = [ ];
         description = ''
           List of LAN bridges to create. Each bridge can have multiple physical interfaces
-          and its own IP configuration. Use this for multiple isolated LAN segments.
+          and its own IP configuration. Supports multiple isolated LAN segments.
         '';
         example = [
           {
             name = "br0";
             interfaces = [ "enp4s0" "enp5s0" ];
             ipv4 = { address = "192.168.2.1"; prefixLength = 24; };
+            ipv6.enable = false;
           }
           {
             name = "br1";
             interfaces = [ "enp6s0" "enp7s0" ];
             ipv4 = { address = "192.168.3.1"; prefixLength = 24; };
+            ipv6.enable = false;
           }
         ];
       };
@@ -276,52 +262,6 @@ in {
           When true and multiple bridges are defined, blocks direct traffic between bridges.
           Bridges can still reach WAN and router services, but not each other.
         '';
-      };
-
-      # Legacy single bridge configuration (kept for backward compatibility)
-      bridge = {
-        name = mkOption {
-          type = types.str;
-          default = "br0";
-          description = "Bridge interface representing the LAN (legacy single-bridge mode).";
-        };
-        interfaces = mkOption {
-          type = types.listOf types.str;
-          default = [ ];
-          description = "Physical interfaces that form the LAN bridge (legacy single-bridge mode).";
-          example = [ "enp4s0" "enp5s0" "enp6s0" "enp7s0" ];
-        };
-      };
-
-      ipv4 = {
-        address = mkOption {
-          type = types.str;
-          default = "192.168.1.1";
-          description = "LAN IPv4 address of the router (legacy single-bridge mode).";
-        };
-        prefixLength = mkOption {
-          type = types.int;
-          default = 24;
-          description = "Prefix length for the LAN IPv4 network (legacy single-bridge mode).";
-        };
-      };
-
-      ipv6 = {
-        enable = mkOption {
-          type = types.bool;
-          default = true;
-          description = "Whether to assign an IPv6 address to the LAN bridge (legacy single-bridge mode).";
-        };
-        address = mkOption {
-          type = types.str;
-          default = "fd00:dead:beef::1";
-          description = "IPv6 address assigned to the LAN bridge (legacy single-bridge mode).";
-        };
-        prefixLength = mkOption {
-          type = types.int;
-          default = 64;
-          description = "Prefix length for the LAN IPv6 network (legacy single-bridge mode).";
-        };
       };
     };
 
@@ -379,7 +319,13 @@ in {
     };
   };
 
-  config = mkIf cfg.enable (mkMerge [
+  config = mkIf cfg.enable (
+    let
+      # Get bridges from config
+      bridges = lanCfg.bridges;
+      bridgeNames = map (b: b.name) bridges;
+    in
+    mkMerge ([
     {
       networking.networkmanager.enable = false;
       networking.useNetworkd = true;
@@ -565,6 +511,6 @@ in {
         deps = [];
       };
     })
-  ]);
+  ]));
 }
 

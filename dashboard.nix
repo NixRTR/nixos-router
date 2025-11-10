@@ -5,10 +5,7 @@ with lib;
 let
   cfg = config.router.dashboard;
   routerCfg = config.router;
-  
-  # Support both single and multiple bridge configurations
-  bridges = if routerCfg.lan.bridges != [] then routerCfg.lan.bridges 
-            else [{ name = routerCfg.lan.bridge.name; }];
+  bridges = routerCfg.lan.bridges;
   bridgeNames = map (b: b.name) bridges;
 in
 
