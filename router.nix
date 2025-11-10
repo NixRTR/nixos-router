@@ -384,16 +384,6 @@ in {
           }];
         })
         (mkIf (wanType == "pppoe") { useDHCP = false; })
-        # Hardware offloading for better performance
-        {
-          ethtool.offload = {
-            rx = true;   # RX checksum offload
-            tx = true;   # TX checksum offload
-            tso = true;  # TCP segmentation offload
-            gso = true;  # Generic segmentation offload
-            gro = true;  # Generic receive offload
-          };
-        }
       ];
 
       # Create systemd network devices for each bridge
@@ -415,6 +405,20 @@ in {
             networkConfig.Bridge = bridge.name;
           };
         }) bridges));
+        
+        # Enable hardware offloading on WAN interface
+        links."10-${wanInterface}" = {
+          matchConfig.Name = wanInterface;
+          linkConfig = {
+            # Enable all hardware offload features
+            ReceiveChecksumOffload = true;
+            TransmitChecksumOffload = true;
+            TCPSegmentationOffload = true;
+            GenericSegmentationOffload = true;
+            GenericReceiveOffload = true;
+            LargeReceiveOffload = true;
+          };
+        };
       };
 
       # Assign IP addresses to each bridge (done below in separate mkMerge blocks)
