@@ -14,7 +14,7 @@ let
     
     src = pkgs.fetchurl {
       url = "https://dl.defined.net/290ff4b6/v${version}/linux/amd64/dnclient";
-      sha256 = "0000000000000000000000000000000000000000000000000000"; # FIXME: Need actual hash
+      sha256 = "sha256-Cup1BFOQo1NTZWfk5lVhtODZ+K9tLrklMceUCgMsovw=";
     };
     
     dontUnpack = true;
