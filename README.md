@@ -10,6 +10,7 @@ A declarative NixOS configuration that transforms a standard PC into a full-feat
 - **DHCP**: ISC Kea DHCP4 serving the bridged LAN
 - **NAT & firewall**: Automatic network address translation and basic security
 - **Port forwarding**: Configurable forwarding rules for internal services
+- **Dynamic DNS**: Automatic Linode DNS updates when WAN IP changes
 - **Secrets management**: Encrypted secrets with sops-nix and Age
 - **Monitoring Dashboard**: Grafana + Prometheus for real-time network and system monitoring
 
@@ -89,6 +90,7 @@ The dashboard provides real-time monitoring of:
 
 - **[Setup Guide](docs/setup.md)** - Installation, upgrades, and initial configuration
 - **[Router Config](docs/router.md)** - WAN/LAN setup, Blocky DNS, Kea DHCP, firewall, port forwarding
+- **[Dynamic DNS](docs/dyndns.md)** - Automatic Linode DNS updates when WAN IP changes
 - **[Secrets Management](docs/secrets.md)** - sops-nix usage and key management
 - **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
 - **[Development](docs/development.md)** - Contributing and development guide
@@ -105,6 +107,8 @@ The dashboard provides real-time monitoring of:
 ├── configuration.nix      # Main system config
 ├── router.nix            # Router module
 ├── dashboard.nix         # Monitoring dashboard module
+├── linode-dyndns.nix     # Dynamic DNS module
+├── router-config.nix     # User-editable router settings
 ├── flake.nix             # Nix flake
 ├── secrets/secrets.yaml  # Encrypted secrets
 ├── scripts/              # Helper scripts

@@ -8,6 +8,7 @@ let
   # Import router configuration variables
   routerConfig = import ./router-config.nix;
   pppoeEnabled = routerConfig.wan.type == "pppoe";
+  dyndnsEnabled = routerConfig.dyndns.enable or false;
   bridgeName = config.router.lan.bridge.name;
 
   splitIPv4 = ip: map (x: lib.toInt x) (lib.splitString "." ip);
@@ -63,6 +64,7 @@ in
       ./hardware-configuration.nix
       ./router.nix
       ./dashboard.nix
+      ./linode-dyndns.nix
     ];
 
   nix.settings.experimental-features = [
@@ -132,6 +134,14 @@ in
         };
         "pppoe-username" = {
           path = "/run/secrets/pppoe-username";
+          owner = "root";
+          group = "root";
+          mode = "0400";
+        };
+      }
+      // lib.optionalAttrs dyndnsEnabled {
+        "linode-api-token" = {
+          path = "/run/secrets/linode-api-token";
           owner = "root";
           group = "root";
           mode = "0400";

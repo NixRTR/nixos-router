@@ -54,4 +54,22 @@
       destinationPort = 4242;
     }
   ];
+
+  # Dynamic DNS Configuration (optional)
+  dyndns = {
+    enable = false;  # Set to true to enable dynamic DNS updates
+    provider = "linode";  # Currently only "linode" is supported
+    
+    # Domain and record to update
+    domain = "example.com";
+    subdomain = "";  # Leave empty for root domain, or specify subdomain like "router"
+    
+    # Linode API credentials (stored in sops secrets)
+    # domainId and recordId can be found using: linode-cli domains list / linode-cli domains records-list DOMAIN_ID
+    domainId = 0;  # Your Linode domain ID
+    recordId = 0;  # Your Linode DNS record ID
+    
+    # Update interval when WAN IP hasn't changed
+    checkInterval = "5m";  # How often to check for IP changes
+  };
 }
