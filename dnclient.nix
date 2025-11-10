@@ -45,7 +45,7 @@ in
 
     image = mkOption {
       type = types.str;
-      default = "defined/dnclient:latest";
+      default = "definednet/dnclient:latest";
       description = "Docker image for dnclient";
     };
   };
