@@ -222,7 +222,7 @@ EOF
             ''}
           fi
         '';
-        ExecStart = "${cfg.package}/bin/dnclient start -f";
+        ExecStart = "${cfg.package}/bin/dnclient start";
         ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
         Restart = "always";
         RestartSec = "10s";
