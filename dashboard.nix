@@ -100,10 +100,15 @@ in
     # Speedtest service and exporter
     systemd.services.speedtest = mkIf cfg.speedtest.enable {
       description = "Speedtest bandwidth measurement";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
       serviceConfig = {
         Type = "oneshot";
         ExecStart = pkgs.writeShellScript "run-speedtest" ''
           set -euo pipefail
+          
+          # Wait a bit for network to be fully ready
+          ${pkgs.coreutils}/bin/sleep 10
           
           # Run speedtest and extract metrics
           RESULT=$(${pkgs.speedtest-cli}/bin/speedtest-cli --simple --secure 2>&1 || echo "ERROR")
@@ -114,15 +119,15 @@ in
           fi
           
           # Parse results (format: "Ping: X ms\nDownload: X Mbit/s\nUpload: X Mbit/s")
-          PING=$(echo "$RESULT" | grep "Ping:" | awk '{print $2}')
-          DOWNLOAD=$(echo "$RESULT" | grep "Download:" | awk '{print $2}')
-          UPLOAD=$(echo "$RESULT" | grep "Upload:" | awk '{print $2}')
+          PING=$(echo "$RESULT" | ${pkgs.gnugrep}/bin/grep "Ping:" | ${pkgs.gawk}/bin/awk '{print $2}')
+          DOWNLOAD=$(echo "$RESULT" | ${pkgs.gnugrep}/bin/grep "Download:" | ${pkgs.gawk}/bin/awk '{print $2}')
+          UPLOAD=$(echo "$RESULT" | ${pkgs.gnugrep}/bin/grep "Upload:" | ${pkgs.gawk}/bin/awk '{print $2}')
           
           # Write metrics to textfile for node_exporter
           METRICS_FILE="/var/lib/speedtest/metrics.prom"
-          mkdir -p /var/lib/speedtest
+          ${pkgs.coreutils}/bin/mkdir -p /var/lib/speedtest
           
-          cat > "$METRICS_FILE" <<EOF
+          ${pkgs.coreutils}/bin/cat > "$METRICS_FILE" <<EOF
           # HELP speedtest_ping_ms Ping latency in milliseconds
           # TYPE speedtest_ping_ms gauge
           speedtest_ping_ms $PING
@@ -134,7 +139,7 @@ in
           speedtest_upload_mbps $UPLOAD
           # HELP speedtest_timestamp Last speedtest run timestamp
           # TYPE speedtest_timestamp gauge
-          speedtest_timestamp $(date +%s)
+          speedtest_timestamp $(${pkgs.coreutils}/bin/date +%s)
           EOF
           
           echo "Speedtest complete: Down=$DOWNLOAD Mbps, Up=$UPLOAD Mbps, Ping=$PING ms"
@@ -150,6 +155,19 @@ in
         OnCalendar = cfg.speedtest.interval;
         RandomizedDelaySec = "5min";
         Persistent = true;
+      };
+    };
+
+    # Run speedtest when WAN gets IP address
+    systemd.services.speedtest-on-wan-up = mkIf cfg.speedtest.enable {
+      description = "Trigger speedtest when WAN is online";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${pkgs.systemd}/bin/systemctl start speedtest.service";
       };
     };
 
