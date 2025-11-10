@@ -103,7 +103,7 @@ in
       allowedTCPPorts = [ 80 443 22000 4242];
       allowedUDPPorts = [ 80 443 22000 4242];
     };
-    portForwards = routerConfig.portForwards;
+    portForwards = routerConfig.portForwards or [];
     dashboard.enable = true;
   };
 

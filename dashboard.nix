@@ -207,14 +207,13 @@ in
     # Create dashboard file
     environment.etc."grafana-dashboards/router-monitoring.json" = {
       text = builtins.toJSON {
-        dashboard = {
-          title = "Router Monitoring";
-          uid = "router-main";
-          tags = [ "router" "network" "system" ];
-          timezone = "browser";
-          schemaVersion = 16;
-          version = 1;
-          refresh = "5s";
+        title = "Router Monitoring";
+        uid = "router-main";
+        tags = [ "router" "network" "system" ];
+        timezone = "browser";
+        schemaVersion = 16;
+        version = 1;
+        refresh = "5s";
 
           panels = [
             # WAN Interface Status
@@ -660,9 +659,7 @@ in
                 };
               };
             }
-          ];
-        };
-        overwrite = true;
+            ];
       };
       mode = "0644";
     };
