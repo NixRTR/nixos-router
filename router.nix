@@ -3,8 +3,7 @@
 with lib;
 
 let
-  cfg = config.router;
-
+  # Pure type definitions and helper functions only
   portRangeType = types.submodule ({ ... }: {
     options = {
       from = mkOption {
@@ -303,9 +302,10 @@ in {
     };
   };
 
-  config = mkIf cfg.enable (
+  config = mkIf config.router.enable (
     let
       # All config-dependent variables must be defined here
+      cfg = config.router;
       wanCfg = cfg.wan;
       wanType = wanCfg.type;
       wanInterface = wanCfg.interface;
