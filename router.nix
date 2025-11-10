@@ -3,7 +3,9 @@
 with lib;
 
 let
-  # Pure type definitions and helper functions only
+  cfg = config.router;
+
+  # Type definitions and helper functions
   portRangeType = types.submodule ({ ... }: {
     options = {
       from = mkOption {
@@ -302,10 +304,9 @@ in {
     };
   };
 
-  config = mkIf config.router.enable (
+  config = mkIf cfg.enable (
     let
-      # All config-dependent variables must be defined here
-      cfg = config.router;
+      # All config-dependent variables defined here to avoid accessing them at module-level
       wanCfg = cfg.wan;
       wanType = wanCfg.type;
       wanInterface = wanCfg.interface;
@@ -326,7 +327,7 @@ in {
 
       natForwardEntries = concatMap mkPortPairs cfg.portForwards;
     in
-    mkMerge ([
+    mkMerge [
     {
       networking.networkmanager.enable = false;
       networking.useNetworkd = true;
@@ -427,19 +428,33 @@ in {
       # DNS and DHCP services configured elsewhere (e.g., blocky + dhcpd4)
     }
 
-    # Configure each bridge interface with its IP addresses
-  ] ++ (map (bridge: {
-    networking.interfaces.${bridge.name} = {
-      ipv4.addresses = [{
-        address = bridge.ipv4.address;
-        prefixLength = bridge.ipv4.prefixLength;
-      }];
-      ipv6.addresses = optionals bridge.ipv6.enable [{
-        address = bridge.ipv6.address;
-        prefixLength = bridge.ipv6.prefixLength;
-      }];
-    };
-  }) bridges) ++ [
+    # Bridge interfaces - br0 (HOMELAB)
+    {
+      networking.interfaces.br0 = mkIf (length bridges > 0) {
+        ipv4.addresses = [{
+          address = (elemAt bridges 0).ipv4.address;
+          prefixLength = (elemAt bridges 0).ipv4.prefixLength;
+        }];
+        ipv6.addresses = optionals (elemAt bridges 0).ipv6.enable [{
+          address = (elemAt bridges 0).ipv6.address;
+          prefixLength = (elemAt bridges 0).ipv6.prefixLength;
+        }];
+      };
+    }
+
+    # Bridge interfaces - br1 (LAN)
+    {
+      networking.interfaces.br1 = mkIf (length bridges > 1) {
+        ipv4.addresses = [{
+          address = (elemAt bridges 1).ipv4.address;
+          prefixLength = (elemAt bridges 1).ipv4.prefixLength;
+        }];
+        ipv6.addresses = optionals (elemAt bridges 1).ipv6.enable [{
+          address = (elemAt bridges 1).ipv6.address;
+          prefixLength = (elemAt bridges 1).ipv6.prefixLength;
+        }];
+      };
+    }
 
     (mkIf (wanType == "static" && staticCfg.dnsServers != [ ]) {
       networking.nameservers = staticCfg.dnsServers;
@@ -512,6 +527,6 @@ in {
         deps = [];
       };
     })
-  ]));
+  ]);
 }
 
