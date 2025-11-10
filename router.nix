@@ -4,19 +4,6 @@ with lib;
 
 let
   cfg = config.router;
-  wanCfg = cfg.wan;
-  wanType = wanCfg.type;
-  wanInterface = wanCfg.interface;
-  staticCfg = wanCfg.static;
-  pppoeCfg = wanCfg.pppoe;
-  lanCfg = cfg.lan;
-  firewallCfg = cfg.firewall;
-  natCfg = cfg.nat;
-
-  natExternalInterface =
-    if natCfg.externalInterface != null then natCfg.externalInterface
-    else if wanType == "pppoe" then pppoeCfg.logicalInterface
-    else wanInterface;
 
   portRangeType = types.submodule ({ ... }: {
     options = {
@@ -62,9 +49,6 @@ let
         destination = "${forward.destination}:${toString dest}";
       }) externalPorts destinationPorts
     ) protoList;
-
-  natForwardEntries =
-    concatMap mkPortPairs cfg.portForwards;
 
   portForwardModule = types.submodule ({ name, ... }: {
     options = {
@@ -321,9 +305,26 @@ in {
 
   config = mkIf cfg.enable (
     let
-      # Get bridges from config
+      # All config-dependent variables must be defined here
+      wanCfg = cfg.wan;
+      wanType = wanCfg.type;
+      wanInterface = wanCfg.interface;
+      staticCfg = wanCfg.static;
+      pppoeCfg = wanCfg.pppoe;
+      lanCfg = cfg.lan;
+      firewallCfg = cfg.firewall;
+      natCfg = cfg.nat;
+
       bridges = lanCfg.bridges;
       bridgeNames = map (b: b.name) bridges;
+      lanIsolation = lanCfg.isolation;
+
+      natExternalInterface =
+        if natCfg.externalInterface != null then natCfg.externalInterface
+        else if wanType == "pppoe" then pppoeCfg.logicalInterface
+        else wanInterface;
+
+      natForwardEntries = concatMap mkPortPairs cfg.portForwards;
     in
     mkMerge ([
     {
@@ -380,7 +381,7 @@ in {
         trustedInterfaces = bridgeNames;  # Trust all LAN bridges for WAN access
         
         # Block traffic between bridges if isolation is enabled
-        extraCommands = mkIf (lanCfg.isolation && (length bridges) > 1) (
+        extraCommands = mkIf (lanIsolation && (length bridges) > 1) (
           let
             # Generate all bridge pairs for blocking
             bridgePairs = flatten (map (i: 
@@ -395,7 +396,7 @@ in {
             '') bridgePairs
         );
         
-        extraStopCommands = mkIf (lanCfg.isolation && (length bridges) > 1) (
+        extraStopCommands = mkIf (lanIsolation && (length bridges) > 1) (
           let
             bridgePairs = flatten (map (i: 
               map (j: { from = elemAt bridgeNames i; to = elemAt bridgeNames j; })
