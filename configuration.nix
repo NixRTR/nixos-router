@@ -9,34 +9,15 @@ let
   routerConfig = import ./router-config.nix;
   pppoeEnabled = routerConfig.wan.type == "pppoe";
   dyndnsEnabled = routerConfig.dyndns.enable or false;
-  bridgeName = config.router.lan.bridge.name;
+  
+  # Extract bridge information from config
+  bridges = routerConfig.lan.bridges;
+  bridgeNames = map (b: b.name) bridges;
+  bridgeIPs = map (b: b.ipv4.address) bridges;
 
-  splitIPv4 = ip: map (x: lib.toInt x) (lib.splitString "." ip);
-
-  prefixToOctets = prefix:
+  # Helper function to convert lease time string to seconds
+  leaseToSeconds = lease:
     let
-      fullOctets = prefix / 8;
-      remainder = prefix - fullOctets * 8;
-    in map (idx:
-      if idx < fullOctets then 255
-      else if idx == fullOctets then
-        if remainder == 0 then 0 else 256 - builtins.pow 2 (8 - remainder)
-      else 0
-    ) (lib.range 0 3);
-
-  netmaskOctets = prefixToOctets routerConfig.lan.prefix;
-  netmaskString = lib.concatStringsSep "." (map toString netmaskOctets);
-
-  networkOctets =
-    lib.zipListsWith (a: b: builtins.bitAnd a b)
-      (splitIPv4 routerConfig.lan.ip)
-      netmaskOctets;
-
-  networkAddress = lib.concatStringsSep "." (map toString networkOctets);
-
-  leaseToSeconds =
-    let
-      lease = routerConfig.dhcp.leaseTime or "24h";
       numeric = builtins.match "^[0-9]+$" lease;
       unitMatch = builtins.match "^([0-9]+)([smhd])$" lease;
       multiplier = unit:
@@ -54,8 +35,51 @@ let
          in num * multiplier unit
        else 86400;
 
-  dhcpDefaultLease = leaseToSeconds;
-  dhcpMaxLease = dhcpDefaultLease * 2;
+  # Build DHCP subnets from config
+  # Supports both old (single) and new (multi-network) formats
+  dhcpSubnets = 
+    if routerConfig.dhcp ? homelab && routerConfig.dhcp ? lan then
+      # New multi-network format
+      [
+        {
+          id = 1;
+          subnet = "${routerConfig.dhcp.homelab.network}/${toString routerConfig.dhcp.homelab.prefix}";
+          pools = [{
+            pool = "${routerConfig.dhcp.homelab.start} - ${routerConfig.dhcp.homelab.end}";
+          }];
+          option-data = [
+            { name = "routers"; data = routerConfig.dhcp.homelab.gateway; }
+            { name = "domain-name-servers"; data = routerConfig.dhcp.homelab.dns; }
+          ];
+          valid-lifetime = leaseToSeconds routerConfig.dhcp.homelab.leaseTime;
+        }
+        {
+          id = 2;
+          subnet = "${routerConfig.dhcp.lan.network}/${toString routerConfig.dhcp.lan.prefix}";
+          pools = [{
+            pool = "${routerConfig.dhcp.lan.start} - ${routerConfig.dhcp.lan.end}";
+          }];
+          option-data = [
+            { name = "routers"; data = routerConfig.dhcp.lan.gateway; }
+            { name = "domain-name-servers"; data = routerConfig.dhcp.lan.dns; }
+          ];
+          valid-lifetime = leaseToSeconds routerConfig.dhcp.lan.leaseTime;
+        }
+      ]
+    else
+      # Legacy single-network format (fallback for compatibility)
+      [{
+        id = 1;
+        subnet = "${routerConfig.lan.ip}/${toString routerConfig.lan.prefix}";
+        pools = [{
+          pool = "${routerConfig.dhcp.start} - ${routerConfig.dhcp.end}";
+        }];
+        option-data = [
+          { name = "routers"; data = routerConfig.lan.ip; }
+          { name = "domain-name-servers"; data = routerConfig.lan.ip; }
+        ];
+        valid-lifetime = leaseToSeconds (routerConfig.dhcp.leaseTime or "24h");
+      }];
 in
 
 {
@@ -93,14 +117,9 @@ in
       };
     } else {});
     lan = {
-      bridge.interfaces = routerConfig.lan.interfaces;
-      ipv4 = {
-        address = routerConfig.lan.ip;
-        prefixLength = routerConfig.lan.prefix;
-      };
-      ipv6 = {
-        enable = false;
-      };
+      # Use new multi-bridge configuration
+      bridges = routerConfig.lan.bridges;
+      isolation = routerConfig.lan.isolation or true;
     };
     firewall = {
       allowedTCPPorts = [ 80 443 22000 4242];
@@ -184,10 +203,9 @@ in
   services.blocky = {
     enable = true;
     settings = {
-      ports.dns = [
-        "${routerConfig.lan.ip}:53"
-        "127.0.0.1:53"
-      ];
+      ports.dns = 
+        # Listen on all bridge IPs plus localhost
+        (map (ip: "${ip}:53") bridgeIPs) ++ [ "127.0.0.1:53" ];
       upstreams.groups.default = [
         "tcp+udp:1.1.1.1"
         "tcp+udp:8.8.8.8"
@@ -208,41 +226,17 @@ in
     enable = true;
     settings = {
       interfaces-config = {
-        interfaces = [ bridgeName ];
+        # Listen on all bridge interfaces
+        interfaces = bridgeNames;
       };
       lease-database = {
         type = "memfile";
         persist = true;
         name = "/var/lib/kea/dhcp4.leases";
       };
-      option-data = [
-        {
-          name = "routers";
-          data = routerConfig.lan.ip;
-        }
-        {
-          name = "domain-name-servers";
-          data = routerConfig.lan.ip;
-        }
-        {
-          name = "subnet-mask";
-          data = netmaskString;
-        }
-      ];
-      valid-lifetime = dhcpDefaultLease;
-      renew-timer = dhcpDefaultLease / 2;
-      rebind-timer = (dhcpDefaultLease * 3) / 4;
-      subnet4 = [
-        {
-          id = 1;
-          subnet = "${networkAddress}/${toString routerConfig.lan.prefix}";
-          pools = [
-            {
-              pool = "${routerConfig.dhcp.start} - ${routerConfig.dhcp.end}";
-            }
-          ];
-        }
-      ];
+      # Use per-subnet option-data instead of global
+      # Each subnet defines its own gateway and DNS
+      subnet4 = dhcpSubnets;
     };
   };
 

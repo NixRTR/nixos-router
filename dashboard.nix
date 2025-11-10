@@ -5,6 +5,11 @@ with lib;
 let
   cfg = config.router.dashboard;
   routerCfg = config.router;
+  
+  # Support both single and multiple bridge configurations
+  bridges = if routerCfg.lan.bridges != [] then routerCfg.lan.bridges 
+            else [{ name = routerCfg.lan.bridge.name; }];
+  bridgeNames = map (b: b.name) bridges;
 in
 
 {
@@ -260,20 +265,46 @@ in
               nullPointMode = "null";
             }
 
-            # LAN Bridge Status
+            # HOMELAB Bridge (br0)
             {
               id = 2;
-              title = "LAN Bridge - ${routerCfg.lan.bridge.name}";
+              title = "HOMELAB Bridge (br0)";
               type = "graph";
-              gridPos = { x = 12; y = 0; w = 12; h = 8; };
+              gridPos = { x = 12; y = 0; w = 12; h = 4; };
               targets = [
                 {
-                  expr = ''rate(node_network_receive_bytes_total{device="${routerCfg.lan.bridge.name}"}[1m]) * 8'';
+                  expr = ''rate(node_network_receive_bytes_total{device="br0"}[1m]) * 8'';
                   legendFormat = "Download";
                   refId = "A";
                 }
                 {
-                  expr = ''rate(node_network_transmit_bytes_total{device="${routerCfg.lan.bridge.name}"}[1m]) * 8'';
+                  expr = ''rate(node_network_transmit_bytes_total{device="br0"}[1m]) * 8'';
+                  legendFormat = "Upload";
+                  refId = "B";
+                }
+              ];
+              yaxes = [
+                { format = "bps"; label = "Bandwidth"; }
+                { format = "short"; }
+              ];
+              legend.show = true;
+              nullPointMode = "null";
+            }
+
+            # LAN Bridge (br1)
+            {
+              id = 12;
+              title = "LAN Bridge (br1)";
+              type = "graph";
+              gridPos = { x = 12; y = 4; w = 12; h = 4; };
+              targets = [
+                {
+                  expr = ''rate(node_network_receive_bytes_total{device="br1"}[1m]) * 8'';
+                  legendFormat = "Download";
+                  refId = "A";
+                }
+                {
+                  expr = ''rate(node_network_transmit_bytes_total{device="br1"}[1m]) * 8'';
                   legendFormat = "Upload";
                   refId = "B";
                 }
@@ -293,7 +324,7 @@ in
               type = "stat";
               gridPos = { x = 0; y = 8; w = 6; h = 4; };
               targets = [{
-                expr = ''node_network_up{device=~"${routerCfg.wan.interface}|${routerCfg.lan.bridge.name}|ppp0"}'';
+                expr = ''node_network_up{device=~"${routerCfg.wan.interface}|br0|br1|ppp0"}'';
                 legendFormat = "{{device}}";
                 refId = "A";
               }];
@@ -581,7 +612,7 @@ in
           ] ++ optionals cfg.speedtest.enable [
             # Speedtest Download Speed
             {
-              id = 12;
+              id = 13;
               title = "Speedtest - Download";
               type = "gauge";
               gridPos = { x = 0; y = 21; w = 8; h = 5; };
@@ -613,7 +644,7 @@ in
 
             # Speedtest Upload Speed
             {
-              id = 13;
+              id = 14;
               title = "Speedtest - Upload";
               type = "gauge";
               gridPos = { x = 8; y = 21; w = 8; h = 5; };
@@ -645,7 +676,7 @@ in
 
             # Speedtest Ping
             {
-              id = 14;
+              id = 15;
               title = "Speedtest - Ping";
               type = "stat";
               gridPos = { x = 16; y = 21; w = 8; h = 5; };

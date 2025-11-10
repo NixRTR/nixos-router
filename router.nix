@@ -13,9 +13,20 @@ let
   firewallCfg = cfg.firewall;
   natCfg = cfg.nat;
 
-  bridgeName = lanCfg.bridge.name;
+  # Support both single bridge (legacy) and multiple bridges
+  bridges = if lanCfg.bridges != [] then lanCfg.bridges else [{
+    name = lanCfg.bridge.name;
+    interfaces = lanCfg.bridge.interfaces;
+    ipv4 = lanCfg.ipv4;
+    ipv6 = lanCfg.ipv6;
+  }];
 
-  routerIPv4 = lanCfg.ipv4.address;
+  bridgeNames = map (b: b.name) bridges;
+  
+  # Legacy single bridge name for backward compatibility
+  bridgeName = (builtins.head bridges).name;
+
+  routerIPv4 = (builtins.head bridges).ipv4.address;
 
   natExternalInterface =
     if natCfg.externalInterface != null then natCfg.externalInterface
@@ -89,6 +100,50 @@ let
         type = types.nullOr portSpecType;
         default = null;
         description = "Internal port or range; defaults to externalPort when null.";
+      };
+    };
+  });
+
+  bridgeModule = types.submodule ({ name, ... }: {
+    options = {
+      name = mkOption {
+        type = types.str;
+        description = "Bridge interface name.";
+        example = "br0";
+      };
+      interfaces = mkOption {
+        type = types.listOf types.str;
+        description = "Physical interfaces that form this bridge.";
+        example = [ "enp4s0" "enp5s0" ];
+      };
+      ipv4 = {
+        address = mkOption {
+          type = types.str;
+          description = "IPv4 address of the router on this bridge.";
+          example = "192.168.1.1";
+        };
+        prefixLength = mkOption {
+          type = types.int;
+          default = 24;
+          description = "Prefix length for the IPv4 network.";
+        };
+      };
+      ipv6 = {
+        enable = mkOption {
+          type = types.bool;
+          default = false;
+          description = "Whether to assign an IPv6 address to this bridge.";
+        };
+        address = mkOption {
+          type = types.str;
+          default = "fd00:dead:beef::1";
+          description = "IPv6 address assigned to the bridge.";
+        };
+        prefixLength = mkOption {
+          type = types.int;
+          default = 64;
+          description = "Prefix length for the IPv6 network.";
+        };
       };
     };
   });
@@ -192,16 +247,48 @@ in {
     };
 
     lan = {
+      # New multi-bridge configuration
+      bridges = mkOption {
+        type = types.listOf bridgeModule;
+        default = [ ];
+        description = ''
+          List of LAN bridges to create. Each bridge can have multiple physical interfaces
+          and its own IP configuration. Use this for multiple isolated LAN segments.
+        '';
+        example = [
+          {
+            name = "br0";
+            interfaces = [ "enp4s0" "enp5s0" ];
+            ipv4 = { address = "192.168.2.1"; prefixLength = 24; };
+          }
+          {
+            name = "br1";
+            interfaces = [ "enp6s0" "enp7s0" ];
+            ipv4 = { address = "192.168.3.1"; prefixLength = 24; };
+          }
+        ];
+      };
+
+      isolation = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          When true and multiple bridges are defined, blocks direct traffic between bridges.
+          Bridges can still reach WAN and router services, but not each other.
+        '';
+      };
+
+      # Legacy single bridge configuration (kept for backward compatibility)
       bridge = {
         name = mkOption {
           type = types.str;
           default = "br0";
-          description = "Bridge interface representing the LAN.";
+          description = "Bridge interface representing the LAN (legacy single-bridge mode).";
         };
         interfaces = mkOption {
           type = types.listOf types.str;
           default = [ ];
-          description = "Physical interfaces that form the LAN bridge.";
+          description = "Physical interfaces that form the LAN bridge (legacy single-bridge mode).";
           example = [ "enp4s0" "enp5s0" "enp6s0" "enp7s0" ];
         };
       };
@@ -210,12 +297,12 @@ in {
         address = mkOption {
           type = types.str;
           default = "192.168.1.1";
-          description = "LAN IPv4 address of the router.";
+          description = "LAN IPv4 address of the router (legacy single-bridge mode).";
         };
         prefixLength = mkOption {
           type = types.int;
           default = 24;
-          description = "Prefix length for the LAN IPv4 network.";
+          description = "Prefix length for the LAN IPv4 network (legacy single-bridge mode).";
         };
       };
 
@@ -223,17 +310,17 @@ in {
         enable = mkOption {
           type = types.bool;
           default = true;
-          description = "Whether to assign an IPv6 address to the LAN bridge.";
+          description = "Whether to assign an IPv6 address to the LAN bridge (legacy single-bridge mode).";
         };
         address = mkOption {
           type = types.str;
           default = "fd00:dead:beef::1";
-          description = "IPv6 address assigned to the LAN bridge.";
+          description = "IPv6 address assigned to the LAN bridge (legacy single-bridge mode).";
         };
         prefixLength = mkOption {
           type = types.int;
           default = 64;
-          description = "Prefix length for the LAN IPv6 network.";
+          description = "Prefix length for the LAN IPv6 network (legacy single-bridge mode).";
         };
       };
     };
@@ -318,38 +405,82 @@ in {
         (mkIf (wanType == "pppoe") { useDHCP = false; })
       ];
 
+      # Create systemd network devices for each bridge
       systemd.network = {
-        netdevs.${bridgeName} = {
-          netdevConfig = {
-            Kind = "bridge";
-            Name = bridgeName;
+        netdevs = listToAttrs (map (bridge: {
+          name = bridge.name;
+          value = {
+            netdevConfig = {
+              Kind = "bridge";
+              Name = bridge.name;
+            };
           };
-        };
+        }) bridges);
 
-        networks.lan-members = {
-          matchConfig.Name = concatStringsSep " " lanCfg.bridge.interfaces;
-          networkConfig.Bridge = bridgeName;
-        };
+        networks = listToAttrs (flatten (map (bridge: {
+          name = "${bridge.name}-members";
+          value = {
+            matchConfig.Name = concatStringsSep " " bridge.interfaces;
+            networkConfig.Bridge = bridge.name;
+          };
+        }) bridges));
       };
 
-      networking.interfaces.${bridgeName} = {
-        ipv4.addresses = [{
-          address = lanCfg.ipv4.address;
-          prefixLength = lanCfg.ipv4.prefixLength;
-        }];
-      };
+      # Assign IP addresses to each bridge
+      networking.interfaces = listToAttrs (map (bridge: {
+        name = bridge.name;
+        value = {
+          ipv4.addresses = [{
+            address = bridge.ipv4.address;
+            prefixLength = bridge.ipv4.prefixLength;
+          }];
+          ipv6.addresses = optionals bridge.ipv6.enable [{
+            address = bridge.ipv6.address;
+            prefixLength = bridge.ipv6.prefixLength;
+          }];
+        };
+      }) bridges);
 
       networking.firewall = {
         enable = true;
         allowPing = firewallCfg.allowPing;
-        trustedInterfaces = [ bridgeName ];  # Trust LAN interface completely
+        trustedInterfaces = bridgeNames;  # Trust all LAN bridges for WAN access
+        
+        # Block traffic between bridges if isolation is enabled
+        extraCommands = mkIf (lanCfg.isolation && (length bridges) > 1) (
+          let
+            # Generate all bridge pairs for blocking
+            bridgePairs = flatten (map (i: 
+              map (j: { from = elemAt bridgeNames i; to = elemAt bridgeNames j; })
+                (range (i + 1) ((length bridgeNames) - 1))
+            ) (range 0 ((length bridgeNames) - 2)));
+          in
+            concatMapStrings (pair: ''
+              # Block ${pair.from} <-> ${pair.to}
+              iptables -I FORWARD -i ${pair.from} -o ${pair.to} -j DROP
+              iptables -I FORWARD -i ${pair.to} -o ${pair.from} -j DROP
+            '') bridgePairs
+        );
+        
+        extraStopCommands = mkIf (lanCfg.isolation && (length bridges) > 1) (
+          let
+            bridgePairs = flatten (map (i: 
+              map (j: { from = elemAt bridgeNames i; to = elemAt bridgeNames j; })
+                (range (i + 1) ((length bridgeNames) - 1))
+            ) (range 0 ((length bridgeNames) - 2)));
+          in
+            concatMapStrings (pair: ''
+              iptables -D FORWARD -i ${pair.from} -o ${pair.to} -j DROP || true
+              iptables -D FORWARD -i ${pair.to} -o ${pair.from} -j DROP || true
+            '') bridgePairs
+        );
       };
 
       networking.nat = {
         enable = natCfg.enable;
         externalInterface = natExternalInterface;
         internalInterfaces =
-          if natCfg.internalInterfaces == [ ] then [ bridgeName ] else natCfg.internalInterfaces;
+          if natCfg.internalInterfaces == [ ] then bridgeNames else natCfg.internalInterfaces;
         enableIPv6 = natCfg.enableIPv6;
         forwardPorts = natForwardEntries;
       };

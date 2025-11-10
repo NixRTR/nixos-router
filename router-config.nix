@@ -13,18 +13,65 @@
     interface = "eno1";
   };
 
-  # LAN configuration
+  # LAN configuration - Multiple isolated networks
   lan = {
-    interfaces = [ "enp4s0" "enp5s0" "enp6s0" "enp7s0" ];  # Bridge interfaces
-    ip = "192.168.4.1";
-    prefix = 24;
+    # Physical port mapping (for reference):
+    # enp4s0, enp5s0 = HOMELAB (left two ports on 4-port card)
+    # enp6s0, enp7s0 = LAN (right two ports on 4-port card)
+    
+    bridges = [
+      # HOMELAB network - servers, IoT devices
+      {
+        name = "br0";
+        interfaces = [ "enp4s0" "enp5s0" ];
+        ipv4 = {
+          address = "192.168.2.1";
+          prefixLength = 24;
+        };
+        ipv6.enable = false;
+      }
+      # LAN network - computers, phones, tablets
+      {
+        name = "br1";
+        interfaces = [ "enp6s0" "enp7s0" ];
+        ipv4 = {
+          address = "192.168.3.1";
+          prefixLength = 24;
+        };
+        ipv6.enable = false;
+      }
+    ];
+    
+    # Block traffic between HOMELAB and LAN at the router level
+    # (Hera and Triton have dual NICs and can bridge as needed)
+    isolation = true;
   };
 
-  # DHCP configuration
+  # DHCP configuration - per network
   dhcp = {
-    start = "192.168.4.100";
-    end = "192.168.4.200";
-    leaseTime = "24h";
+    # HOMELAB (br0 - 192.168.2.0/24)
+    homelab = {
+      interface = "br0";
+      network = "192.168.2.0";
+      prefix = 24;
+      start = "192.168.2.100";
+      end = "192.168.2.200";
+      leaseTime = "24h";
+      gateway = "192.168.2.1";
+      dns = "192.168.2.1";
+    };
+    
+    # LAN (br1 - 192.168.3.0/24)
+    lan = {
+      interface = "br1";
+      network = "192.168.3.0";
+      prefix = 24;
+      start = "192.168.3.100";
+      end = "192.168.3.200";
+      leaseTime = "24h";
+      gateway = "192.168.3.1";
+      dns = "192.168.3.1";
+    };
   };
 
   # Port Forwarding Rules
