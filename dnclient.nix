@@ -93,12 +93,45 @@ in
       "d ${cfg.configDir} 0700 root root -"
     ];
 
+    # Install dnclient as a service using its own service manager
+    systemd.services.dnclient-install = {
+      description = "Install Defined Networking service";
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        WorkingDirectory = cfg.configDir;
+        ExecStart = pkgs.writeShellScript "dnclient-install" ''
+          set -euo pipefail
+          
+          # Check if already installed
+          if ${pkgs.systemd}/bin/systemctl list-unit-files | ${pkgs.gnugrep}/bin/grep -q "dnclient.service"; then
+            echo "dnclient service already installed"
+            exit 0
+          fi
+          
+          cd "${cfg.configDir}"
+          
+          # Copy dnclient binary to config directory (required for install)
+          ${pkgs.coreutils}/bin/cp ${cfg.package}/bin/dnclient ./dnclient
+          ${pkgs.coreutils}/bin/chmod +x ./dnclient
+          
+          # Install the service
+          ./dnclient install
+          
+          echo "dnclient service installed"
+        '';
+        User = "root";
+        Group = "root";
+      };
+    };
+
     # Enrollment service (oneshot, runs once if enrollment code provided)
     # Note: Enrollment must happen AFTER dnclient daemon is started
     systemd.services.dnclient-enroll = mkIf (cfg.enrollmentCode != null || cfg.enrollmentCodeFile != null) {
       description = "Enroll Defined Networking host";
-      after = [ "network-online.target" "dnclient.service" ];
-      requires = [ "dnclient.service" ];
+      after = [ "network-online.target" "dnclient-start.service" ];
+      requires = [ "dnclient-start.service" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
       
@@ -189,56 +222,30 @@ in
       };
     };
 
-    # Main dnclient service
-    systemd.services.dnclient = {
-      description = "Defined Networking Nebula client";
-      after = [ "network-online.target" ];
+    # Start the dnclient service (installed by dnclient-install)
+    systemd.services.dnclient-start = {
+      description = "Start Defined Networking service";
+      after = [ "network-online.target" "dnclient-install.service" ];
+      requires = [ "dnclient-install.service" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
-
+      
       serviceConfig = {
-        Type = "simple";
+        Type = "oneshot";
+        RemainAfterExit = true;
         WorkingDirectory = cfg.configDir;
-        ExecStartPre = pkgs.writeShellScript "dnclient-check-config" ''
-          # If not enrolled and enrollment code provided, create a dummy config to allow service to start
-          if [ ! -f "${cfg.configDir}/config.yml" ]; then
-            ${optionalString (cfg.enrollmentCode != null || cfg.enrollmentCodeFile != null) ''
-              echo "Creating placeholder config for initial enrollment..."
-              cat > "${cfg.configDir}/config.yml" <<EOF
-# Placeholder config - will be replaced by enrollment
-EOF
-            ''}
-            ${optionalString (cfg.enrollmentCode == null && cfg.enrollmentCodeFile == null) ''
-              echo "ERROR: dnclient not enrolled yet. Please provide enrollmentCode or enrollmentCodeFile."
-              exit 1
-            ''}
-          fi
+        ExecStart = pkgs.writeShellScript "dnclient-start" ''
+          set -euo pipefail
           
-          # Update port if non-default and config exists
-          if [ -s "${cfg.configDir}/config.yml" ] && [ "$(wc -l < "${cfg.configDir}/config.yml")" -gt 1 ]; then
-            ${optionalString (cfg.port != 4242) ''
-              echo "Ensuring port is set to ${toString cfg.port}..."
-              ${pkgs.gnused}/bin/sed -i 's/listen:.*$/listen: "0.0.0.0:${toString cfg.port}"/' "${cfg.configDir}/config.yml"
-            ''}
-          fi
+          cd "${cfg.configDir}"
+          
+          # Start the dnclient service
+          ./dnclient start
+          
+          echo "dnclient service started"
         '';
-        ExecStart = "${cfg.package}/bin/dnclient start";
-        ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
-        Restart = "always";
-        RestartSec = "10s";
         User = "root";
         Group = "root";
-        
-        # Security hardening
-        NoNewPrivileges = false; # dnclient needs to create network interfaces
-        PrivateTmp = true;
-        ProtectSystem = "strict";
-        ProtectHome = true;
-        ReadWritePaths = [ cfg.configDir ];
-        
-        # Network capabilities
-        AmbientCapabilities = [ "CAP_NET_ADMIN" ];
-        CapabilityBoundingSet = [ "CAP_NET_ADMIN" ];
       };
     };
 
