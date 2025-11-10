@@ -94,9 +94,11 @@ in
     ];
 
     # Enrollment service (oneshot, runs once if enrollment code provided)
+    # Note: Enrollment must happen AFTER dnclient daemon is started
     systemd.services.dnclient-enroll = mkIf (cfg.enrollmentCode != null || cfg.enrollmentCodeFile != null) {
       description = "Enroll Defined Networking host";
-      after = [ "network-online.target" ];
+      after = [ "network-online.target" "dnclient.service" ];
+      requires = [ "dnclient.service" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
       
@@ -136,10 +138,38 @@ in
           fi
           
           echo "Enrolling host with Defined Networking..."
+          
+          # Create config directory if it doesn't exist
+          mkdir -p "${cfg.configDir}"
           cd "${cfg.configDir}"
+          
+          # Wait for dnclient daemon to be ready
+          for i in {1..30}; do
+            if [ -S /var/run/dnclient.sock ]; then
+              echo "dnclient daemon is ready"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "ERROR: dnclient daemon socket not found after 30 seconds"
+              exit 1
+            fi
+            echo "Waiting for dnclient daemon... ($i/30)"
+            sleep 1
+          done
+          
+          # Run enrollment - requires running daemon
+          echo "Running enrollment command..."
           ${cfg.package}/bin/dnclient enroll -code "$ENROLL_CODE"
           
-          echo "Enrollment complete"
+          # Verify config was created
+          if [ ! -f "${cfg.configDir}/config.yml" ] || [ ! -s "${cfg.configDir}/config.yml" ]; then
+            echo "ERROR: Enrollment completed but valid config.yml not found"
+            exit 1
+          fi
+          
+          echo "Enrollment complete - restarting dnclient with new config"
+          # Restart dnclient to use the new configuration
+          ${pkgs.systemd}/bin/systemctl restart dnclient.service
         '';
         ExecStartPost = mkIf (cfg.port != 4242) (pkgs.writeShellScript "dnclient-set-port" ''
           set -euo pipefail
@@ -162,26 +192,35 @@ in
     # Main dnclient service
     systemd.services.dnclient = {
       description = "Defined Networking Nebula client";
-      after = [ "network-online.target" ] 
-        ++ optional (cfg.enrollmentCode != null || cfg.enrollmentCodeFile != null) "dnclient-enroll.service";
+      after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
-      requires = optionals (cfg.enrollmentCode != null || cfg.enrollmentCodeFile != null) [ "dnclient-enroll.service" ];
       wantedBy = [ "multi-user.target" ];
 
       serviceConfig = {
         Type = "simple";
         WorkingDirectory = cfg.configDir;
         ExecStartPre = pkgs.writeShellScript "dnclient-check-config" ''
+          # If not enrolled and enrollment code provided, create a dummy config to allow service to start
           if [ ! -f "${cfg.configDir}/config.yml" ]; then
-            echo "ERROR: dnclient not enrolled yet. Please provide enrollmentCode or enrollmentCodeFile."
-            exit 1
+            ${optionalString (cfg.enrollmentCode != null || cfg.enrollmentCodeFile != null) ''
+              echo "Creating placeholder config for initial enrollment..."
+              cat > "${cfg.configDir}/config.yml" <<EOF
+# Placeholder config - will be replaced by enrollment
+EOF
+            ''}
+            ${optionalString (cfg.enrollmentCode == null && cfg.enrollmentCodeFile == null) ''
+              echo "ERROR: dnclient not enrolled yet. Please provide enrollmentCode or enrollmentCodeFile."
+              exit 1
+            ''}
           fi
           
-          # Update port if non-default
-          ${optionalString (cfg.port != 4242) ''
-            echo "Ensuring port is set to ${toString cfg.port}..."
-            ${pkgs.gnused}/bin/sed -i 's/listen:.*$/listen: "0.0.0.0:${toString cfg.port}"/' "${cfg.configDir}/config.yml"
-          ''}
+          # Update port if non-default and config exists
+          if [ -s "${cfg.configDir}/config.yml" ] && [ "$(wc -l < "${cfg.configDir}/config.yml")" -gt 1 ]; then
+            ${optionalString (cfg.port != 4242) ''
+              echo "Ensuring port is set to ${toString cfg.port}..."
+              ${pkgs.gnused}/bin/sed -i 's/listen:.*$/listen: "0.0.0.0:${toString cfg.port}"/' "${cfg.configDir}/config.yml"
+            ''}
+          fi
         '';
         ExecStart = "${cfg.package}/bin/dnclient start -f";
         ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
