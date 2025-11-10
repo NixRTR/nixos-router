@@ -384,6 +384,16 @@ in {
           }];
         })
         (mkIf (wanType == "pppoe") { useDHCP = false; })
+        # Hardware offloading for better performance
+        {
+          ethtool.offload = {
+            rx = true;   # RX checksum offload
+            tx = true;   # TX checksum offload
+            tso = true;  # TCP segmentation offload
+            gso = true;  # Generic segmentation offload
+            gro = true;  # Generic receive offload
+          };
+        }
       ];
 
       # Create systemd network devices for each bridge
@@ -531,17 +541,6 @@ in {
         "fs.file-max" = 2097152;
       };
 
-      # Enable hardware offloading for better performance
-      networking.interfaces.${wanInterface}.ethtool = {
-        offload = {
-          rx = true;   # RX checksum offload
-          tx = true;   # TX checksum offload
-          tso = true;  # TCP segmentation offload
-          gso = true;  # Generic segmentation offload
-          gro = true;  # Generic receive offload
-        };
-      };
-      
       # CPU governor for performance
       powerManagement.cpuFreqGovernor = "performance";
       
@@ -562,6 +561,14 @@ in {
           address = (elemAt bridges 0).ipv6.address;
           prefixLength = (elemAt bridges 0).ipv6.prefixLength;
         }];
+        # Hardware offloading for bridge
+        ethtool.offload = {
+          rx = true;
+          tx = true;
+          tso = true;
+          gso = true;
+          gro = true;
+        };
       };
     }
 
@@ -576,6 +583,14 @@ in {
           address = (elemAt bridges 1).ipv6.address;
           prefixLength = (elemAt bridges 1).ipv6.prefixLength;
         }];
+        # Hardware offloading for bridge
+        ethtool.offload = {
+          rx = true;
+          tx = true;
+          tso = true;
+          gso = true;
+          gro = true;
+        };
       };
     }
 
