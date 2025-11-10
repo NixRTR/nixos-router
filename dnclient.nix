@@ -165,7 +165,7 @@ in
       after = [ "network-online.target" ] 
         ++ optional (cfg.enrollmentCode != null || cfg.enrollmentCodeFile != null) "dnclient-enroll.service";
       wants = [ "network-online.target" ];
-      requires = optional (cfg.enrollmentCode != null || cfg.enrollmentCodeFile != null) [ "dnclient-enroll.service" ];
+      requires = optionals (cfg.enrollmentCode != null || cfg.enrollmentCodeFile != null) [ "dnclient-enroll.service" ];
       wantedBy = [ "multi-user.target" ];
 
       serviceConfig = {
