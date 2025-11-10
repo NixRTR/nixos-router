@@ -488,6 +488,10 @@ in {
         "net.ipv4.tcp_sack" = 1;
         "net.ipv4.tcp_no_metrics_save" = 1;
         
+        # Use BBR congestion control (modern, better performance)
+        "net.ipv4.tcp_congestion_control" = "bbr";
+        "net.core.default_qdisc" = "fq";  # Fair Queue required for BBR
+        
         # Increase TCP buffer sizes for better throughput
         "net.core.rmem_max" = 134217728;  # 128 MB
         "net.core.wmem_max" = 134217728;  # 128 MB
@@ -500,8 +504,50 @@ in {
         # Reduce TIME_WAIT connections
         "net.ipv4.tcp_fin_timeout" = 30;
         "net.ipv4.tcp_tw_reuse" = 1;
+        
+        # Connection tracking optimization
+        "net.netfilter.nf_conntrack_max" = 262144;  # Handle more concurrent connections
+        "net.netfilter.nf_conntrack_tcp_timeout_established" = 86400;  # 24 hours
+        "net.netfilter.nf_conntrack_tcp_timeout_time_wait" = 30;
+        
+        # SYN flood protection
+        "net.ipv4.tcp_syncookies" = 1;
+        "net.ipv4.tcp_max_syn_backlog" = 8192;
+        "net.ipv4.tcp_synack_retries" = 2;
+        
+        # Increase network device backlog for high-speed networks
+        "net.core.netdev_max_backlog" = 5000;
+        
+        # Optimize for routing/forwarding
+        "net.ipv4.conf.all.accept_redirects" = 0;
+        "net.ipv4.conf.all.send_redirects" = 0;
+        "net.ipv4.conf.all.accept_source_route" = 0;
+        "net.ipv4.conf.all.rp_filter" = 1;  # Reverse path filtering (security)
+        
+        # Reduce swappiness (router shouldn't swap)
+        "vm.swappiness" = 10;
+        
+        # Optimize file handle limits
+        "fs.file-max" = 2097152;
       };
 
+      # Enable hardware offloading for better performance
+      networking.interfaces.${wanInterface}.ethtool = {
+        offload = {
+          rx = true;   # RX checksum offload
+          tx = true;   # TX checksum offload
+          tso = true;  # TCP segmentation offload
+          gso = true;  # Generic segmentation offload
+          gro = true;  # Generic receive offload
+        };
+      };
+      
+      # CPU governor for performance
+      powerManagement.cpuFreqGovernor = "performance";
+      
+      # Enable kernel modules for BBR
+      boot.kernelModules = [ "tcp_bbr" ];
+      
       # DNS and DHCP services configured elsewhere (e.g., blocky + dhcpd4)
     }
 

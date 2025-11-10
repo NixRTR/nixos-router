@@ -193,6 +193,7 @@ in
       upstreams.groups.default = [
         "tcp+udp:1.1.1.1"
         "tcp+udp:8.8.8.8"
+        "tcp+udp:9.9.9.9"  # Quad9 (privacy-focused)
       ];
       bootstrapDns = [
         "tcp+udp:1.1.1.1"
@@ -200,8 +201,17 @@ in
       ];
       caching = {
         minTime = "5m";
-        maxTime = "30m";
+        maxTime = "2h";  # Increased from 30m for better performance
+        prefetching = true;  # Refresh popular entries before expiry
+        prefetchExpires = "2h";
+        prefetchThreshold = 5;  # Prefetch if queried 5+ times
       };
+      # Performance optimizations
+      clientLookup = {
+        upstream = "tcp+udp:1.1.1.1";
+      };
+      # Connection pooling for upstream queries
+      upstreams.timeout = "2s";
       log.level = "info";
     };
   };
