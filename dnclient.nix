@@ -95,12 +95,12 @@ in
             # Get enrollment code if provided
             ENROLL_ARGS=""
             ${optionalString (cfg.enrollmentCode != null) ''
-              ENROLL_ARGS="-e ENROLL_CODE='${cfg.enrollmentCode}'"
+              ENROLL_ARGS="-e DN_ENROLLMENT_CODE='${cfg.enrollmentCode}'"
             ''}
             ${optionalString (cfg.enrollmentCodeFile != null) ''
               if [ -f "${cfg.enrollmentCodeFile}" ]; then
                 ENROLL_CODE=$(cat "${cfg.enrollmentCodeFile}")
-                ENROLL_ARGS="-e ENROLL_CODE=$ENROLL_CODE"
+                ENROLL_ARGS="-e DN_ENROLLMENT_CODE=$ENROLL_CODE"
               fi
             ''}
             
