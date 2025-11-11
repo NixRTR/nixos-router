@@ -152,7 +152,7 @@ in
       # Wait for PowerDNS Admin to be ready
       echo "Waiting for PowerDNS Admin to initialize..."
       for i in {1..30}; do
-        if curl -s http://localhost:9191/ > /dev/null 2>&1; then
+        if ${pkgs.curl}/bin/curl -s http://localhost:9191/ > /dev/null 2>&1; then
           echo "PowerDNS Admin is ready"
           break
         fi

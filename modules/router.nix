@@ -646,7 +646,7 @@ in {
             if [ -f "$PEER_FILE" ]; then
               # Use temp file approach - no need for sed -i (GNU extension)
               TEMP_FILE=$(mktemp)
-              sed "s/PPPOE_USERNAME_PLACEHOLDER/$USERNAME/g; s/PPPOE_PASSWORD_PLACEHOLDER/$PASSWORD/g" "$PEER_FILE" > "$TEMP_FILE"
+              ${pkgs.gnused}/bin/sed "s/PPPOE_USERNAME_PLACEHOLDER/$USERNAME/g; s/PPPOE_PASSWORD_PLACEHOLDER/$PASSWORD/g" "$PEER_FILE" > "$TEMP_FILE"
               mv "$TEMP_FILE" "$PEER_FILE"
               chmod 600 "$PEER_FILE"
             fi

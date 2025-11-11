@@ -102,7 +102,7 @@ in
         LINODE_TOKEN=$(cat "${cfg.tokenFile}")
         
         # Get current public IP
-        PUBLIC_IP=$(curl -s https://api.ipify.org)
+        PUBLIC_IP=$(${pkgs.curl}/bin/curl -s https://api.ipify.org)
         
         if [ -z "$PUBLIC_IP" ]; then
           echo "[ERROR] Failed to get public IP address"
@@ -124,10 +124,10 @@ in
         fi
         
         # Get current DNS record
-        CURRENT_RECORD=$(curl -s -H "Authorization: Bearer $LINODE_TOKEN" \
+        CURRENT_RECORD=$(${pkgs.curl}/bin/curl -s -H "Authorization: Bearer $LINODE_TOKEN" \
           "https://api.linode.com/v4/domains/${toString cfg.domainId}/records/${toString cfg.recordId}")
         
-        CURRENT_TARGET=$(echo "$CURRENT_RECORD" | jq -r ".target")
+        CURRENT_TARGET=$(echo "$CURRENT_RECORD" | ${pkgs.jq}/bin/jq -r ".target")
         
         if [ "$CURRENT_TARGET" == "$PUBLIC_IP" ]; then
           echo "[INFO] DNS record already up to date"
@@ -138,14 +138,14 @@ in
         echo "[INFO] Updating DNS record from $CURRENT_TARGET to $PUBLIC_IP"
         
         # Update the DNS record
-        RESPONSE=$(curl -s -X PUT \
+        RESPONSE=$(${pkgs.curl}/bin/curl -s -X PUT \
           -H "Authorization: Bearer $LINODE_TOKEN" \
           -H "Content-Type: application/json" \
           -d "{\"target\": \"$PUBLIC_IP\", \"ttl_sec\": 30}" \
           "https://api.linode.com/v4/domains/${toString cfg.domainId}/records/${toString cfg.recordId}")
         
         # Check if update was successful
-        NEW_TARGET=$(echo "$RESPONSE" | jq -r ".target")
+        NEW_TARGET=$(echo "$RESPONSE" | ${pkgs.jq}/bin/jq -r ".target")
         
         if [ "$NEW_TARGET" == "$PUBLIC_IP" ]; then
           echo "[SUCCESS] DNS record updated successfully"
