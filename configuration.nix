@@ -73,7 +73,6 @@ in
       ./router.nix
       ./dashboard.nix
       ./linode-dyndns.nix
-      ./dnclient.nix
     ];
 
   nix.settings.experimental-features = [

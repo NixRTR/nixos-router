@@ -1,133 +1,68 @@
 # NixOS Router
 
-A declarative NixOS configuration that transforms a standard PC into a full-featured network router with integrated secrets management.
+A production-grade, declarative NixOS router configuration with enterprise-level features and optimizations.
 
-## Features
+## ✨ Highlights
 
-- **Multiple WAN types**: DHCP, PPPoE, and static IP support
-- **LAN bridging**: Combine multiple Ethernet ports into one network
-- **DNS**: Blocky resolver with upstream forwarding and caching
-- **DHCP**: ISC Kea DHCP4 serving the bridged LAN
-- **NAT & firewall**: Automatic network address translation and basic security
-- **Port forwarding**: Configurable forwarding rules for internal services
-- **Dynamic DNS**: Automatic Linode DNS updates when WAN IP changes
-- **Mesh VPN**: Defined Networking (Nebula) integration for secure overlay networks
-- **Secrets management**: Encrypted secrets with sops-nix and Age
-- **Monitoring Dashboard**: Grafana + Prometheus for real-time network and system monitoring
+- **🌐 Multi-Network Support** - Isolated LAN segments with selective access control
+- **🚀 Performance Optimized** - BBR congestion control, MSS clamping, hardware offloading
+- **📊 Full Monitoring** - Grafana dashboard with real-time metrics
+- **🔒 Security Hardened** - Encrypted secrets, SYN flood protection, reverse path filtering
+- **🔧 Easy Management** - One-command install and updates
+- **☁️ Dynamic DNS** - Automatic Linode DNS updates for changing WAN IPs
 
-## Quick Start
-
-### Automated Installation (Recommended)
+## 🚀 Quick Start
 
 Boot from NixOS installer ISO and run:
-```bash
-curl -fsSL https://beard.click/nixos-router | sudo bash
-```
-
-This script will interactively ask for:
-- **Target disk** (shows available disks)
-- **Hostname** (default: nixos-router)
-- **Timezone** (default: America/Anchorage)
-- **WAN interface** (shows available interfaces)
-- **WAN connection type** (DHCP or PPPoE)
-- **PPPoE credentials** (only if PPPoE selected)
-- **LAN IP address** and subnet
-- **DHCP range** and lease time for clients
-- **LAN bridge interfaces**
-- **Router admin password** (for system access)
-- **Age key** (use existing or generate new)
-
-Then it will:
-- Partition and format your selected disk
-- Install NixOS with the router configuration
-- Set up Age keys (generate new or use existing)
-- Set up the basic router system
-
-### Manual Installation
-
-1. **Install NixOS** with flakes enabled
-2. **Clone this repository**
-3. **Generate Age key** for encryption:
-   ```bash
-   sudo ./scripts/install-age-key.sh
-   ```
-4. **Create secrets** (see [docs/secrets.md](docs/secrets.md))
-5. **Configure router** in `router-config.nix` (and adjust `configuration.nix` if you need additional tweaks)
-6. **Deploy**:
-   ```bash
-   sudo nixos-rebuild switch --flake .#router
-   ```
-
-## Upgrading Existing Installations
-
-For a quick refresh, run the hosted update helper:
 
 ```bash
-curl -fsSL https://beard.click/nixos-router-update | sudo bash
+curl -fsSL https://beard.click/nixos-router > install.sh
+chmod +x install.sh
+sudo ./install.sh
 ```
 
-This downloads the latest `scripts/update-router.sh`, backs up `/etc/nixos`, syncs the repository (preserving `hardware-configuration.nix`, `router-config.nix`, and `secrets/secrets.yaml`), then executes `nixos-rebuild switch --flake /etc/nixos#router`.
+The installer will guide you through:
+- **Simple mode**: Single network for most users
+- **Advanced mode**: Multiple isolated networks (HOMELAB + LAN)
 
-If you already have the repository checked out locally, you can invoke the script directly:
+## 📚 Documentation
 
-```bash
-sudo /etc/nixos/scripts/update-router.sh
-```
+Complete documentation is available in the [`docs/`](docs/) directory:
 
-## Monitoring Dashboard
-
-Access the Grafana dashboard at `http://<router-ip>:3000` (default credentials: admin/admin).
-
-The dashboard provides real-time monitoring of:
-- WAN and LAN interface bandwidth and status
-- PPPoE connection status (when applicable)
-- Network errors and packet drops
-- CPU, memory, and disk usage
-- System services status (Blocky, Kea, PPPoE)
-- Active network connections
-- System uptime
-
-## Documentation
-
-- **[Setup Guide](docs/setup.md)** - Installation, upgrades, and initial configuration
-- **[Router Config](docs/router.md)** - WAN/LAN setup, Blocky DNS, Kea DHCP, firewall, port forwarding
-- **[Dynamic DNS](docs/dyndns.md)** - Automatic Linode DNS updates when WAN IP changes
-- **[Defined Networking](docs/dnclient.md)** - Mesh VPN setup with Defined Networking (Nebula)
-- **[Secrets Management](docs/secrets.md)** - sops-nix usage and key management
+- **[Installation Guide](docs/installation.md)** - Install and initial setup
+- **[Configuration Guide](docs/configuration.md)** - Configure networks, DHCP, and services
+- **[Network Isolation](docs/isolation.md)** - Multi-LAN setup and access control
+- **[Monitoring](docs/monitoring.md)** - Grafana dashboard and metrics
+- **[Optional Features](docs/optional-features.md)** - Dynamic DNS, VPN, and more
+- **[Performance](docs/performance.md)** - Optimization details and tuning
 - **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
-- **[Development](docs/development.md)** - Contributing and development guide
+- **[Updating](docs/updating.md)** - Keep your router up to date
+- **[Testing in VM](docs/testing.md)** - Test in QEMU before deploying to hardware
 
-## Requirements
-
-- NixOS 25.05 or later with flakes enabled
-- Age keypair for secret encryption
-- Compatible network hardware
-
-## Repository Structure
+## 🏗️ Architecture
 
 ```
-├── configuration.nix      # Main system config
-├── router.nix            # Router module
-├── dashboard.nix         # Monitoring dashboard module
-├── linode-dyndns.nix     # Dynamic DNS module
-├── dnclient.nix          # Defined Networking (Nebula) module
-├── router-config.nix     # User-editable router settings
-├── flake.nix             # Nix flake
-├── secrets/secrets.yaml  # Encrypted secrets
-├── scripts/              # Helper scripts
-└── docs/                 # Detailed documentation
+Internet ──▶ [WAN] ──▶ [Router/Firewall] ──┬──▶ [br0] HOMELAB (192.168.2.0/24)
+                                            └──▶ [br1] LAN (192.168.3.0/24)
 ```
 
-## Security
+- **Isolated networks** with firewall protection between segments
+- **Dual DHCP servers** for automatic IP assignment
+- **DNS caching** with upstream forwarding (Cloudflare, Google, Quad9)
+- **NAT and port forwarding** for external access
+- **Real-time monitoring** via Grafana + Prometheus
 
-- Secrets are encrypted at rest using Age public-key encryption
-- Runtime secrets are accessible only to root with restrictive permissions
-- No sensitive data is stored in plain text in the repository
+## 🔒 Security
 
-## License
+- Secrets encrypted at rest with Age public-key cryptography
+- SYN flood protection and connection rate limiting
+- Reverse path filtering (anti-spoofing)
+- Automated security updates via declarative configuration
 
-MIT License - see LICENSE file for details.
+## 📄 License
 
-## Contributing
+MIT License - See [LICENSE](LICENSE) for details
 
-See [docs/development.md](docs/development.md) for development setup and contribution guidelines.
+## 🤝 Contributing
+
+This is a personal router configuration, but feel free to fork and adapt for your needs!

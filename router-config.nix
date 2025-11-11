@@ -130,20 +130,4 @@
     # Update interval when WAN IP hasn't changed
     checkInterval = "5m";  # How often to check for IP changes
   };
-
-  # Defined Networking (Nebula VPN) Configuration (optional)
-  dnclient = {
-    enable = false;  # Set to true to enable Defined Networking
-    
-    # Enrollment code from https://admin.defined.net/
-    # Can be removed after initial enrollment
-    # For security, consider using enrollmentCodeFile with sops-nix instead
-    enrollmentCode = "";  # Your enrollment code (optional, see docs)
-    
-    # Alternative: use a file for the enrollment code (recommended with sops-nix)
-    # enrollmentCodeFile = "/run/secrets/dn-enrollment-code";  # Uncomment to use
-    
-    # Nebula port (UDP)
-    port = 4242;  # Default Nebula port, change if needed
-  };
 }

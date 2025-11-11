@@ -12,6 +12,7 @@ REPO_URL="https://github.com/beardedtek/nixos-router.git"  # Update this with yo
 PPPOE_USER=""
 PPPOE_PASS=""
 USER_PASSWORD=""
+MULTI_LAN_MODE=false
 
 # Interactive configuration
 echo "Available disks:"
@@ -70,24 +71,83 @@ if [[ -z "$USER_PASSWORD" ]]; then
     exit 1
 fi
 
-read -p "Enter LAN IP address [192.168.4.1]: " LAN_IP_INPUT
-LAN_IP="${LAN_IP_INPUT:-192.168.4.1}"
+# Ask about LAN configuration mode
+echo
+echo "LAN Configuration Mode:"
+echo "1) Simple - Single network (recommended for most users)"
+echo "2) Advanced - Multiple isolated networks (HOMELAB + LAN)"
+read -p "Enter mode (1 or 2) [1]: " LAN_MODE_CHOICE
+case ${LAN_MODE_CHOICE:-1} in
+    1) MULTI_LAN_MODE=false ;;
+    2) MULTI_LAN_MODE=true ;;
+    *) MULTI_LAN_MODE=false ;;
+esac
 
-read -p "Enter LAN subnet prefix length [24]: " LAN_PREFIX_INPUT
-LAN_PREFIX="${LAN_PREFIX_INPUT:-24}"
+if [[ "$MULTI_LAN_MODE" == "false" ]]; then
+    # Simple mode - single network
+    read -p "Enter LAN IP address [192.168.1.1]: " LAN_IP_INPUT
+    LAN_IP="${LAN_IP_INPUT:-192.168.1.1}"
 
-read -p "Enter DHCP range start [192.168.4.100]: " DHCP_START_INPUT
-DHCP_START="${DHCP_START_INPUT:-192.168.4.100}"
+    read -p "Enter LAN subnet prefix length [24]: " LAN_PREFIX_INPUT
+    LAN_PREFIX="${LAN_PREFIX_INPUT:-24}"
 
-read -p "Enter DHCP range end [192.168.4.200]: " DHCP_END_INPUT
-DHCP_END="${DHCP_END_INPUT:-192.168.4.200}"
+    # Calculate network address from IP and prefix
+    IFS='.' read -r i1 i2 i3 i4 <<< "$LAN_IP"
+    LAN_NETWORK="${i1}.${i2}.${i3}.0"
 
-read -p "Enter DHCP lease time [24h]: " DHCP_LEASE_INPUT
-DHCP_LEASE="${DHCP_LEASE_INPUT:-24h}"
+    read -p "Enter DHCP range start [${i1}.${i2}.${i3}.100]: " DHCP_START_INPUT
+    DHCP_START="${DHCP_START_INPUT:-${i1}.${i2}.${i3}.100}"
 
-echo "Available interfaces for LAN bridge (space-separated):"
-read -p "Enter LAN bridge interfaces [enp4s0 enp5s0 enp6s0 enp7s0]: " LAN_INTERFACES_INPUT
-LAN_INTERFACES="${LAN_INTERFACES_INPUT:-enp4s0 enp5s0 enp6s0 enp7s0}"
+    read -p "Enter DHCP range end [${i1}.${i2}.${i3}.200]: " DHCP_END_INPUT
+    DHCP_END="${DHCP_END_INPUT:-${i1}.${i2}.${i3}.200}"
+
+    read -p "Enter DHCP lease time [24h]: " DHCP_LEASE_INPUT
+    DHCP_LEASE="${DHCP_LEASE_INPUT:-24h}"
+
+    echo "Available interfaces for LAN bridge (space-separated):"
+    read -p "Enter LAN bridge interfaces [enp4s0 enp5s0 enp6s0 enp7s0]: " LAN_INTERFACES_INPUT
+    LAN_INTERFACES="${LAN_INTERFACES_INPUT:-enp4s0 enp5s0 enp6s0 enp7s0}"
+else
+    # Advanced mode - multiple networks
+    echo
+    echo "HOMELAB Network (br0):"
+    read -p "Enter HOMELAB IP address [192.168.2.1]: " HOMELAB_IP_INPUT
+    HOMELAB_IP="${HOMELAB_IP_INPUT:-192.168.2.1}"
+
+    IFS='.' read -r i1 i2 i3 i4 <<< "$HOMELAB_IP"
+    HOMELAB_NETWORK="${i1}.${i2}.${i3}.0"
+
+    read -p "Enter HOMELAB DHCP start [${i1}.${i2}.${i3}.100]: " HOMELAB_DHCP_START_INPUT
+    HOMELAB_DHCP_START="${HOMELAB_DHCP_START_INPUT:-${i1}.${i2}.${i3}.100}"
+
+    read -p "Enter HOMELAB DHCP end [${i1}.${i2}.${i3}.200]: " HOMELAB_DHCP_END_INPUT
+    HOMELAB_DHCP_END="${HOMELAB_DHCP_END_INPUT:-${i1}.${i2}.${i3}.200}"
+
+    read -p "Enter HOMELAB bridge interfaces (space-separated) [enp4s0 enp5s0]: " HOMELAB_INTERFACES_INPUT
+    HOMELAB_INTERFACES="${HOMELAB_INTERFACES_INPUT:-enp4s0 enp5s0}"
+
+    echo
+    echo "LAN Network (br1):"
+    read -p "Enter LAN IP address [192.168.3.1]: " LAN_IP_INPUT
+    LAN_IP="${LAN_IP_INPUT:-192.168.3.1}"
+
+    IFS='.' read -r j1 j2 j3 j4 <<< "$LAN_IP"
+    LAN_NETWORK="${j1}.${j2}.${j3}.0"
+
+    read -p "Enter LAN DHCP start [${j1}.${j2}.${j3}.100]: " LAN_DHCP_START_INPUT
+    LAN_DHCP_START="${LAN_DHCP_START_INPUT:-${j1}.${j2}.${j3}.100}"
+
+    read -p "Enter LAN DHCP end [${j1}.${j2}.${j3}.200]: " LAN_DHCP_END_INPUT
+    LAN_DHCP_END="${LAN_DHCP_END_INPUT:-${j1}.${j2}.${j3}.200}"
+
+    read -p "Enter LAN bridge interfaces (space-separated) [enp6s0 enp7s0]: " LAN_INTERFACES_INPUT
+    LAN_INTERFACES="${LAN_INTERFACES_INPUT:-enp6s0 enp7s0}"
+
+    read -p "Enter DHCP lease time [24h]: " DHCP_LEASE_INPUT
+    DHCP_LEASE="${DHCP_LEASE_INPUT:-24h}"
+
+    LAN_PREFIX=24  # Fixed for multi-LAN mode
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -275,8 +335,8 @@ generate_config() {
 setup_router_config() {
     log_info "Setting up router configuration"
 
-    # Clone the router repository
-    git clone "$REPO_URL" /mnt/etc/nixos/router-config
+    # Clone the router repository (using nix-shell as git isn't in minimal ISO)
+    nix-shell -p git --run "git clone $REPO_URL /mnt/etc/nixos/router-config"
 
     # Copy configuration files
     cp -r /mnt/etc/nixos/router-config/* /mnt/etc/nixos/
@@ -285,11 +345,13 @@ setup_router_config() {
     # Generate router configuration file
     log_info "Generating router configuration file"
 
-    # Convert space-separated interfaces to Nix array format
-    LAN_INTERFACES_NIX="[ $(echo "$LAN_INTERFACES" | sed 's/ /" "/g' | sed 's/^/"/g' | sed 's/$/"/g') ]"
+    if [[ "$MULTI_LAN_MODE" == "false" ]]; then
+        # Simple mode - single bridge
+        # Convert space-separated interfaces to Nix array format
+        LAN_INTERFACES_NIX="[ $(echo "$LAN_INTERFACES" | sed 's/\([^ ]*\)/"\1"/g') ]"
 
-    # Create router-config.nix with actual values
-    cat > /mnt/etc/nixos/router-config.nix << EOF
+        # Create router-config.nix with actual values
+        cat > /mnt/etc/nixos/router-config.nix << EOF
 # Router configuration variables
 # This file is generated by the installation script
 
@@ -305,29 +367,163 @@ setup_router_config() {
     interface = "$WAN_INTERFACE";
   };
 
-  # LAN configuration
+  # LAN configuration - Single network
   lan = {
-    interfaces = $LAN_INTERFACES_NIX;  # Bridge interfaces
-    ip = "$LAN_IP";
-    prefix = $LAN_PREFIX;
+    bridges = [
+      {
+        name = "br0";
+        interfaces = $LAN_INTERFACES_NIX;
+        ipv4 = {
+          address = "$LAN_IP";
+          prefixLength = $LAN_PREFIX;
+        };
+        ipv6.enable = false;
+      }
+    ];
+    isolation = false;  # No isolation with single bridge
   };
 
   # DHCP configuration
   dhcp = {
-    start = "$DHCP_START";
-    end = "$DHCP_END";
-    leaseTime = "$DHCP_LEASE";
+    homelab = {
+      interface = "br0";
+      network = "$LAN_NETWORK";
+      prefix = $LAN_PREFIX;
+      start = "$DHCP_START";
+      end = "$DHCP_END";
+      leaseTime = "$DHCP_LEASE";
+      gateway = "$LAN_IP";
+      dns = "$LAN_IP";
+    };
   };
+
+  # Port forwarding (add your rules here)
+  portForwards = [];
+
+  # Optional features (disabled by default)
+  dyndns.enable = false;
 }
 EOF
 
-    log_info "Configuration file generated:"
-    echo "  Hostname: $HOSTNAME"
-    echo "  Timezone: $TIMEZONE"
-    echo "  WAN: $WAN_INTERFACE ($WAN_TYPE)"
-    echo "  LAN: $LAN_IP/$LAN_PREFIX"
-    echo "  DHCP: $DHCP_START - $DHCP_END (lease $DHCP_LEASE)"
-    echo "  Interfaces: $LAN_INTERFACES"
+        log_info "Configuration file generated (Simple Mode):"
+        echo "  Hostname: $HOSTNAME"
+        echo "  Timezone: $TIMEZONE"
+        echo "  WAN: $WAN_INTERFACE ($WAN_TYPE)"
+        echo "  LAN (br0): $LAN_IP/$LAN_PREFIX"
+        echo "  DHCP: $DHCP_START - $DHCP_END (lease $DHCP_LEASE)"
+        echo "  Interfaces: $LAN_INTERFACES"
+
+    else
+        # Advanced mode - multiple bridges
+        # Convert space-separated interfaces to Nix array format
+        HOMELAB_INTERFACES_NIX="[ $(echo "$HOMELAB_INTERFACES" | sed 's/\([^ ]*\)/"\1"/g') ]"
+        LAN_INTERFACES_NIX="[ $(echo "$LAN_INTERFACES" | sed 's/\([^ ]*\)/"\1"/g') ]"
+
+        # Create router-config.nix with actual values
+        cat > /mnt/etc/nixos/router-config.nix << EOF
+# Router configuration variables
+# This file is generated by the installation script
+
+{
+  # System settings
+  hostname = "$HOSTNAME";
+  timezone = "$TIMEZONE";
+  username = "routeradmin";
+
+  # WAN configuration
+  wan = {
+    type = "$WAN_TYPE";  # "dhcp" or "pppoe"
+    interface = "$WAN_INTERFACE";
+  };
+
+  # LAN configuration - Multiple isolated networks
+  lan = {
+    bridges = [
+      # HOMELAB network - servers, IoT devices
+      {
+        name = "br0";
+        interfaces = $HOMELAB_INTERFACES_NIX;
+        ipv4 = {
+          address = "$HOMELAB_IP";
+          prefixLength = 24;
+        };
+        ipv6.enable = false;
+      }
+      # LAN network - computers, phones, tablets
+      {
+        name = "br1";
+        interfaces = $LAN_INTERFACES_NIX;
+        ipv4 = {
+          address = "$LAN_IP";
+          prefixLength = 24;
+        };
+        ipv6.enable = false;
+      }
+    ];
+
+    # Block traffic between HOMELAB and LAN at the router level
+    isolation = true;
+
+    # Exception: Allow specific devices to bypass isolation
+    # Format: { source = "IP"; sourceBridge = "brX"; destBridge = "brY"; description = "..."; }
+    isolationExceptions = [
+      # Add your exceptions here, example:
+      # {
+      #   source = "192.168.3.50";      # Your workstation IP
+      #   sourceBridge = "br1";          # From LAN
+      #   destBridge = "br0";            # To HOMELAB
+      #   description = "Workstation access to HOMELAB";
+      # }
+    ];
+  };
+
+  # DHCP configuration - per network
+  dhcp = {
+    # HOMELAB (br0)
+    homelab = {
+      interface = "br0";
+      network = "$HOMELAB_NETWORK";
+      prefix = 24;
+      start = "$HOMELAB_DHCP_START";
+      end = "$HOMELAB_DHCP_END";
+      leaseTime = "$DHCP_LEASE";
+      gateway = "$HOMELAB_IP";
+      dns = "$HOMELAB_IP";
+    };
+
+    # LAN (br1)
+    lan = {
+      interface = "br1";
+      network = "$LAN_NETWORK";
+      prefix = 24;
+      start = "$LAN_DHCP_START";
+      end = "$LAN_DHCP_END";
+      leaseTime = "$DHCP_LEASE";
+      gateway = "$LAN_IP";
+      dns = "$LAN_IP";
+    };
+  };
+
+  # Port forwarding (add your rules here)
+  portForwards = [];
+
+  # Optional features (disabled by default)
+  dyndns.enable = false;
+}
+EOF
+
+        log_info "Configuration file generated (Advanced Mode):"
+        echo "  Hostname: $HOSTNAME"
+        echo "  Timezone: $TIMEZONE"
+        echo "  WAN: $WAN_INTERFACE ($WAN_TYPE)"
+        echo "  HOMELAB (br0): $HOMELAB_IP/24"
+        echo "    DHCP: $HOMELAB_DHCP_START - $HOMELAB_DHCP_END"
+        echo "    Interfaces: $HOMELAB_INTERFACES"
+        echo "  LAN (br1): $LAN_IP/24"
+        echo "    DHCP: $LAN_DHCP_START - $LAN_DHCP_END"
+        echo "    Interfaces: $LAN_INTERFACES"
+        echo "  Isolation: ENABLED"
+    fi
 
     log_success "Router configuration file generated"
 }
@@ -441,24 +637,42 @@ install_nixos() {
 post_install_message() {
     log_success "Installation completed!"
     echo
-    log_warning "IMPORTANT NEXT STEPS:"
+    log_warning "IMPORTANT: Save your Age public key!"
+    echo "Age Public Key: $AGE_PUBKEY"
     echo
-    echo "1. Encrypt your secrets:"
-    echo "   cd /mnt/etc/nixos"
-    echo "   sops --encrypt --age $AGE_PUBKEY secrets/secrets.yaml"
+    log_info "Installation Summary:"
+    if [[ "$MULTI_LAN_MODE" == "false" ]]; then
+        echo "  Mode: Simple (Single Network)"
+        echo "  Network: $LAN_IP/$LAN_PREFIX (br0)"
+    else
+        echo "  Mode: Advanced (Multi-Network with Isolation)"
+        echo "  HOMELAB: $HOMELAB_IP/24 (br0)"
+        echo "  LAN: $LAN_IP/24 (br1)"
+    fi
     echo
-    echo "2. Unmount filesystems:"
+    log_warning "NEXT STEPS:"
+    echo
+    echo "1. Unmount filesystems:"
     echo "   umount -R /mnt"
     echo
-    echo "3. Reboot:"
+    echo "2. Remove USB drive and reboot:"
     echo "   reboot"
     echo
-    echo "4. After reboot, complete setup:"
-    echo "   - Connect to router via SSH or console"
-    echo "   - Update secrets with real values"
-    echo "   - Configure network settings"
+    echo "3. After reboot:"
+    echo "   - Router will auto-login on console"
+    echo "   - SSH from LAN: ssh routeradmin@$LAN_IP"
+    echo "   - Access Grafana: http://$LAN_IP:3000 (admin/admin)"
     echo
-    log_warning "Age Public Key (save this): $AGE_PUBKEY"
+    if [[ "$MULTI_LAN_MODE" == "true" ]]; then
+        echo "4. Configure isolation exceptions (if needed):"
+        echo "   - Edit /etc/nixos/router-config.nix"
+        echo "   - Add isolationExceptions for devices that need cross-network access"
+        echo "   - Run: sudo nixos-rebuild switch --flake /etc/nixos#router"
+        echo
+    fi
+    echo "For documentation, see: /etc/nixos/docs/"
+    echo
+    log_success "Installation complete! Enjoy your new router!"
 }
 
 # Main installation function

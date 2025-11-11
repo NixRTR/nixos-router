@@ -1,0 +1,4 @@
+# Test artifacts
+tests/files/
+tests/*.qcow2
+tests/*.iso
