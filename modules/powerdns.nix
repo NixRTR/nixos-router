@@ -254,7 +254,7 @@ in
       "
       
       echo "Username: $ADMIN_USER"
-      echo "Password: (synced with system)"
+      echo "Password: synced with system"
       
       # Mark as initialized (only on first run)
       if [ "$FIRST_RUN" = "true" ]; then
@@ -265,7 +265,7 @@ in
         echo "=============================================="
         echo "Access: http://router-ip:9191"
         echo "Username: ${routerConfig.username}"
-        echo "Password: (same as system login)"
+        echo "Password: same as system login"
         echo ""
         echo "Use your system credentials to log in."
         echo "=============================================="
