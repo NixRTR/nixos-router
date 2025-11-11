@@ -413,7 +413,7 @@ ip addr show br0
 ip addr show br1
 
 # Check DNS/DHCP
-systemctl status blocky
+systemctl status pdns-recursor powerdns
 systemctl status kea-dhcp4-server
 ```
 

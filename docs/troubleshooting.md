@@ -8,7 +8,7 @@ Run these commands to quickly check router health:
 
 ```bash
 # Check all critical services
-systemctl status systemd-networkd blocky kea-dhcp4-server grafana prometheus
+systemctl status systemd-networkd pdns-recursor powerdns kea-dhcp4-server grafana prometheus
 
 # Check network interfaces
 ip addr show
@@ -276,21 +276,21 @@ dig google.com @192.168.2.1
 
 **Expected**: Returns IP addresses
 
-**If timeout**: Blocky not running or misconfigured
+**If timeout**: PowerDNS Recursor not running or misconfigured
 
-#### Check Blocky Status
+#### Check PowerDNS Status
 
 ```bash
-systemctl status blocky
+systemctl status pdns-recursor
 
 # Check logs
-journalctl -u blocky -n 50
+journalctl -u pdns-recursor -n 50
 ```
 
 #### Test Upstream DNS
 
 ```bash
-# Bypass Blocky, test upstreams directly
+# Bypass PowerDNS, test upstreams directly
 dig google.com @1.1.1.1
 dig google.com @8.8.8.8
 ```
@@ -299,14 +299,14 @@ dig google.com @8.8.8.8
 
 ### Solutions
 
-#### Blocky Not Starting
+#### PowerDNS Not Starting
 
 ```bash
 # Check configuration
-sudo blocky validate --config /etc/blocky/config.yml
+sudo rec_control ping
 
 # Restart
-sudo systemctl restart blocky
+sudo systemctl restart pdns-recursor
 ```
 
 #### Upstream DNS Not Reachable
@@ -322,8 +322,11 @@ sudo iptables -L OUTPUT -v -n | grep 53
 #### DNS Caching Issues
 
 ```bash
-# Clear Blocky cache
-sudo systemctl restart blocky
+# Clear PowerDNS cache
+sudo rec_control wipe-cache '.$'
+
+# Or restart to clear all caches
+sudo systemctl restart pdns-recursor
 ```
 
 #### Wrong DNS Server on Clients
@@ -914,8 +917,11 @@ Before asking for help, collect:
 For services:
 
 ```bash
-# Blocky
-journalctl -u blocky -f
+# PowerDNS Recursor
+journalctl -u pdns-recursor -f
+
+# PowerDNS Authoritative
+journalctl -u powerdns -f
 
 # Kea
 journalctl -u kea-dhcp4-server -f
@@ -950,7 +956,7 @@ If everything is broken:
 
 ```bash
 # Stop all network services
-sudo systemctl stop systemd-networkd blocky kea-dhcp4-server
+sudo systemctl stop systemd-networkd pdns-recursor powerdns kea-dhcp4-server
 
 # Reset iptables
 sudo iptables -F
@@ -959,7 +965,7 @@ sudo iptables -t mangle -F
 
 # Restart services
 sudo systemctl start systemd-networkd
-sudo systemctl start blocky
+sudo systemctl start pdns-recursor powerdns
 sudo systemctl start kea-dhcp4-server
 
 # Or just reboot

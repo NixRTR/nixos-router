@@ -31,6 +31,7 @@ Complete documentation is available in the [`docs/`](docs/) directory:
 
 - **[Installation Guide](docs/installation.md)** - Install and initial setup
 - **[Configuration Guide](docs/configuration.md)** - Configure networks, DHCP, and services
+- **[PowerDNS Guide](docs/powerdns.md)** - DNS management and PowerDNS Admin interface
 - **[Network Isolation](docs/isolation.md)** - Multi-LAN setup and access control
 - **[Monitoring](docs/monitoring.md)** - Grafana dashboard and metrics
 - **[Optional Features](docs/optional-features.md)** - Dynamic DNS, VPN, and more
@@ -48,7 +49,7 @@ Internet ──▶ [WAN] ──▶ [Router/Firewall] ──┬──▶ [br0] HO
 
 - **Isolated networks** with firewall protection between segments
 - **Dual DHCP servers** for automatic IP assignment
-- **DNS caching** with upstream forwarding (Cloudflare, Google, Quad9)
+- **PowerDNS** - Caching resolver + authoritative server with web admin interface
 - **NAT and port forwarding** for external access
 - **Real-time monitoring** via Grafana + Prometheus
 

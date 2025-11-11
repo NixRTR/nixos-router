@@ -82,7 +82,7 @@ sudo nixos-rebuild switch --flake .#router
 Check services:
 
 ```bash
-systemctl status blocky
+systemctl status pdns-recursor powerdns
 systemctl status kea-dhcp4-server
 systemctl status grafana
 ```
@@ -132,7 +132,9 @@ sudo nixos-rebuild switch --flake /etc/nixos#router
 
 ### Router Services
 
-- Blocky (DNS resolver)
+- PowerDNS Recursor (DNS resolver)
+- PowerDNS Authoritative (local DNS zones)
+- PowerDNS Admin (DNS management interface)
 - Kea (DHCP server)
 - Grafana (monitoring dashboard)
 - Prometheus (metrics collection)
@@ -188,7 +190,7 @@ sudo /nix/var/nix/profiles/system-11-link/bin/switch-to-configuration switch
 
 ```bash
 nixos-version
-systemctl status blocky
+systemctl status pdns-recursor powerdns
 ```
 
 ### Make Rollback Permanent
@@ -405,7 +407,7 @@ sudo nixos-rebuild switch --flake .#router
 2. **Check services**:
    ```bash
    systemctl status systemd-networkd
-   systemctl status blocky
+   systemctl status pdns-recursor powerdns
    systemctl status kea-dhcp4-server
    ```
 

@@ -122,7 +122,7 @@ On the router:
 
 ```bash
 # Check all services
-systemctl status systemd-networkd blocky kea-dhcp4-server grafana prometheus
+systemctl status systemd-networkd pdns-recursor powerdns kea-dhcp4-server grafana prometheus
 
 # Check network interfaces
 ip addr show

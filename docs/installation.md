@@ -207,7 +207,7 @@ ping 1.1.1.1
 
 ```bash
 # DNS
-systemctl status blocky
+systemctl status pdns-recursor powerdns
 
 # DHCP
 systemctl status kea-dhcp4-server
@@ -219,10 +219,16 @@ systemctl status prometheus
 
 ### Access Dashboard
 
-Open a browser and navigate to:
-- `http://192.168.2.1:3000` (or your LAN IP)
+**Grafana (Monitoring):**
+- URL: `http://192.168.2.1:3000` (or your LAN IP)
 - Default login: `admin` / `admin`
 - Change password on first login!
+
+**PowerDNS Admin (DNS Management):**
+- URL: `http://192.168.2.1:9191` (or your LAN IP)
+- Login: Use your system credentials (same as SSH)
+- Already configured and ready to use
+- See [PowerDNS Guide](powerdns.md) for details
 
 ---
 

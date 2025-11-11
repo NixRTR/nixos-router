@@ -66,7 +66,7 @@ Same metrics as HOMELAB panel but for the LAN network.
 
 ### Network Performance Panel
 
-- **DNS Queries**: Blocky query rate and cache hits
+- **DNS Queries**: PowerDNS query rate and cache hits
 - **DHCP Leases**: Active leases per network
 - **Firewall Drops**: Blocked packets (isolation, malicious)
 - **NAT Connections**: Active connection count
@@ -74,7 +74,8 @@ Same metrics as HOMELAB panel but for the LAN network.
 
 ### Service Status Panel
 
-- **Blocky DNS**: Running/stopped
+- **PowerDNS Recursor**: DNS resolution service status
+- **PowerDNS Authoritative**: Local DNS zones service status
 - **Kea DHCP**: Running/stopped
 - **Prometheus**: Metrics collection status
 - **Grafana**: Dashboard status
@@ -225,7 +226,7 @@ Example (Email):
 
 Prometheus scrapes metrics from:
 - **Node Exporter**: System metrics (CPU, RAM, disk, network)
-- **Blocky**: DNS query metrics
+- **PowerDNS**: DNS query metrics and cache statistics
 - **Kea Exporter**: DHCP lease metrics
 
 ### Querying Metrics
@@ -243,7 +244,7 @@ rate(node_network_receive_bytes_total{device="br0"}[5m])
 #### DNS Cache Hit Rate
 
 ```promql
-rate(blocky_cache_hit_count[5m]) / rate(blocky_total_queries[5m])
+pdns_recursor_cache_hits / pdns_recursor_questions
 ```
 
 #### Active DHCP Leases
@@ -335,10 +336,14 @@ journalctl -u grafana
 
 ### Service Logs
 
-#### Blocky (DNS)
+#### PowerDNS (DNS)
 
 ```bash
-journalctl -u blocky -f
+# Recursor logs
+journalctl -u pdns-recursor -f
+
+# Authoritative server logs
+journalctl -u powerdns -f
 ```
 
 Watch for:
