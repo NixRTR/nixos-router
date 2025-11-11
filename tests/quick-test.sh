@@ -67,7 +67,7 @@ chmod +x test-vm-qemu.sh test-client-vm.sh test-router.sh
 FILES_DIR="files"
 mkdir -p "$FILES_DIR"
 NIXOS_ISO="${FILES_DIR}/nixos-minimal.iso"
-NIXOS_ISO_URL="https://channels.nixos.org/nixos-23.11/latest-nixos-minimal-x86_64-linux.iso"
+NIXOS_ISO_URL="https://channels.nixos.org/nixos-25.05/latest-nixos-minimal-x86_64-linux.iso"
 
 if [[ ! -f "$NIXOS_ISO" ]]; then
     log_info "Downloading NixOS ISO (this may take a while)..."
