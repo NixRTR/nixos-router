@@ -81,6 +81,9 @@ in
   services.powerdns-admin = {
     enable = true;
     
+    # Secret key file (generated on first run)
+    secretKeyFile = "/var/lib/powerdns-admin/secret-key";
+    
     # Configuration
     config = ''
       import os
