@@ -1,4 +1,10 @@
-# Test artifacts
-tests/files/
-tests/*.qcow2
-tests/*.iso
+# Test artifacts (Linux)
+tests/linux/files/
+tests/linux/*.qcow2
+tests/linux/*.iso
+
+# Test artifacts (Windows)
+tests/windows/ISOs/
+tests/windows/VMs/
+tests/windows/*.vhdx
+tests/windows/*.vmcx

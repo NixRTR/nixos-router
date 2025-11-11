@@ -7,79 +7,7 @@ let
   routerConfig = import ./router-config.nix;
   dyndnsConfig = routerConfig.dyndns or { enable = false; };
   
-  # Script to update Linode DNS record
-  updateScript = pkgs.writeShellScript "linode-dyndns-update" ''
-    set -euo pipefail
-    
-    STATE_FILE="/var/lib/linode-dyndns/last-ip"
-    ${pkgs.coreutils}/bin/mkdir -p /var/lib/linode-dyndns
-    
-    # Get Linode API token from secrets
-    if [ ! -f "${cfg.tokenFile}" ]; then
-      echo "[ERROR] Linode API token file not found: ${cfg.tokenFile}"
-      exit 1
-    fi
-    
-    LINODE_TOKEN=$(${pkgs.coreutils}/bin/cat "${cfg.tokenFile}")
-    
-    # Get current public IP
-    PUBLIC_IP=$(${pkgs.curl}/bin/curl -s https://api.ipify.org)
-    
-    if [ -z "$PUBLIC_IP" ]; then
-      echo "[ERROR] Failed to get public IP address"
-      exit 1
-    fi
-    
-    echo "[INFO] Current public IP: $PUBLIC_IP"
-    
-    # Check if IP has changed
-    if [ -f "$STATE_FILE" ]; then
-      LAST_IP=$(${pkgs.coreutils}/bin/cat "$STATE_FILE")
-      if [ "$PUBLIC_IP" == "$LAST_IP" ]; then
-        echo "[INFO] IP unchanged: No action taken"
-        exit 0
-      fi
-      echo "[INFO] IP changed from $LAST_IP to $PUBLIC_IP"
-    else
-      echo "[INFO] First run, no previous IP recorded"
-    fi
-    
-    # Get current DNS record
-    CURRENT_RECORD=$(${pkgs.curl}/bin/curl -s -H "Authorization: Bearer $LINODE_TOKEN" \
-      "https://api.linode.com/v4/domains/${toString cfg.domainId}/records/${toString cfg.recordId}")
-    
-    CURRENT_TARGET=$(echo "$CURRENT_RECORD" | ${pkgs.jq}/bin/jq -r '.target')
-    
-    if [ "$CURRENT_TARGET" == "$PUBLIC_IP" ]; then
-      echo "[INFO] DNS record already up to date"
-      echo "$PUBLIC_IP" > "$STATE_FILE"
-      exit 0
-    fi
-    
-    echo "[INFO] Updating DNS record from $CURRENT_TARGET to $PUBLIC_IP"
-    
-    # Update the DNS record
-    RESPONSE=$(${pkgs.curl}/bin/curl -s -X PUT \
-      -H "Authorization: Bearer $LINODE_TOKEN" \
-      -H "Content-Type: application/json" \
-      -d "{\"target\": \"$PUBLIC_IP\", \"ttl_sec\": 30}" \
-      "https://api.linode.com/v4/domains/${toString cfg.domainId}/records/${toString cfg.recordId}")
-    
-    # Check if update was successful
-    NEW_TARGET=$(echo "$RESPONSE" | ${pkgs.jq}/bin/jq -r '.target')
-    
-    if [ "$NEW_TARGET" == "$PUBLIC_IP" ]; then
-      echo "[SUCCESS] DNS record updated successfully"
-      echo "$PUBLIC_IP" > "$STATE_FILE"
-      
-      # Log to systemd journal
-      echo "[INFO] ${cfg.fullDomain} → $PUBLIC_IP"
-    else
-      ERROR=$(echo "$RESPONSE" | ${pkgs.jq}/bin/jq -r '.errors[0].reason // "Unknown error"')
-      echo "[ERROR] Failed to update DNS record: $ERROR"
-      exit 1
-    fi
-  '';
+  # Update script will be inlined in the service
 
 in
 
@@ -158,9 +86,82 @@ in
       description = "Linode Dynamic DNS updater for ${cfg.fullDomain}";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
+      
+      script = ''
+        set -euo pipefail
+        
+        STATE_FILE="/var/lib/linode-dyndns/last-ip"
+        mkdir -p /var/lib/linode-dyndns
+        
+        # Get Linode API token from secrets
+        if [ ! -f "${cfg.tokenFile}" ]; then
+          echo "[ERROR] Linode API token file not found: ${cfg.tokenFile}"
+          exit 1
+        fi
+        
+        LINODE_TOKEN=$(cat "${cfg.tokenFile}")
+        
+        # Get current public IP
+        PUBLIC_IP=$(curl -s https://api.ipify.org)
+        
+        if [ -z "$PUBLIC_IP" ]; then
+          echo "[ERROR] Failed to get public IP address"
+          exit 1
+        fi
+        
+        echo "[INFO] Current public IP: $PUBLIC_IP"
+        
+        # Check if IP has changed
+        if [ -f "$STATE_FILE" ]; then
+          LAST_IP=$(cat "$STATE_FILE")
+          if [ "$PUBLIC_IP" == "$LAST_IP" ]; then
+            echo "[INFO] IP unchanged: No action taken"
+            exit 0
+          fi
+          echo "[INFO] IP changed from $LAST_IP to $PUBLIC_IP"
+        else
+          echo "[INFO] First run, no previous IP recorded"
+        fi
+        
+        # Get current DNS record
+        CURRENT_RECORD=$(curl -s -H "Authorization: Bearer $LINODE_TOKEN" \
+          "https://api.linode.com/v4/domains/${toString cfg.domainId}/records/${toString cfg.recordId}")
+        
+        CURRENT_TARGET=$(echo "$CURRENT_RECORD" | jq -r ".target")
+        
+        if [ "$CURRENT_TARGET" == "$PUBLIC_IP" ]; then
+          echo "[INFO] DNS record already up to date"
+          echo "$PUBLIC_IP" > "$STATE_FILE"
+          exit 0
+        fi
+        
+        echo "[INFO] Updating DNS record from $CURRENT_TARGET to $PUBLIC_IP"
+        
+        # Update the DNS record
+        RESPONSE=$(curl -s -X PUT \
+          -H "Authorization: Bearer $LINODE_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "{\"target\": \"$PUBLIC_IP\", \"ttl_sec\": 30}" \
+          "https://api.linode.com/v4/domains/${toString cfg.domainId}/records/${toString cfg.recordId}")
+        
+        # Check if update was successful
+        NEW_TARGET=$(echo "$RESPONSE" | jq -r ".target")
+        
+        if [ "$NEW_TARGET" == "$PUBLIC_IP" ]; then
+          echo "[SUCCESS] DNS record updated successfully"
+          echo "$PUBLIC_IP" > "$STATE_FILE"
+          
+          # Log to systemd journal
+          echo "[INFO] ${cfg.fullDomain} → $PUBLIC_IP"
+        else
+          ERROR=$(echo "$RESPONSE" | jq -r ".errors[0].reason // \"Unknown error\"")
+          echo "[ERROR] Failed to update DNS record: $ERROR"
+          exit 1
+        fi
+      '';
+      
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = updateScript;
         User = "root";
       };
     };
@@ -185,7 +186,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        ExecStart = "${pkgs.systemd}/bin/systemctl start linode-dyndns.service";
+        ExecStart = "systemctl start linode-dyndns.service";
       };
     };
 

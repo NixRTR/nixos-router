@@ -2,16 +2,30 @@
 
 Quick reference for testing the NixOS router in a VM.
 
-## Prerequisites
+## Testing Approaches
 
-- WSL2 on Windows
+This repository supports two testing approaches:
+
+1. **Linux Testing** (`tests/linux/`) - Uses QEMU in WSL2 or native Linux
+2. **Windows Testing** (`tests/windows/`) - Uses Hyper-V on Windows natively
+
+Choose the approach that best fits your development environment.
+
+---
+
+## Linux Testing (WSL2/QEMU)
+
+### Prerequisites
+
+- WSL2 on Windows (or native Linux)
 - QEMU installed (`sudo apt install qemu-system-x86`)
 - VNC viewer on Windows (optional but recommended)
+- `wget` for automatic ISO downloads (usually pre-installed)
 
-## Directory Structure
+### Directory Structure
 
 ```
-tests/
+tests/linux/
 ├── files/                      # Downloaded ISOs (gitignored)
 │   ├── nixos-minimal.iso
 │   └── alpine-virt-*.iso
@@ -28,7 +42,7 @@ tests/
 ### 1. Make Scripts Executable
 
 ```bash
-cd /mnt/c/Users/YourName/github/nixos-router/tests
+cd /mnt/c/Users/YourName/github/nixos-router/tests/linux
 chmod +x test-vm-qemu.sh test-client-vm.sh test-router.sh quick-test.sh
 ```
 
@@ -39,9 +53,11 @@ chmod +x test-vm-qemu.sh test-client-vm.sh test-router.sh quick-test.sh
 ```
 
 Follow the menu:
-1. Setup (downloads NixOS ISO, installs QEMU)
+1. Setup (installs QEMU, automatically downloads NixOS ISO)
 2. Create VM disk
 3. Start VM (installer)
+
+**Note**: The scripts will automatically download required ISOs when needed.
 
 ### 3. Install Router
 
@@ -219,6 +235,64 @@ Keep ISOs for next test (or delete to save space):
 ```bash
 rm files/nixos-minimal.iso files/alpine-virt-*.iso
 ```
+
+## Full Documentation
+
+See [docs/testing.md](../docs/testing.md) for complete Linux testing guide.
+
+---
+
+## Windows Testing (Hyper-V)
+
+### Prerequisites
+
+- Windows 10/11 Pro, Enterprise, or Education
+- Hyper-V enabled
+- PowerShell 5.1 or later
+- At least 8GB RAM available for VMs
+
+### Directory Structure
+
+```
+tests/windows/
+├── ISOs/                       # Downloaded ISOs (gitignored)
+│   └── nixos-minimal.iso
+├── VMs/                        # VM storage (gitignored)
+├── Test-RouterVM.ps1           # Main router VM manager
+├── Test-ClientVM.ps1           # Test client VMs
+├── Test-Router.ps1             # Automated tests
+├── Setup-HyperV.ps1            # Initial setup
+└── README.md                   # Windows testing guide
+```
+
+### Quick Start
+
+1. **Enable Hyper-V and Setup** (run as Administrator):
+   ```powershell
+   cd tests\windows
+   .\Setup-HyperV.ps1
+   ```
+   
+   This will enable Hyper-V, create virtual switches, and offer to download the NixOS ISO automatically.
+
+2. **Create Router VM**:
+   ```powershell
+   .\Test-RouterVM.ps1 -Action Create
+   ```
+   
+   If the ISO wasn't downloaded yet, the script will offer to download it.
+
+3. **Start Router VM**:
+   ```powershell
+   .\Test-RouterVM.ps1 -Action Start
+   ```
+
+4. **Run Automated Tests**:
+   ```powershell
+   .\Test-Router.ps1
+   ```
+
+See `tests/windows/README.md` for detailed Windows testing instructions.
 
 ## Full Documentation
 

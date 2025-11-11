@@ -25,6 +25,20 @@ The installer will guide you through:
 - **Simple mode**: Single network for most users
 - **Advanced mode**: Multiple isolated networks (HOMELAB + LAN)
 
+## 🧩 Modular Architecture
+
+This router is built with a clean modular design. All functionality is organized into focused modules:
+
+- **`router.nix`** - Core networking (WAN, LAN bridges, firewall, NAT)
+- **`powerdns.nix`** - DNS services (Recursor, Authoritative, Admin UI)
+- **`dhcp.nix`** - DHCP server (ISC Kea)
+- **`dashboard.nix`** - Monitoring (Grafana, Prometheus)
+- **`users.nix`** - User account management
+- **`secrets.nix`** - Encrypted secrets (sops-nix)
+- **`linode-dyndns.nix`** - Dynamic DNS updates
+
+See [`modules/README.md`](modules/README.md) for detailed information about each module.
+
 ## 📚 Documentation
 
 Complete documentation is available in the [`docs/`](docs/) directory:
