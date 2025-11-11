@@ -4,7 +4,7 @@ with lib;
 
 let
   cfg = config.services.linode-dyndns;
-  routerConfig = import ./router-config.nix;
+  routerConfig = import ../router-config.nix;
   dyndnsConfig = routerConfig.dyndns or { enable = false; };
   
   # Update script will be inlined in the service
