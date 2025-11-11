@@ -242,6 +242,50 @@ ping 192.168.1.1  # Router IP
 ping google.com   # Internet via router
 ```
 
+### Cleanup-TestEnvironment.ps1
+
+**Purpose**: Clean up all test VMs and files
+
+**Usage**:
+```powershell
+.\Cleanup-TestEnvironment.ps1 [-KeepISOs] [-KeepSwitches] [-Force]
+```
+
+**Parameters**:
+- `-KeepISOs`: Keep downloaded ISO files (don't delete)
+- `-KeepSwitches`: Keep virtual switches (don't delete)
+- `-Force`: Skip confirmation prompts
+
+**Examples**:
+```powershell
+# Complete cleanup with confirmation
+.\Cleanup-TestEnvironment.ps1
+
+# Keep ISOs for future tests
+.\Cleanup-TestEnvironment.ps1 -KeepISOs
+
+# Keep switches for future tests
+.\Cleanup-TestEnvironment.ps1 -KeepSwitches
+
+# Keep both ISOs and switches
+.\Cleanup-TestEnvironment.ps1 -KeepISOs -KeepSwitches
+
+# Cleanup without confirmation
+.\Cleanup-TestEnvironment.ps1 -Force
+
+# Quick cleanup keeping resources
+.\Cleanup-TestEnvironment.ps1 -KeepISOs -KeepSwitches -Force
+```
+
+**What it does**:
+- Stops all running test VMs
+- Removes all VMs with names starting with "NixOS-Router-"
+- Deletes all VHD/VHDX files
+- Optionally removes ISO files
+- Optionally removes virtual switches
+- Cleans up empty directories
+- Shows summary of what was removed
+
 ### Test-Router.ps1
 
 **Purpose**: Automated testing of router functionality
@@ -507,28 +551,60 @@ ip link show eth0  # Should be UP
 # ... etc
 ```
 
-### Remove Virtual Switches
+### Automated Cleanup (Recommended)
 
+Use the cleanup script to remove everything:
+
+```powershell
+# Complete cleanup (removes VMs, VHDs, ISOs, and switches)
+.\Cleanup-TestEnvironment.ps1
+
+# Keep ISOs for future tests
+.\Cleanup-TestEnvironment.ps1 -KeepISOs
+
+# Keep virtual switches for future tests
+.\Cleanup-TestEnvironment.ps1 -KeepSwitches
+
+# Keep both ISOs and switches
+.\Cleanup-TestEnvironment.ps1 -KeepISOs -KeepSwitches
+
+# Skip confirmation prompt
+.\Cleanup-TestEnvironment.ps1 -Force
+```
+
+### Manual Cleanup (Alternative)
+
+If you prefer to clean up manually:
+
+**Stop and Remove VMs:**
+```powershell
+# Stop all test VMs
+Get-VM | Where-Object { $_.Name -like "NixOS-Router-*" } | Stop-VM -Force
+
+# Remove all test VMs
+Get-VM | Where-Object { $_.Name -like "NixOS-Router-*" } | Remove-VM -Force
+```
+
+**Remove Files:**
+```powershell
+# Remove VMs directory (deletes all VM disks)
+Remove-Item VMs\ -Recurse -Force
+
+# Remove ISOs (optional - skip to keep for future tests)
+Remove-Item ISOs\*.iso
+```
+
+**Remove Virtual Switches:**
 ```powershell
 # List switches
 Get-VMSwitch | Where-Object { $_.Name -like "NixOS-Router-*" }
 
 # Remove switches (optional - can keep for future tests)
-Remove-VMSwitch -Name "NixOS-Router-LAN1"
-Remove-VMSwitch -Name "NixOS-Router-LAN2"
-Remove-VMSwitch -Name "NixOS-Router-LAN3"
-Remove-VMSwitch -Name "NixOS-Router-LAN4"
-Remove-VMSwitch -Name "NixOS-Router-WAN" -ErrorAction SilentlyContinue
-```
-
-### Clean Up Files
-
-```powershell
-# Remove VMs directory (deletes all VM disks)
-Remove-Item VMs\ -Recurse -Force
-
-# Keep ISOs for next test (or delete to save space)
-# Remove-Item ISOs\*.iso
+Remove-VMSwitch -Name "NixOS-Router-LAN1" -Force
+Remove-VMSwitch -Name "NixOS-Router-LAN2" -Force
+Remove-VMSwitch -Name "NixOS-Router-LAN3" -Force
+Remove-VMSwitch -Name "NixOS-Router-LAN4" -Force
+Remove-VMSwitch -Name "NixOS-Router-WAN" -Force -ErrorAction SilentlyContinue
 ```
 
 ---

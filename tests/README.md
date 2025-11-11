@@ -258,10 +258,11 @@ tests/windows/
 ├── ISOs/                       # Downloaded ISOs (gitignored)
 │   └── nixos-minimal.iso
 ├── VMs/                        # VM storage (gitignored)
+├── Setup-HyperV.ps1            # Initial setup
 ├── Test-RouterVM.ps1           # Main router VM manager
 ├── Test-ClientVM.ps1           # Test client VMs
 ├── Test-Router.ps1             # Automated tests
-├── Setup-HyperV.ps1            # Initial setup
+├── Cleanup-TestEnvironment.ps1 # Cleanup script
 └── README.md                   # Windows testing guide
 ```
 
