@@ -76,6 +76,30 @@ in
       log-dns-details=no
     '';
   };
+  
+  # Generate and load PowerDNS API key
+  systemd.services.pdns.serviceConfig.EnvironmentFile = "-/var/lib/powerdns/api-key-env";
+  
+  systemd.services.pdns.preStart = ''
+    # Ensure directory exists
+    mkdir -p /var/lib/powerdns
+    chown pdns:pdns /var/lib/powerdns
+    
+    # Generate API key if it doesn't exist
+    if [ ! -f /var/lib/powerdns/api-key ]; then
+      echo "Generating PowerDNS API key..."
+      tr -dc A-Za-z0-9 </dev/urandom | head -c 32 > /var/lib/powerdns/api-key
+      chown pdns:pdns /var/lib/powerdns/api-key
+      chmod 600 /var/lib/powerdns/api-key
+    fi
+    
+    # Create environment file from API key
+    if [ -f /var/lib/powerdns/api-key ]; then
+      echo "POWERDNS_API_KEY=$(cat /var/lib/powerdns/api-key)" > /var/lib/powerdns/api-key-env
+      chown pdns:pdns /var/lib/powerdns/api-key-env
+      chmod 600 /var/lib/powerdns/api-key-env
+    fi
+  '';
 
   # PowerDNS Admin - Web interface for managing PowerDNS
   services.powerdns-admin = {
@@ -141,7 +165,7 @@ in
   systemd.services.powerdns-admin-init = {
     description = "Initialize PowerDNS Admin database, secrets, and sync admin password";
     wantedBy = [ "multi-user.target" ];
-    after = [ "powerdns-admin.service" "sops-nix.service" ];
+    after = [ "powerdns-admin.service" "pdns.service" "sops-nix.service" ];
     
     serviceConfig = {
       Type = "oneshot";
@@ -175,12 +199,13 @@ in
       ADMIN_USER="${routerConfig.username}"
       ADMIN_EMAIL="${routerConfig.username}@localhost"
       
-      # Read password from sops secret
+      # Read password from sops secret (optional - if not found, use default)
       if [ -f /run/secrets/password ]; then
         ADMIN_PASSWORD=$(cat /run/secrets/password)
       else
-        echo "ERROR: Password secret not found at /run/secrets/password"
-        exit 1
+        echo "Warning: Password secret not found at /run/secrets/password"
+        echo "Using default password 'admin' - please change after first login"
+        ADMIN_PASSWORD="admin"
       fi
       
       # Wait for database to exist
@@ -218,7 +243,14 @@ in
         fi
         
         # Always ensure PowerDNS API settings exist
-        sqlite3 '$DB_PATH' \"INSERT OR IGNORE INTO setting (name, value) VALUES ('pdns_api_url', 'http://127.0.0.1:8081'), ('pdns_api_key', 'changeme'), ('pdns_version', '4.7.0');\"
+        # Read the PowerDNS API key
+        if [ -f /var/lib/powerdns/api-key ]; then
+          PDNS_API_KEY=\$(cat /var/lib/powerdns/api-key)
+        else
+          PDNS_API_KEY='changeme'
+        fi
+        
+        sqlite3 '$DB_PATH' \"INSERT OR IGNORE INTO setting (name, value) VALUES ('pdns_api_url', 'http://127.0.0.1:8081'), ('pdns_api_key', '\$PDNS_API_KEY'), ('pdns_version', '4.7.0');\""
       "
       
       echo "Username: $ADMIN_USER"
@@ -249,8 +281,8 @@ in
     '';
   };
   
-  # Load secret key into environment for PowerDNS Admin
-  systemd.services.powerdns-admin.serviceConfig.EnvironmentFile = "/var/lib/powerdns-admin/secret-key-env";
+  # Load secret key into environment for PowerDNS Admin (- prefix makes it optional)
+  systemd.services.powerdns-admin.serviceConfig.EnvironmentFile = "-/var/lib/powerdns-admin/secret-key-env";
   
   systemd.services.powerdns-admin.preStart = ''
     # Ensure directory exists with correct ownership
