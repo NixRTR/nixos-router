@@ -81,8 +81,9 @@ in
   services.powerdns-admin = {
     enable = true;
     
-    # Secret key file (generated on first run)
+    # Secret key and salt files (generated on first run)
     secretKeyFile = "/var/lib/powerdns-admin/secret-key";
+    saltFile = "/var/lib/powerdns-admin/salt";
     
     # Configuration
     config = ''
@@ -262,6 +263,14 @@ in
       tr -dc A-Za-z0-9 </dev/urandom | head -c 64 > /var/lib/powerdns-admin/secret-key
       chown powerdns-admin:powerdns-admin /var/lib/powerdns-admin/secret-key
       chmod 600 /var/lib/powerdns-admin/secret-key
+    fi
+    
+    # Generate salt if it doesn't exist
+    if [ ! -f /var/lib/powerdns-admin/salt ]; then
+      echo "Generating salt for PowerDNS Admin..."
+      tr -dc A-Za-z0-9 </dev/urandom | head -c 32 > /var/lib/powerdns-admin/salt
+      chown powerdns-admin:powerdns-admin /var/lib/powerdns-admin/salt
+      chmod 600 /var/lib/powerdns-admin/salt
     fi
     
     # Create environment file from secret key
