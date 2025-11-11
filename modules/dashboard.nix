@@ -119,9 +119,9 @@ in
           fi
           
           # Parse results (format: "Ping: X ms\nDownload: X Mbit/s\nUpload: X Mbit/s")
-          PING=$(echo "$RESULT" | grep "Ping:" | awk '{print $2}')
-          DOWNLOAD=$(echo "$RESULT" | grep "Download:" | awk '{print $2}')
-          UPLOAD=$(echo "$RESULT" | grep "Upload:" | awk '{print $2}')
+          PING=$(echo "$RESULT" | ${pkgs.gnugrep}/bin/grep "Ping:" | ${pkgs.gawk}/bin/awk '{print $2}')
+          DOWNLOAD=$(echo "$RESULT" | ${pkgs.gnugrep}/bin/grep "Download:" | ${pkgs.gawk}/bin/awk '{print $2}')
+          UPLOAD=$(echo "$RESULT" | ${pkgs.gnugrep}/bin/grep "Upload:" | ${pkgs.gawk}/bin/awk '{print $2}')
           
           # Write metrics to textfile for node_exporter
           METRICS_FILE="/var/lib/speedtest/metrics.prom"
