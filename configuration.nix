@@ -18,7 +18,8 @@ in
     
     # All modules are now organized in ./modules/
     ./modules/router.nix       # Router networking (WAN, LAN bridges, firewall, NAT)
-    ./modules/powerdns.nix     # DNS services (Recursor, Authoritative, Admin UI)
+    ./modules/powerdns.nix     # DNS services (Recursor + Authoritative)
+    ./modules/powerdns-admin.nix # PowerDNS Admin UI (Docker Compose)
     ./modules/dhcp.nix         # DHCP server (Kea)
     ./modules/users.nix        # User account management
     ./modules/secrets.nix      # Secrets management (sops-nix)

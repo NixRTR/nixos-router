@@ -13,7 +13,8 @@ The router uses PowerDNS for DNS services, providing both recursive DNS resoluti
 ### 2. PowerDNS Authoritative Server
 - **Purpose**: Host authoritative DNS zones for local networks
 - **Port**: 5300 (internal), 8081 (API/web server)
-- **Backend**: SQLite database
+- **Backend**: SQLite database (stored in `/var/lib/powerdns`)
+- **Implementation**: Docker Compose (`powerdns` service)
 - **Use case**: Local domain names, split-horizon DNS
 
 ### 3. PowerDNS Admin
@@ -33,11 +34,9 @@ The router uses PowerDNS for DNS services, providing both recursive DNS resoluti
 **Fully Automated Setup:**
 
 After running `sudo nixos-rebuild switch`, the system automatically:
-- ✅ Generates a secure random secret key
-- ✅ Initializes the database
-- ✅ Creates admin account using your system credentials
-- ✅ Configures PowerDNS API connection
-- ✅ Starts PowerDNS Admin on port 9191
+- ✅ Generates the PowerDNS API key and config in `/etc/powerdns`
+- ✅ Deploys the Docker Compose stack (`powerdns`, `powerdns-admin`)
+- ✅ Starts the containers on the host network (ports 8081, 9191 open)
 
 **Everything is ready to use!**
 
@@ -249,7 +248,7 @@ Your PowerDNS Admin password is automatically synced with your system password:
 4. Rebuild and restart:
    ```bash
    sudo nixos-rebuild switch
-   sudo systemctl restart powerdns powerdns-admin
+   sudo systemctl restart powerdns-admin-compose
    ```
 
 5. Update in PowerDNS Admin web interface:
@@ -283,12 +282,10 @@ ssh -L 9191:localhost:9191 routeradmin@router-ip
 systemctl status pdns-recursor
 journalctl -u pdns-recursor -f
 
-# Authoritative
-systemctl status powerdns
-journalctl -u powerdns -f
-
-# Admin interface
-systemctl status powerdns-admin
+# Authoritative/Admin stack (Docker Compose)
+systemctl status powerdns-admin-compose
+journalctl -u powerdns-admin-compose -f
+docker logs -f powerdns
 docker logs -f powerdns-admin
 ```
 
@@ -457,7 +454,7 @@ sudo tar -czf /backup/powerdns-admin-$(date +%Y%m%d).tar.gz -C /var/lib powerdns
 
 ```bash
 # Stop services
-sudo systemctl stop powerdns powerdns-admin-compose
+sudo systemctl stop powerdns-admin-compose
 
 # Restore PowerDNS database
 sudo cp /backup/pdns-20250111.sqlite3 /var/lib/powerdns/pdns.sqlite3
@@ -467,15 +464,14 @@ sudo chown powerdns:powerdns /var/lib/powerdns/pdns.sqlite3
 sudo tar -xzf /backup/powerdns-admin-20250111.tar.gz -C /var/lib
 
 # Start services
-sudo systemctl start powerdns
 sudo systemctl start powerdns-admin-compose
 ```
 
 ---
 
-## Managing PowerDNS Admin (Docker Compose)
+## Managing PowerDNS Stack (Docker Compose)
 
-Since PowerDNS Admin runs in Docker Compose, you can manage it using standard docker-compose commands:
+Both PowerDNS Authoritative and PowerDNS Admin run in Docker Compose. Manage them with standard `docker-compose` commands:
 
 ### View the configuration
 
@@ -483,35 +479,35 @@ Since PowerDNS Admin runs in Docker Compose, you can manage it using standard do
 cat /etc/powerdns-admin/docker-compose.yml
 ```
 
-### Check container status
+### Check container status (both services)
 
 ```bash
 cd /etc/powerdns-admin
 docker-compose ps
 ```
 
-### View logs
+### View logs (all services)
 
 ```bash
 cd /etc/powerdns-admin
-docker-compose logs -f powerdns-admin
+docker-compose logs -f
 ```
 
-### Restart the container
+### Restart the stack
 
 ```bash
 cd /etc/powerdns-admin
 docker-compose restart
 ```
 
-### Stop the container
+### Stop the stack
 
 ```bash
 cd /etc/powerdns-admin
 docker-compose down
 ```
 
-### Pull latest image and restart
+### Pull latest images and restart
 
 ```bash
 cd /etc/powerdns-admin
@@ -519,10 +515,10 @@ docker-compose pull
 docker-compose up -d
 ```
 
-### Or use systemd
+### Or use systemd (recommended)
 
 ```bash
-# Restart via systemd
+# Restart via systemd (manages the entire stack)
 sudo systemctl restart powerdns-admin-compose
 
 # Check status
@@ -532,7 +528,9 @@ sudo systemctl status powerdns-admin-compose
 sudo journalctl -u powerdns-admin-compose -f
 ```
 
-**Data persistence**: All PowerDNS Admin data is stored in `/var/lib/powerdns-admin`
+**Data persistence**:
+- PowerDNS database: `/var/lib/powerdns/pdns.sqlite3`
+- PowerDNS Admin data: `/var/lib/powerdns-admin`
 
 ---
 

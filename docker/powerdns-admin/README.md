@@ -1,12 +1,12 @@
-# PowerDNS Admin - Docker Compose
+# PowerDNS Stack - Docker Compose
 
-This directory contains the Docker Compose configuration for PowerDNS Admin.
+This directory contains the Docker Compose configuration for both PowerDNS Authoritative and PowerDNS Admin.
 
 ## Why Docker?
 
-PowerDNS Admin has Flask/SQLAlchemy compatibility issues with NixOS's native packages. Running it in Docker provides:
+Running the DNS management stack in Docker provides:
 - ✅ **Isolation**: Separate from system packages
-- ✅ **Reliability**: Official upstream image
+- ✅ **Reliability**: Official upstream images
 - ✅ **Easy updates**: `docker-compose pull && docker-compose up -d`
 - ✅ **Portability**: Standard Docker configuration
 
@@ -18,14 +18,14 @@ When you run `sudo nixos-rebuild switch`, NixOS:
 1. Deploys `docker-compose.yml` to `/etc/powerdns-admin/`
 2. Enables Docker service
 3. Starts `powerdns-admin-compose.service`
-4. Pulls the latest image
-5. Starts the container
+4. Pulls the latest images
+5. Starts both containers (`powerdns`, `powerdns-admin`)
 
 ## Configuration
 
 To modify the configuration:
 
-1. Edit `modules/powerdns.nix` (not this file)
+1. Edit `modules/powerdns.nix` or `modules/powerdns-admin.nix` (not this file)
 2. Rebuild: `sudo nixos-rebuild switch --flake /etc/nixos#router`
 
 The file here is for **reference only** and shows what gets deployed.
@@ -69,8 +69,9 @@ docker-compose up -d
 
 ## Access
 
-- **URL**: `http://router-ip:9191`
-- **Default credentials**: `admin` / `admin`
+- **PowerDNS API**: `http://router-ip:8081`
+- **PowerDNS Admin UI**: `http://router-ip:9191`
+- **Default PowerDNS Admin credentials**: `admin` / `admin`
 - **⚠️ IMPORTANT**: Change password on first login!
 
 ## First-Time Setup
@@ -85,7 +86,8 @@ docker-compose up -d
 
 ## Data Persistence
 
-All data is stored in `/var/lib/powerdns-admin/` on the host system.
+- Authoritative DNS database: `/var/lib/powerdns/pdns.sqlite3`
+- PowerDNS Admin data: `/var/lib/powerdns-admin/`
 
 ### Backup
 
@@ -103,10 +105,11 @@ sudo systemctl start powerdns-admin-compose
 
 ## Troubleshooting
 
-### Container won't start
+### Containers won't start
 
 ```bash
 # Check Docker logs
+docker logs powerdns
 docker logs powerdns-admin
 
 # Check systemd logs
@@ -119,7 +122,8 @@ sudo systemctl status docker
 ### Can't access web interface
 
 ```bash
-# Check if container is running
+# Check if containers are running
+docker ps | grep powerdns
 docker ps | grep powerdns-admin
 
 # Check if port is listening
@@ -132,12 +136,13 @@ sudo iptables -L -n | grep 9191
 ### Reset to defaults
 
 ```bash
-# Stop and remove container
+# Stop and remove containers
 cd /etc/powerdns-admin
 docker-compose down
 
 # Remove data (⚠️ THIS DELETES ALL DATA)
 sudo rm -rf /var/lib/powerdns-admin/*
+sudo rm -f /var/lib/powerdns/pdns.sqlite3
 
 # Restart
 sudo systemctl start powerdns-admin-compose
@@ -147,5 +152,6 @@ sudo systemctl start powerdns-admin-compose
 
 - [PowerDNS Admin GitHub](https://github.com/PowerDNS-Admin/PowerDNS-Admin)
 - [PowerDNS Documentation](../../docs/powerdns.md)
-- [Official Docker Image](https://hub.docker.com/r/ngoduykhanh/powerdns-admin)
+- [PowerDNS Authoritative Image](https://hub.docker.com/r/powerdns/pdns-auth-4.9.5)
+- [PowerDNS Admin Image](https://hub.docker.com/r/ngoduykhanh/powerdns-admin)
 
