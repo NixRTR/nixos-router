@@ -241,6 +241,12 @@ in
       };
       wantedBy = [ "multi-user.target" ];
     };
+
+    # Ensure systemd-resolved does not bind to port 53
+    services.resolved = {
+      enable = lib.mkDefault true;
+      dnsStubListener = false;
+    };
   };
 }
 
