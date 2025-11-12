@@ -15,9 +15,9 @@ in
   # PowerDNS Recursor - Recursive DNS resolver with caching
   services.pdns-recursor = {
     enable = true;
-    # Forward to upstream DNS servers
+    # Forward to upstream DNS servers (list format for YAML)
     forwardZones = {
-      "." = "1.1.1.1;8.8.8.8;9.9.9.9";
+      "." = [ "1.1.1.1" "8.8.8.8" "9.9.9.9" ];
     };
     settings = {
       # Listen addresses - Listen on all bridge IPs plus localhost
@@ -104,8 +104,10 @@ in
   '';
 
   # PowerDNS Admin - Web interface for managing PowerDNS
+  # Disabled native service due to Flask/SQLAlchemy conflicts
+  # Running in Docker instead (see systemd service below)
   services.powerdns-admin = {
-    enable = true;
+    enable = false;
     
     # Secret key and salt files (generated on first run)
     secretKeyFile = "/var/lib/powerdns-admin/secret-key";
@@ -210,17 +212,21 @@ in
         ADMIN_PASSWORD="admin"
       fi
       
-      # Wait for database to exist
+      # Wait for database to exist (PowerDNS Admin creates it on first start)
       DB_PATH="/var/lib/powerdns-admin/powerdns-admin.db"
-      for i in {1..30}; do
+      echo "Waiting for PowerDNS Admin to create database..."
+      for i in {1..60}; do
         if [ -f "$DB_PATH" ]; then
+          echo "Database found at $DB_PATH"
           break
         fi
         sleep 1
       done
       
       if [ ! -f "$DB_PATH" ]; then
-        echo "ERROR: Database not found at $DB_PATH"
+        echo "WARNING: Database not found at $DB_PATH after 60 seconds"
+        echo "PowerDNS Admin may not have started successfully"
+        echo "Check: systemctl status powerdns-admin.service"
         exit 1
       fi
       
@@ -317,6 +323,78 @@ in
     # Let systemd handle ownership
     StateDirectory = "powerdns-admin";
     StateDirectoryMode = "0750";
+  };
+
+  # Enable Docker for PowerDNS Admin
+  virtualisation.docker.enable = true;
+  
+  # Docker Compose configuration for PowerDNS Admin
+  environment.etc."powerdns-admin/docker-compose.yml".text = ''
+    version: '3.8'
+    
+    services:
+      powerdns-admin:
+        image: ngoduykhanh/powerdns-admin:latest
+        container_name: powerdns-admin
+        restart: unless-stopped
+        network_mode: host
+        environment:
+          - SECRET_KEY=changeme-on-first-run
+          - BIND_ADDRESS=0.0.0.0
+          - PORT=9191
+          - SQLA_DB_USER=powerdns
+          - SQLA_DB_NAME=powerdnsadmin
+        volumes:
+          - /var/lib/powerdns-admin:/data
+        depends_on:
+          - pdns
+        healthcheck:
+          test: ["CMD", "curl", "-f", "http://localhost:9191/"]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+          start_period: 40s
+  '';
+  
+  # Systemd service to manage PowerDNS Admin via docker-compose
+  systemd.services.powerdns-admin-compose = {
+    description = "PowerDNS Admin (Docker Compose)";
+    after = [ "network.target" "docker.service" "pdns.service" ];
+    requires = [ "docker.service" ];
+    wantedBy = [ "multi-user.target" ];
+    
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      WorkingDirectory = "/etc/powerdns-admin";
+    };
+    
+    path = [ pkgs.docker-compose ];
+    
+    script = ''
+      # Ensure data directory exists
+      mkdir -p /var/lib/powerdns-admin
+      
+      # Start PowerDNS Admin
+      ${pkgs.docker-compose}/bin/docker-compose up -d
+      
+      # Wait for service to be ready
+      echo "Waiting for PowerDNS Admin to start..."
+      for i in {1..30}; do
+        if ${pkgs.curl}/bin/curl -sf http://localhost:9191/ > /dev/null 2>&1; then
+          echo "PowerDNS Admin is ready!"
+          echo "Access at: http://your-router-ip:9191"
+          echo "Default credentials: admin / admin"
+          echo "IMPORTANT: Change password on first login!"
+          break
+        fi
+        sleep 2
+      done
+    '';
+    
+    preStop = "${pkgs.docker-compose}/bin/docker-compose down";
+    
+    reload = "${pkgs.docker-compose}/bin/docker-compose restart";
   };
 
   # Firewall rules for PowerDNS services

@@ -1,0 +1,62 @@
+# PowerDNS Admin - Docker Compose Configuration
+# 
+# This file is for REFERENCE ONLY - it's automatically deployed to
+# /etc/powerdns-admin/docker-compose.yml by NixOS configuration.
+#
+# To customize, edit modules/powerdns.nix and rebuild:
+#   sudo nixos-rebuild switch --flake /etc/nixos#router
+#
+# Manual management:
+#   cd /etc/powerdns-admin
+#   docker-compose ps        # Check status
+#   docker-compose logs -f   # View logs
+#   docker-compose restart   # Restart container
+#   docker-compose down      # Stop container
+#   docker-compose pull      # Update image
+#   docker-compose up -d     # Start container
+
+version: '3.8'
+
+services:
+  powerdns-admin:
+    image: ngoduykhanh/powerdns-admin:latest
+    container_name: powerdns-admin
+    restart: unless-stopped
+    
+    # Use host networking to access PowerDNS API on localhost:8081
+    network_mode: host
+    
+    environment:
+      # Secret key for Flask sessions (change this in production)
+      - SECRET_KEY=changeme-on-first-run
+      
+      # Bind address and port
+      - BIND_ADDRESS=0.0.0.0
+      - PORT=9191
+      
+      # Database settings (SQLite is used by default inside the container)
+      - SQLA_DB_USER=powerdns
+      - SQLA_DB_NAME=powerdnsadmin
+    
+    volumes:
+      # Persistent data storage (database, configs, etc.)
+      - /var/lib/powerdns-admin:/data
+    
+    # Wait for PowerDNS Authoritative Server to be ready
+    depends_on:
+      - pdns
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9191/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Notes:
+# - Access the web interface at http://router-ip:9191
+# - Default login: admin / admin (CHANGE ON FIRST LOGIN!)
+# - PowerDNS API URL: http://localhost:8081
+# - API key is stored in /var/lib/powerdns/api-key on the host
+# - All data persists in /var/lib/powerdns-admin on the host
+

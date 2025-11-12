@@ -19,8 +19,10 @@ The router uses PowerDNS for DNS services, providing both recursive DNS resoluti
 ### 3. PowerDNS Admin
 - **Purpose**: Web interface for managing DNS zones and records
 - **Port**: 9191
-- **Implementation**: Native NixOS service
+- **Implementation**: Docker Compose (official image)
 - **Access**: `http://router-ip:9191`
+- **Compose file**: `/etc/powerdns-admin/docker-compose.yml`
+- **Why Docker**: Avoids Flask/SQLAlchemy compatibility issues with NixOS packages
 
 ---
 
@@ -43,26 +45,24 @@ After running `sudo nixos-rebuild switch`, the system automatically:
 
 ```
 URL:      http://192.168.2.1:9191 (or your router's IP)
-Username: <your system username>  (e.g., routeradmin)
-Password: <your system password>  (same as SSH/console)
+Username: admin
+Password: admin
 ```
 
-**Same credentials as your system login!** No need to remember separate passwords.
+**⚠️ IMPORTANT: Change the default password on first login!**
 
-**Password Synchronization:**
-
-Your PowerDNS Admin password automatically stays in sync with your system password:
-- Change your system password (update sops secret and rebuild)
-- PowerDNS Admin password updates automatically on next `nixos-rebuild switch`
-- Always use your current system password to log in
+The Docker container runs the official PowerDNS Admin image with its own database and user management.
 
 **First Login:**
 
 1. Open your browser to `http://192.168.2.1:9191`
-2. Log in with your system credentials (same as SSH)
-3. Start creating DNS zones and records!
-
-The PowerDNS API is already configured and connected - no additional setup needed!
+2. Log in with default credentials: `admin` / `admin`
+3. **Immediately change the password** under Settings > Profile
+4. Configure PowerDNS API connection (one-time setup):
+   - Go to Settings > PDNS
+   - API URL: `http://localhost:8081`
+   - API Key: (automatically generated, stored in `/var/lib/powerdns/api-key`)
+5. Start creating DNS zones and records!
 
 ### Testing DNS Resolution
 
@@ -449,27 +449,90 @@ end
 # Backup PowerDNS database
 sudo cp /var/lib/powerdns/pdns.sqlite3 /backup/pdns-$(date +%Y%m%d).sqlite3
 
-# Backup PowerDNS Admin database
-sudo cp /var/lib/powerdns-admin/powerdns-admin.db /backup/powerdns-admin-$(date +%Y%m%d).db
+# Backup PowerDNS Admin data (Docker volume)
+sudo tar -czf /backup/powerdns-admin-$(date +%Y%m%d).tar.gz -C /var/lib powerdns-admin
 ```
 
 ### Restore DNS Zones
 
 ```bash
 # Stop services
-sudo systemctl stop powerdns powerdns-admin
+sudo systemctl stop powerdns powerdns-admin-compose
 
 # Restore PowerDNS database
 sudo cp /backup/pdns-20250111.sqlite3 /var/lib/powerdns/pdns.sqlite3
 sudo chown powerdns:powerdns /var/lib/powerdns/pdns.sqlite3
 
-# Restore PowerDNS Admin database
-sudo cp /backup/powerdns-admin-20250111.db /var/lib/powerdns-admin/powerdns-admin.db
-sudo chown powerdns-admin:powerdns-admin /var/lib/powerdns-admin/powerdns-admin.db
+# Restore PowerDNS Admin data (Docker volume)
+sudo tar -xzf /backup/powerdns-admin-20250111.tar.gz -C /var/lib
 
 # Start services
-sudo systemctl start powerdns powerdns-admin
+sudo systemctl start powerdns
+sudo systemctl start powerdns-admin-compose
 ```
+
+---
+
+## Managing PowerDNS Admin (Docker Compose)
+
+Since PowerDNS Admin runs in Docker Compose, you can manage it using standard docker-compose commands:
+
+### View the configuration
+
+```bash
+cat /etc/powerdns-admin/docker-compose.yml
+```
+
+### Check container status
+
+```bash
+cd /etc/powerdns-admin
+docker-compose ps
+```
+
+### View logs
+
+```bash
+cd /etc/powerdns-admin
+docker-compose logs -f powerdns-admin
+```
+
+### Restart the container
+
+```bash
+cd /etc/powerdns-admin
+docker-compose restart
+```
+
+### Stop the container
+
+```bash
+cd /etc/powerdns-admin
+docker-compose down
+```
+
+### Pull latest image and restart
+
+```bash
+cd /etc/powerdns-admin
+docker-compose pull
+docker-compose up -d
+```
+
+### Or use systemd
+
+```bash
+# Restart via systemd
+sudo systemctl restart powerdns-admin-compose
+
+# Check status
+sudo systemctl status powerdns-admin-compose
+
+# View systemd logs
+sudo journalctl -u powerdns-admin-compose -f
+```
+
+**Data persistence**: All PowerDNS Admin data is stored in `/var/lib/powerdns-admin`
 
 ---
 
