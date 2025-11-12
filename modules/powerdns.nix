@@ -80,7 +80,7 @@ gsqlite3-database=/var/lib/powerdns/pdns.sqlite3
 
 # API for PowerDNS Admin
 api=yes
-api-key=${API_KEY}
+api-key=''${API_KEY}
 webserver=yes
 webserver-address=0.0.0.0
 webserver-port=8081
