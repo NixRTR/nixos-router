@@ -245,7 +245,7 @@ in
     # Ensure systemd-resolved does not bind to port 53
     services.resolved = {
       enable = lib.mkDefault true;
-      dnsStubListener = false;
+      extraConfig = lib.mkDefault "DNSStubListener=no\n";
     };
   };
 }
