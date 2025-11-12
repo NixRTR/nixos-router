@@ -105,8 +105,9 @@ in
   services.powerdns-admin = {
     enable = true;
     
-    # Secret key file (generated on first run)
+    # Secret key and salt files (generated on first run)
     secretKeyFile = "/var/lib/powerdns-admin/secret-key";
+    saltFile = "/var/lib/powerdns-admin/salt";
     
     # Configuration
     config = ''
@@ -283,17 +284,23 @@ in
   # Load secret key into environment for PowerDNS Admin (- prefix makes it optional)
   systemd.services.powerdns-admin.serviceConfig.EnvironmentFile = "-/var/lib/powerdns-admin/secret-key-env";
   
-  systemd.services.powerdns-admin.preStart = ''
-    # Ensure directory exists with correct ownership
+  # Create the files before systemd tries to mount them
+  system.activationScripts.powerdns-admin-setup = ''
+    # Ensure directory exists
     mkdir -p /var/lib/powerdns-admin
-    chown powerdns-admin:powerdns-admin /var/lib/powerdns-admin
     
     # Generate secret key if it doesn't exist
     if [ ! -f /var/lib/powerdns-admin/secret-key ]; then
       echo "Generating secret key for PowerDNS Admin..."
       tr -dc A-Za-z0-9 </dev/urandom | head -c 64 > /var/lib/powerdns-admin/secret-key
-      chown powerdns-admin:powerdns-admin /var/lib/powerdns-admin/secret-key
       chmod 600 /var/lib/powerdns-admin/secret-key
+    fi
+    
+    # Generate salt if it doesn't exist
+    if [ ! -f /var/lib/powerdns-admin/salt ]; then
+      echo "Generating salt for PowerDNS Admin..."
+      tr -dc A-Za-z0-9 </dev/urandom | head -c 32 > /var/lib/powerdns-admin/salt
+      chmod 600 /var/lib/powerdns-admin/salt
     fi
     
     # Create environment file from secret key
@@ -301,6 +308,14 @@ in
       echo "POWERDNS_ADMIN_SECRET_KEY=$(cat /var/lib/powerdns-admin/secret-key)" > /var/lib/powerdns-admin/secret-key-env
       chmod 600 /var/lib/powerdns-admin/secret-key-env
     fi
+  '';
+  
+  systemd.services.powerdns-admin.preStart = ''
+    # Ensure proper ownership
+    chown powerdns-admin:powerdns-admin /var/lib/powerdns-admin
+    chown powerdns-admin:powerdns-admin /var/lib/powerdns-admin/secret-key
+    chown powerdns-admin:powerdns-admin /var/lib/powerdns-admin/salt
+    chown powerdns-admin:powerdns-admin /var/lib/powerdns-admin/secret-key-env
   '';
 
   # Firewall rules for PowerDNS services
