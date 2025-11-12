@@ -148,6 +148,8 @@ in
         ""
         "  powerdns-admin:"
         "    image: ngoduykhanh/powerdns-admin:latest"
+        "    ports:"
+        "      - 8080:80"
         "    depends_on:"
         "      - mariadb"
         "    environment:"
