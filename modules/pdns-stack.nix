@@ -4,7 +4,7 @@ let
   cfg = config.services.pdnsStack;
 
   listToCSV = list:
-    if lib.isNull list || list == [] then ""
+    if builtins.isNull list || list == [] then ""
     else lib.concatStringsSep "," list;
 in
 {
