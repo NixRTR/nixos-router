@@ -15,20 +15,22 @@ in
   # PowerDNS Recursor - Recursive DNS resolver with caching
   services.pdns-recursor = {
     enable = true;
-    dns.address = 
-      # Listen on all bridge IPs plus localhost
-      (map (ip: "${ip}:53") bridgeIPs) ++ [ "127.0.0.1:53" ];
-    dns.allowFrom = [
-      "127.0.0.0/8"
-      "192.168.0.0/16"
-      "10.0.0.0/8"
-      "172.16.0.0/12"
-    ];
     # Forward to upstream DNS servers
     forwardZones = {
       "." = "1.1.1.1;8.8.8.8;9.9.9.9";
     };
     settings = {
+      # Listen addresses - Listen on all bridge IPs plus localhost
+      local-address = (map (ip: "${ip}:53") bridgeIPs) ++ [ "127.0.0.1:53" ];
+      
+      # Allow queries from private networks
+      allow-from = [
+        "127.0.0.0/8"
+        "192.168.0.0/16"
+        "10.0.0.0/8"
+        "172.16.0.0/12"
+      ];
+      
       # Caching settings
       max-cache-entries = 1000000;
       max-cache-ttl = 7200;  # 2 hours
@@ -310,13 +312,12 @@ in
     fi
   '';
   
-  systemd.services.powerdns-admin.preStart = ''
-    # Ensure proper ownership
-    chown powerdns-admin:powerdns-admin /var/lib/powerdns-admin
-    chown powerdns-admin:powerdns-admin /var/lib/powerdns-admin/secret-key
-    chown powerdns-admin:powerdns-admin /var/lib/powerdns-admin/salt
-    chown powerdns-admin:powerdns-admin /var/lib/powerdns-admin/secret-key-env
-  '';
+  # Ensure the service user has access to the files
+  systemd.services.powerdns-admin.serviceConfig = {
+    # Let systemd handle ownership
+    StateDirectory = "powerdns-admin";
+    StateDirectoryMode = "0750";
+  };
 
   # Firewall rules for PowerDNS services
   networking.firewall.allowedUDPPorts = mkAfter [ 53 ];
