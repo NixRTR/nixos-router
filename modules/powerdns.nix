@@ -225,32 +225,32 @@ in
       # Generate password hash (SHA256)
       PASSWORD_HASH=$(echo -n "$ADMIN_PASSWORD" | sha256sum | cut -d' ' -f1)
       
+      # Read PowerDNS API key
+      if [ -f /var/lib/powerdns/api-key ]; then
+        PDNS_API_KEY=$(cat /var/lib/powerdns/api-key)
+      else
+        PDNS_API_KEY='changeme'
+      fi
+      
       # Use nix-shell to temporarily provide sqlite3 (no permanent install)
       ${pkgs.nix}/bin/nix-shell -p sqlite --run "
         # Check if user exists
-        USER_EXISTS=\$(sqlite3 '$DB_PATH' \"SELECT COUNT(*) FROM user WHERE username='$ADMIN_USER';\")
+        USER_EXISTS=\$(sqlite3 '$DB_PATH' 'SELECT COUNT(*) FROM user WHERE username=\"$ADMIN_USER\";')
         
         if [ \"\$USER_EXISTS\" -gt 0 ]; then
           # User exists - update password
           echo 'Updating password for user: $ADMIN_USER'
-          sqlite3 '$DB_PATH' \"UPDATE user SET password='$PASSWORD_HASH' WHERE username='$ADMIN_USER';\"
+          sqlite3 '$DB_PATH' 'UPDATE user SET password=\"$PASSWORD_HASH\" WHERE username=\"$ADMIN_USER\";'
           echo 'Password synchronized with system password'
         else
-          # User doesn't exist - create new
+          # User does not exist - create new
           echo 'Creating new admin user: $ADMIN_USER'
-          sqlite3 '$DB_PATH' \"INSERT INTO user (username, password, email, role_id, confirmed) VALUES ('$ADMIN_USER', '$PASSWORD_HASH', '$ADMIN_EMAIL', 1, 1);\"
+          sqlite3 '$DB_PATH' 'INSERT INTO user (username, password, email, role_id, confirmed) VALUES (\"$ADMIN_USER\", \"$PASSWORD_HASH\", \"$ADMIN_EMAIL\", 1, 1);'
           echo 'Admin user created successfully'
         fi
         
         # Always ensure PowerDNS API settings exist
-        # Read the PowerDNS API key
-        if [ -f /var/lib/powerdns/api-key ]; then
-          PDNS_API_KEY=\$(cat /var/lib/powerdns/api-key)
-        else
-          PDNS_API_KEY='changeme'
-        fi
-        
-        sqlite3 '$DB_PATH' \"INSERT OR IGNORE INTO setting (name, value) VALUES ('pdns_api_url', 'http://127.0.0.1:8081'), ('pdns_api_key', '\$PDNS_API_KEY'), ('pdns_version', '4.7.0');\""
+        sqlite3 '$DB_PATH' 'INSERT OR IGNORE INTO setting (name, value) VALUES (\"pdns_api_url\", \"http://127.0.0.1:8081\"), (\"pdns_api_key\", \"$PDNS_API_KEY\"), (\"pdns_version\", \"4.7.0\");'
       "
       
       echo "Username: $ADMIN_USER"
