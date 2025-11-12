@@ -19,8 +19,8 @@ in
     };
 
     directory = lib.mkOption {
-      type = lib.types.path;
-      default = /etc/pdns-stack;
+      type = lib.types.str;
+      default = "/etc/pdns-stack";
       description = "Directory where docker-compose and supporting files are rendered.";
     };
 
