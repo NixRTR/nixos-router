@@ -1,557 +1,200 @@
-# PowerDNS Configuration
+## PowerDNS Stack Overview
 
-The router uses PowerDNS for DNS services, providing both recursive DNS resolution and authoritative DNS hosting with a web-based admin interface.
+The router now uses a fully containerized PowerDNS stack powered by Docker Compose and managed by the custom NixOS module `services.pdnsStack`. The stack includes:
 
-## Components
+- `dnsdist` (host network) – terminates DNS queries on the router’s HOMELAB and LAN interfaces and routes them to the appropriate backend.
+- `pdns-auth-homelab` and `pdns-auth-lan` – two authoritative PowerDNS instances sharing a common MariaDB backend, allowing split-horizon records per network.
+- `pdns-recursor` – resolves Internet queries and forwards local zones back to the authoritative instances.
+- `powerdns-admin` – the web UI for managing zones and records.
+- `mariadb` + `redis` – databases required by the authoritative servers and PowerDNS-Admin.
 
-### 1. PowerDNS Recursor
-- **Purpose**: Recursive DNS resolver with caching
-- **Replaces**: Traditional DNS resolvers like Blocky/dnsmasq
-- **Port**: 53 (DNS)
-- **Listens on**: All bridge interfaces + localhost
-
-### 2. PowerDNS Authoritative Server
-- **Purpose**: Host authoritative DNS zones for local networks
-- **Port**: 5300 (internal), 8081 (API/web server)
-- **Backend**: SQLite database (stored in `/var/lib/powerdns`)
-- **Implementation**: Docker Compose (`powerdns` service)
-- **Use case**: Local domain names, split-horizon DNS
-
-### 3. PowerDNS Admin
-- **Purpose**: Web interface for managing DNS zones and records
-- **Port**: 9191
-- **Implementation**: Docker Compose (official image)
-- **Access**: `http://router-ip:9191`
-- **Compose file**: `/etc/powerdns-admin/docker-compose.yml`
-- **Why Docker**: Avoids Flask/SQLAlchemy compatibility issues with NixOS packages
+All compose files and support scripts are rendered to `/etc/pdns-stack/`, while persistent data is stored under `/var/lib/powerdns-*`.
 
 ---
 
-## Quick Start
+## Enabling the Stack
 
-### Accessing PowerDNS Admin
-
-**Fully Automated Setup:**
-
-After running `sudo nixos-rebuild switch`, the system automatically:
-- ✅ Generates the PowerDNS API key and config in `/etc/powerdns`
-- ✅ Deploys the Docker Compose stack (`powerdns`, `powerdns-admin`)
-- ✅ Starts the containers on the host network (ports 8081, 9191 open)
-
-**Everything is ready to use!**
-
-**Login Credentials:**
-
-```
-URL:      http://192.168.2.1:9191 (or your router's IP)
-Username: admin
-Password: admin
-```
-
-**⚠️ IMPORTANT: Change the default password on first login!**
-
-The Docker container runs the official PowerDNS Admin image with its own database and user management.
-
-**First Login:**
-
-1. Open your browser to `http://192.168.2.1:9191`
-2. Log in with default credentials: `admin` / `admin`
-3. **Immediately change the password** under Settings > Profile
-4. Configure PowerDNS API connection (one-time setup):
-   - Go to Settings > PDNS
-   - API URL: `http://localhost:8081`
-   - API Key: (automatically generated, stored in `/var/lib/powerdns/api-key`)
-5. Start creating DNS zones and records!
-
-### Testing DNS Resolution
-
-```bash
-# From a client on the network
-dig @192.168.2.1 google.com
-
-# Test DNSSEC
-dig @192.168.2.1 +dnssec cloudflare.com
-
-# Check response time (should be fast with caching)
-dig @192.168.2.1 example.com
-dig @192.168.2.1 example.com  # Second query should be instant
-```
-
----
-
-## Configuration
-
-### Recursor Settings
-
-Located in `/etc/nixos/configuration.nix`:
+`router-config.nix` carries the input values (API keys, router IPs, upstream resolvers):
 
 ```nix
-services.pdns-recursor = {
+dns = {
   enable = true;
-  dns.address = [ "192.168.2.1:53" "192.168.3.1:53" "127.0.0.1:53" ];
-  dns.allowFrom = [
-    "127.0.0.0/8"
-    "192.168.0.0/16"
-    "10.0.0.0/8"
-    "172.16.0.0/12"
-  ];
-  forwardZones = {
-    "." = "1.1.1.1;8.8.8.8;9.9.9.9";
-  };
-  settings = {
-    max-cache-entries = 1000000;
-    max-cache-ttl = 7200;  # 2 hours
-    threads = 2;
-  };
+  routerIPs = [ "192.168.2.1" "192.168.3.1" ];
+  upstreamResolvers = [ "9.9.9.9" "1.1.1.1" ];
+  mariadbRootPassword = "replace-with-secure-root-pw";
+  pdnsDbPassword = "replace-with-secure-pdns-pw";
+  pdnsApiKeyHomelab = "replace-with-real-api-key-homelab";
+  pdnsApiKeyLan = "replace-with-real-api-key-lan";
+  powerdnsAdminSecret = "replace-with-secret";
 };
 ```
 
-### Authoritative Server Settings
+`configuration.nix` merges those values when enabling the service:
 
 ```nix
-services.powerdns = {
+imports = [
+  # …
+  ./modules/pdns-stack.nix
+];
+
+services.pdnsStack = {
   enable = true;
-  extraConfig = ''
-    local-port=5300
-    local-address=127.0.0.1
-    
-    # SQLite backend
-    launch=gsqlite3
-    gsqlite3-database=/var/lib/powerdns/pdns.sqlite3
-    
-    # API for PowerDNS Admin
-    api=yes
-    api-key=changeme
-    webserver=yes
-    webserver-port=8081
-  '';
+  routerIPs = [ "192.168.2.1" "192.168.3.1" ];
+  upstreamResolvers = [ "9.9.9.9" "1.1.1.1" ];
+  mariadbRootPassword = "replace-with-secure-root-pw";
+  pdnsDbPassword = "replace-with-secure-pdns-pw";
+  pdnsApiKeyHomelab = "replace-with-real-api-key-homelab";
+  pdnsApiKeyLan = "replace-with-real-api-key-lan";
+  powerdnsAdminSecret = "replace-with-secret";
 };
 ```
 
----
+Then apply the configuration and start the stack:
 
-## Common Tasks
-
-### Change Upstream DNS Servers
-
-Edit `/etc/nixos/configuration.nix`:
-
-```nix
-forwardZones = {
-  "." = "1.1.1.1;8.8.8.8";  # Cloudflare and Google
-};
-```
-
-Popular upstream options:
-- **Cloudflare**: `1.1.1.1`, `1.0.0.1`
-- **Google**: `8.8.8.8`, `8.8.4.4`
-- **Quad9** (privacy-focused): `9.9.9.9`, `149.112.112.112`
-- **OpenDNS**: `208.67.222.222`, `208.67.220.220`
-
-Apply changes:
 ```bash
 sudo nixos-rebuild switch
+sudo systemctl start pdns-stack
+sudo systemctl status pdns-stack
 ```
 
-### Create a Local DNS Zone
-
-1. Open PowerDNS Admin: `http://192.168.2.1:9191`
-2. Go to "Domain" → "Add Domain"
-3. Enter domain name: `homelab.local`
-4. Type: `Native`
-5. Click "Create"
-
-### Add DNS Records
-
-1. Click on your domain (`homelab.local`)
-2. Click "Add Record"
-3. Fill in:
-   - **Name**: `server1` (becomes `server1.homelab.local`)
-   - **Type**: `A`
-   - **Content**: `192.168.2.33`
-   - **TTL**: `3600`
-4. Click "Save"
-
-Now `server1.homelab.local` resolves to `192.168.2.33` from any device on your network!
-
-### Split-Horizon DNS
-
-Serve different DNS responses to internal vs external clients:
-
-1. Create zone `example.com` in PowerDNS Admin
-2. Add A record:
-   - **Name**: `@` (root domain)
-   - **Content**: `192.168.2.33` (internal IP)
-3. Configure recursor to use authoritative server for this zone:
-
-```nix
-forwardZones = {
-  "example.com" = "127.0.0.1:5300";
-  "." = "1.1.1.1;8.8.8.8";
-};
-```
-
-Internal clients get `192.168.2.33`, external clients get the public DNS record.
+`pdns-stack` uses `docker compose up -d` behind the scenes; the service remains active (`RemainAfterExit = true`) until explicitly stopped.
 
 ---
 
-## Security
+## File Layout
 
-### Change Your Password
+| Path | Description |
+| --- | --- |
+| `/etc/pdns-stack/docker-compose.yml` | Docker Compose definition generated by the module |
+| `/etc/pdns-stack/dnsdist/dnsdist.lua` | dnsdist configuration (binds to `services.pdnsStack.routerIPs`) |
+| `/etc/pdns-stack/manage.sh` | Convenience wrapper for `docker compose` |
+| `/var/lib/powerdns-mysql/` | MariaDB data files |
+| `/var/lib/powerdns-admin/` | PowerDNS-Admin data & secrets (`compose.env`) |
 
-Your PowerDNS Admin password is automatically synced with your system password:
-
-1. Update your password in sops secrets:
-   ```bash
-   # Edit the secrets file
-   sops /etc/nixos/secrets/secrets.yaml
-   
-   # Update the 'password' field
-   ```
-
-2. Rebuild the system:
-   ```bash
-   sudo nixos-rebuild switch
-   ```
-
-3. The PowerDNS Admin password automatically updates!
-
-**No manual steps needed** - just rebuild and your new password works everywhere (SSH, console, and PowerDNS Admin).
-
-### Change API Key
-
-**Important**: Change the default API key!
-
-1. Edit `/etc/nixos/configuration.nix`:
-   ```nix
-   services.powerdns = {
-     extraConfig = ''
-       api-key=your-secure-random-key-here
-     '';
-   };
-   ```
-
-2. Update PowerDNS Admin configuration to use the same key:
-   - The API key is read from the environment variable `POWERDNS_API_KEY`
-   - Both services are already configured to use the same key
-
-3. Generate and store a secure key:
-   ```bash
-   # Generate secure API key
-   openssl rand -hex 32 > /var/lib/powerdns-admin/api-key
-   
-   # Set proper permissions
-   sudo chown powerdns-admin:powerdns-admin /var/lib/powerdns-admin/api-key
-   sudo chmod 600 /var/lib/powerdns-admin/api-key
-   ```
-
-4. Rebuild and restart:
-   ```bash
-   sudo nixos-rebuild switch
-   sudo systemctl restart powerdns-admin-compose
-   ```
-
-5. Update in PowerDNS Admin web interface:
-   - Settings → PowerDNS → API Key
-
-### Restrict Access to Admin Interface
-
-PowerDNS Admin should only be accessible from trusted networks.
-
-**Option 1**: Firewall rule (recommended)
-```nix
-networking.firewall.interfaces."br0".allowedTCPPorts = [ 9191 ];
-# Only accessible from br0 (HOMELAB), not br1 (LAN)
-```
-
-**Option 2**: VPN/SSH tunnel
-```bash
-# Access via SSH tunnel
-ssh -L 9191:localhost:9191 routeradmin@router-ip
-# Then open http://localhost:9191 on your local machine
-```
+`compose.env` contains passwords and API keys rendered from the module options. Update this file carefully and restart the stack if you change any secrets.
 
 ---
 
-## Monitoring
+## Operating the Stack
 
-### Check Service Status
+### Systemd
 
 ```bash
-# Recursor
-systemctl status pdns-recursor
-journalctl -u pdns-recursor -f
+sudo systemctl status pdns-stack
+sudo systemctl restart pdns-stack
+sudo systemctl stop pdns-stack
+sudo journalctl -u pdns-stack -f
+```
 
-# Authoritative/Admin stack (Docker Compose)
-systemctl status powerdns-admin-compose
-journalctl -u powerdns-admin-compose -f
-docker logs -f powerdns
+### docker compose Wrapper
+
+```bash
+cd /etc/pdns-stack
+./manage.sh ps
+./manage.sh logs -f dnsdist
+./manage.sh pull
+./manage.sh up -d
+./manage.sh down
+```
+
+### Container Logs
+
+```bash
+docker logs -f dnsdist
+docker logs -f pdns-auth-homelab
+docker logs -f pdns-auth-lan
+docker logs -f pdns-recursor
 docker logs -f powerdns-admin
-```
-
-### Performance Metrics
-
-PowerDNS Recursor provides detailed statistics:
-
-```bash
-# View live stats
-rec_control get-all
-
-# Cache statistics
-rec_control get cache-size
-rec_control get cache-hits
-rec_control get cache-misses
-
-# Query statistics
-rec_control get questions
-rec_control get answers
-```
-
-### Grafana Dashboard
-
-PowerDNS metrics are automatically collected by Prometheus and displayed in Grafana:
-
-- **Dashboard**: `http://router-ip:3000`
-- **Metrics include**:
-  - Query rate
-  - Cache hit ratio
-  - Response times
-  - Upstream query times
-
----
-
-## Troubleshooting
-
-### DNS Not Resolving
-
-```bash
-# Check if recursor is running
-systemctl status pdns-recursor
-
-# Test locally on router
-dig @127.0.0.1 google.com
-
-# Check logs
-journalctl -u pdns-recursor -n 50
-
-# Test upstream connectivity
-ping 1.1.1.1
-```
-
-### PowerDNS Admin Won't Start
-
-```bash
-# Check service status
-systemctl status powerdns-admin
-
-# View logs
-journalctl -u powerdns-admin -n 50
-
-# Restart
-sudo systemctl restart powerdns-admin
-```
-
-### Can't Access Admin Interface
-
-1. Check firewall:
-   ```bash
-   sudo nft list ruleset | grep 9191
-   ```
-
-2. Test from router:
-   ```bash
-   curl http://localhost:9191
-   ```
-
-3. Check if service is listening:
-   ```bash
-   sudo ss -tlnp | grep 9191
-   ```
-
-### Slow DNS Queries
-
-```bash
-# Check cache hit ratio
-rec_control get cache-hits
-rec_control get cache-misses
-
-# Test upstream latency
-dig @1.1.1.1 example.com
-dig @8.8.8.8 example.com
-
-# Increase cache size if needed
-# Edit configuration.nix:
-settings = {
-  max-cache-entries = 2000000;  # Double the cache
-};
+docker logs -f mariadb
 ```
 
 ---
 
-## Advanced Configuration
+## DNS Endpoints and Split Horizon
 
-### Enable DNSSEC Validation
+- dnsdist listens on every IP in `services.pdnsStack.routerIPs` (HOMELAB + LAN).
+- Requests for `jeandr.net` originating from `192.168.2.0/24` go to the HOMELAB authoritative pool.
+- Requests for the same zone from `192.168.3.0/24` go to the LAN authoritative pool.
+- Everything else is answered by the recursor, which forwards to the upstream resolvers list.
 
-```nix
-services.pdns-recursor = {
-  settings = {
-    dnssec = "validate";  # Enable full DNSSEC validation
-  };
-};
-```
+Verify behaviour:
 
-### Increase Performance
-
-```nix
-services.pdns-recursor = {
-  settings = {
-    threads = 4;  # More threads for high-traffic networks
-    max-cache-entries = 2000000;
-    max-tcp-clients = 128;
-    max-tcp-per-client = 10;
-  };
-};
-```
-
-### Custom Lua Scripting
-
-PowerDNS supports Lua scripts for advanced filtering/manipulation:
-
-```nix
-services.pdns-recursor = {
-  settings = {
-    lua-config-file = "/etc/powerdns/recursor.lua";
-  };
-};
-```
-
-Create `/etc/powerdns/recursor.lua`:
-```lua
-function preresolve(dq)
-  if dq.qname:equal("badsite.com") then
-    dq.rcode = pdns.NXDOMAIN
-    return true
-  end
-  return false
-end
+```bash
+dig @192.168.2.1 internal-host.jeandr.net
+dig @192.168.3.1 internal-host.jeandr.net
+dig @192.168.2.1 google.com
 ```
 
 ---
 
-## Backup and Restore
+## PowerDNS-Admin
 
-### Backup DNS Zones
+- URL: `http://router-ip:8080`
+- Default credentials: `admin` / `admin` (change immediately)
+- Configure the authoritative API endpoint in Settings → PDNS (`http://172.28.0.11:8081` with the HOMELAB API key).
+- Redis is preconfigured at `redis://redis:6379/0`.
+
+### Enabling additional APIs
+
+If PowerDNS-Admin should talk to the LAN authoritative instance, add it through the web UI using the LAN API key.
+
+---
+
+## Backups
+
+A simple backup routine:
 
 ```bash
-# Backup PowerDNS database
-sudo cp /var/lib/powerdns/pdns.sqlite3 /backup/pdns-$(date +%Y%m%d).sqlite3
+ENV_FILE=/var/lib/powerdns-admin/compose.env
+SQL_PASS=$(grep ^MYSQL_PASSWORD "$ENV_FILE" | cut -d= -f2)
 
-# Backup PowerDNS Admin data (Docker volume)
-sudo tar -czf /backup/powerdns-admin-$(date +%Y%m%d).tar.gz -C /var/lib powerdns-admin
+# Dump MariaDB
+docker exec -t mariadb \
+  mysqldump -u pdns -p"$SQL_PASS" powerdns powerdns_admin > /backup/powerdns-$(date +%Y%m%d).sql
+
+# Tar persistent directories
+sudo tar -czf /backup/powerdns-data-$(date +%Y%m%d).tar.gz \
+  -C /var/lib powerdns-mysql powerdns-admin
 ```
 
-### Restore DNS Zones
+Restore procedure:
 
 ```bash
-# Stop services
-sudo systemctl stop powerdns-admin-compose
+sudo systemctl stop pdns-stack
+sudo tar -xzf /backup/powerdns-data-YYYYMMDD.tar.gz -C /var/lib
 
-# Restore PowerDNS database
-sudo cp /backup/pdns-20250111.sqlite3 /var/lib/powerdns/pdns.sqlite3
-sudo chown powerdns:powerdns /var/lib/powerdns/pdns.sqlite3
+ENV_FILE=/var/lib/powerdns-admin/compose.env
+SQL_PASS=$(grep ^MYSQL_PASSWORD "$ENV_FILE" | cut -d= -f2)
 
-# Restore PowerDNS Admin data (Docker volume)
-sudo tar -xzf /backup/powerdns-admin-20250111.tar.gz -C /var/lib
+mysql -h 127.0.0.1 -P 3306 -u pdns -p"$SQL_PASS" \
+  powerdns < powerdns-YYYYMMDD.sql
+mysql -h 127.0.0.1 -P 3306 -u pdns -p"$SQL_PASS" \
+  powerdns_admin < powerdns-YYYYMMDD.sql
 
-# Start services
-sudo systemctl start powerdns-admin-compose
+sudo systemctl start pdns-stack
 ```
 
 ---
 
-## Managing PowerDNS Stack (Docker Compose)
+## Security Notes
 
-Both PowerDNS Authoritative and PowerDNS Admin run in Docker Compose. Manage them with standard `docker-compose` commands:
-
-### View the configuration
-
-```bash
-cat /etc/powerdns-admin/docker-compose.yml
-```
-
-### Check container status (both services)
-
-```bash
-cd /etc/powerdns-admin
-docker-compose ps
-```
-
-### View logs (all services)
-
-```bash
-cd /etc/powerdns-admin
-docker-compose logs -f
-```
-
-### Restart the stack
-
-```bash
-cd /etc/powerdns-admin
-docker-compose restart
-```
-
-### Stop the stack
-
-```bash
-cd /etc/powerdns-admin
-docker-compose down
-```
-
-### Pull latest images and restart
-
-```bash
-cd /etc/powerdns-admin
-docker-compose pull
-docker-compose up -d
-```
-
-### Or use systemd (recommended)
-
-```bash
-# Restart via systemd (manages the entire stack)
-sudo systemctl restart powerdns-admin-compose
-
-# Check status
-sudo systemctl status powerdns-admin-compose
-
-# View systemd logs
-sudo journalctl -u powerdns-admin-compose -f
-```
-
-**Data persistence**:
-- PowerDNS database: `/var/lib/powerdns/pdns.sqlite3`
-- PowerDNS Admin data: `/var/lib/powerdns-admin`
+- Replace all default passwords/API keys via `services.pdnsStack` or `compose.env`.
+- Restrict `routerIPs` to only the interfaces that should answer DNS (`br0`, `br1`, Tailscale, etc.).
+- Consider moving secrets into SOPS or another secret manager rather than hard-coding them in Nix.
+- dnsdist runs with `network_mode: host`; ensure only trusted images are used and host firewall rules allow the expected traffic (ports 53/udp+tcp, 8080, 8081).
 
 ---
 
-## Migration from Blocky
+## Troubleshooting Checklist
 
-If you're upgrading from a Blocky configuration:
+- `systemctl status pdns-stack` shows failure → inspect `journalctl -u pdns-stack`.
+- Containers not running → `./manage.sh ps` or `docker ps`.
+- API errors in PowerDNS-Admin → verify API key and URL (should match `pdns-auth-homelab`).
+- Split-horizon delivering wrong answers → inspect `/etc/pdns-stack/dnsdist/dnsdist.lua` and ensure subnets match actual DHCP ranges.
 
-1. **Automatic**: The recursor is configured with the same upstream servers (1.1.1.1, 8.8.8.8, 9.9.9.9)
-2. **Cache**: PowerDNS cache starts empty but fills quickly
-3. **No configuration changes needed**: DHCP already points clients to the router's IP for DNS
+For deeper PowerDNS configuration guidance, consult:
 
-The transition should be seamless!
-
----
-
-## See Also
-
-- [PowerDNS Recursor Documentation](https://doc.powerdns.com/recursor/)
 - [PowerDNS Authoritative Documentation](https://doc.powerdns.com/authoritative/)
-- [PowerDNS Admin GitHub](https://github.com/PowerDNS-Admin/PowerDNS-Admin)
-- [Monitoring Guide](monitoring.md)
-- [Troubleshooting Guide](troubleshooting.md)
-
+- [PowerDNS Recursor Documentation](https://doc.powerdns.com/recursor/)
+- [PowerDNS-Admin GitHub](https://github.com/PowerDNS-Admin/PowerDNS-Admin)
 

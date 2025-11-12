@@ -18,8 +18,7 @@ in
     
     # All modules are now organized in ./modules/
     ./modules/router.nix       # Router networking (WAN, LAN bridges, firewall, NAT)
-    ./modules/powerdns.nix     # DNS services (Recursor + Authoritative)
-    ./modules/powerdns-admin.nix # PowerDNS Admin UI (Docker Compose)
+    ./modules/pdns-stack.nix   # PowerDNS stack (dnsdist + pdns + recursor + admin via Docker)
     ./modules/dhcp.nix         # DHCP server (Kea)
     ./modules/users.nix        # User account management
     ./modules/secrets.nix      # Secrets management (sops-nix)
@@ -84,6 +83,11 @@ in
     curl           # Used by DynDNS timer (every 5 min) and health checks
     jq             # Used by DynDNS timer for JSON parsing
   ];
+
+  services.pdnsStack = ({ enable = true; } // (routerConfig.dns or {}));
+
+  networking.firewall.allowedUDPPorts = lib.mkAfter [ 53 ];
+  networking.firewall.allowedTCPPorts = lib.mkAfter [ 53 8080 8081 ];
 
   # Enable SSH for remote administration
   services.openssh.enable = true;

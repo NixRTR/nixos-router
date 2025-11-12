@@ -130,4 +130,16 @@
     # Update interval when WAN IP hasn't changed
     checkInterval = "5m";  # How often to check for IP changes
   };
+
+  # DNS stack configuration (dnsdist + PowerDNS + recursor + PowerDNS-Admin)
+  dns = {
+    enable = true;
+    routerIPs = [ "192.168.2.1" "192.168.3.1" ];
+    upstreamResolvers = [ "9.9.9.9" "1.1.1.1" ];
+    mariadbRootPassword = "replace-with-secure-root-pw";
+    pdnsDbPassword = "replace-with-secure-pdns-pw";
+    pdnsApiKeyHomelab = "replace-with-real-api-key-homelab";
+    pdnsApiKeyLan = "replace-with-real-api-key-lan";
+    powerdnsAdminSecret = "replace-with-secret";
+  };
 }
