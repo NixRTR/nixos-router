@@ -141,5 +141,6 @@
     pdnsApiKeyHomelab = "replace-with-real-api-key-homelab";
     pdnsApiKeyLan = "replace-with-real-api-key-lan";
     powerdnsAdminSecret = "replace-with-secret";
+    powerdnsAdminLanSecret = "replace-with-secret-lan";
   };
 }

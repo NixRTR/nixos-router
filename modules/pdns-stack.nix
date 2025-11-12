@@ -65,6 +65,12 @@ in
       default = "powerdns-admin-secret";
       description = "SECRET_KEY for the PowerDNS-Admin web UI.";
     };
+
+    powerdnsAdminLanSecret = lib.mkOption {
+      type = lib.types.str;
+      default = "powerdns-admin-lan-secret";
+      description = "SECRET_KEY for the LAN PowerDNS-Admin web UI.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -92,6 +98,7 @@ in
         "      MYSQL_PASSWORD: \"${cfg.pdnsDbPassword}\""
         "    volumes:"
         "      - mariadb-data:/var/lib/mysql"
+        "      - ./mariadb/init:/docker-entrypoint-initdb.d:ro"
         "    networks:"
         "      pdns-net:"
         "        ipv4_address: 172.28.0.20"
@@ -166,6 +173,26 @@ in
         "      pdns-net:"
         "        ipv4_address: 172.28.0.14"
         ""
+        "  powerdns-admin-lan:"
+        "    image: ngoduykhanh/powerdns-admin:latest"
+        "    ports:"
+        "      - 8081:80"
+        "    depends_on:"
+        "      - mariadb"
+        "    environment:"
+        "      - ADMIN_EMAIL=admin@example.local"
+        "      - SECRET_KEY=${cfg.powerdnsAdminLanSecret}"
+        "      - SQLA_DB_USER=pdns"
+        "      - SQLA_DB_PASSWORD=${cfg.pdnsDbPassword}"
+        "      - SQLA_DB_HOST=172.28.0.20"
+        "      - SQLA_DB_NAME=powerdns_admin_lan"
+        "      - REDIS_URL=redis://redis:6379/1"
+        "      - PDNS_API_URL=http://172.28.0.12:8082"
+        "      - PDNS_API_KEY=${cfg.pdnsApiKeyLan}"
+        "    networks:"
+        "      pdns-net:"
+        "        ipv4_address: 172.28.0.16"
+        ""
         "  dnsdist:"
         "    image: powerdns/dnsdist-21:latest"
         "    network_mode: host"
@@ -226,6 +253,14 @@ in
       '';
       mode = "0755";
     };
+
+    environment.etc."pdns-stack/mariadb/init/10-create-databases.sql".text = ''
+      CREATE DATABASE IF NOT EXISTS powerdns_admin_homelab;
+      CREATE DATABASE IF NOT EXISTS powerdns_admin_lan;
+      GRANT ALL PRIVILEGES ON powerdns_admin_homelab.* TO 'pdns'@'%';
+      GRANT ALL PRIVILEGES ON powerdns_admin_lan.* TO 'pdns'@'%';
+      FLUSH PRIVILEGES;
+    '';
 
     systemd.services.pdns-stack = {
       description = "PowerDNS docker-compose stack";

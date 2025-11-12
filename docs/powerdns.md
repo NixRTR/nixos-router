@@ -1,12 +1,12 @@
-## PowerDNS Stack Overview
+# PowerDNS Stack Overview
 
 The router now uses a fully containerized PowerDNS stack powered by Docker Compose and managed by the custom NixOS module `services.pdnsStack`. The stack includes:
 
 - `dnsdist` (host network) – terminates DNS queries on the router’s HOMELAB and LAN interfaces and routes them to the appropriate backend.
 - `pdns-auth-homelab` and `pdns-auth-lan` – two authoritative PowerDNS instances sharing a common MariaDB backend, allowing split-horizon records per network.
 - `pdns-recursor` – resolves Internet queries and forwards local zones back to the authoritative instances.
-- `powerdns-admin` – the web UI for managing zones and records.
-- `mariadb` + `redis` – databases required by the authoritative servers and PowerDNS-Admin.
+- `powerdns-admin` and `powerdns-admin-lan` – two PowerDNS-Admin instances (one per authoritative server).
+- `mariadb` + `redis` – shared database backend (multiple schemas/Redis DBs) used by the services.
 
 All compose files and support scripts are rendered to `/etc/pdns-stack/`, while persistent data is stored under `/var/lib/powerdns-*`.
 
@@ -26,6 +26,7 @@ dns = {
   pdnsApiKeyHomelab = "replace-with-real-api-key-homelab";
   pdnsApiKeyLan = "replace-with-real-api-key-lan";
   powerdnsAdminSecret = "replace-with-secret";
+  powerdnsAdminLanSecret = "replace-with-secret-lan";
 };
 ```
 
@@ -46,6 +47,7 @@ services.pdnsStack = {
   pdnsApiKeyHomelab = "replace-with-real-api-key-homelab";
   pdnsApiKeyLan = "replace-with-real-api-key-lan";
   powerdnsAdminSecret = "replace-with-secret";
+  powerdnsAdminLanSecret = "replace-with-secret-lan";
 };
 ```
 
@@ -69,7 +71,7 @@ sudo systemctl status pdns-stack
 | `/etc/pdns-stack/dnsdist/dnsdist.lua` | dnsdist configuration (binds to `services.pdnsStack.routerIPs`) |
 | `/etc/pdns-stack/manage.sh` | Convenience wrapper for `docker compose` |
 | `/var/lib/powerdns-mysql/` | MariaDB data files |
-| `/var/lib/powerdns-admin/` | PowerDNS-Admin data & secrets (`compose.env`) |
+| `/var/lib/powerdns-admin/` | PowerDNS-Admin data & secrets (`compose.env`, Redis dumps) |
 
 `compose.env` contains passwords and API keys rendered from the module options. Update this file carefully and restart the stack if you change any secrets.
 
@@ -127,16 +129,17 @@ dig @192.168.2.1 google.com
 
 ---
 
-## PowerDNS-Admin
+## PowerDNS-Admin UIs
 
-- URL: `http://router-ip:8080`
-- Default credentials: `admin` / `admin` (change immediately)
-- Configure the authoritative API endpoint in Settings → PDNS (`http://172.28.0.11:8081` with the HOMELAB API key).
-- Redis is preconfigured at `redis://redis:6379/0`.
+| Instance | URL | Purpose | Redis DB | MariaDB schema |
+| --- | --- | --- | --- | --- |
+| `powerdns-admin` | `http://router-ip:8080` | HOMELAB (`pdns-auth-homelab`) | `redis://redis:6379/0` | `powerdns_admin_homelab` |
+| `powerdns-admin-lan` | `http://router-ip:8081` | LAN (`pdns-auth-lan`) | `redis://redis:6379/1` | `powerdns_admin_lan` |
 
-### Enabling additional APIs
+Both UIs start with credentials `admin` / `admin`. Change them immediately, then confirm the PDNS API settings inside each interface:
 
-If PowerDNS-Admin should talk to the LAN authoritative instance, add it through the web UI using the LAN API key.
+- HOMELAB: `http://172.28.0.11:8081` with `services.pdnsStack.pdnsApiKeyHomelab`
+- LAN: `http://172.28.0.12:8082` with `services.pdnsStack.pdnsApiKeyLan`
 
 ---
 
@@ -150,7 +153,10 @@ SQL_PASS=$(grep ^MYSQL_PASSWORD "$ENV_FILE" | cut -d= -f2)
 
 # Dump MariaDB
 docker exec -t mariadb \
-  mysqldump -u pdns -p"$SQL_PASS" powerdns powerdns_admin > /backup/powerdns-$(date +%Y%m%d).sql
+  mysqldump -u pdns -p"$SQL_PASS" \
+    powerdns \
+    powerdns_admin_homelab \
+    powerdns_admin_lan > /backup/powerdns-$(date +%Y%m%d).sql
 
 # Tar persistent directories
 sudo tar -czf /backup/powerdns-data-$(date +%Y%m%d).tar.gz \
@@ -169,7 +175,9 @@ SQL_PASS=$(grep ^MYSQL_PASSWORD "$ENV_FILE" | cut -d= -f2)
 mysql -h 127.0.0.1 -P 3306 -u pdns -p"$SQL_PASS" \
   powerdns < powerdns-YYYYMMDD.sql
 mysql -h 127.0.0.1 -P 3306 -u pdns -p"$SQL_PASS" \
-  powerdns_admin < powerdns-YYYYMMDD.sql
+  powerdns_admin_homelab < powerdns-YYYYMMDD.sql
+mysql -h 127.0.0.1 -P 3306 -u pdns -p"$SQL_PASS" \
+  powerdns_admin_lan < powerdns-YYYYMMDD.sql
 
 sudo systemctl start pdns-stack
 ```
@@ -189,7 +197,7 @@ sudo systemctl start pdns-stack
 
 - `systemctl status pdns-stack` shows failure → inspect `journalctl -u pdns-stack`.
 - Containers not running → `./manage.sh ps` or `docker ps`.
-- API errors in PowerDNS-Admin → verify API key and URL (should match `pdns-auth-homelab`).
+- API errors in PowerDNS-Admin → verify API key and URL (HOMELAB → `pdns-auth-homelab`, LAN → `pdns-auth-lan`).
 - Split-horizon delivering wrong answers → inspect `/etc/pdns-stack/dnsdist/dnsdist.lua` and ensure subnets match actual DHCP ranges.
 
 For deeper PowerDNS configuration guidance, consult:
@@ -197,4 +205,3 @@ For deeper PowerDNS configuration guidance, consult:
 - [PowerDNS Authoritative Documentation](https://doc.powerdns.com/authoritative/)
 - [PowerDNS Recursor Documentation](https://doc.powerdns.com/recursor/)
 - [PowerDNS-Admin GitHub](https://github.com/PowerDNS-Admin/PowerDNS-Admin)
-
