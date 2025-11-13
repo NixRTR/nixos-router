@@ -24,9 +24,10 @@ Build and use our custom installation ISO with automated menu system:
    ```
 
 2. **Write to USB** and boot from it
-3. **Select installation option** from the automated menu
+3. **(Optional)** Add your `router-config.nix` to the USB's `/config/` directory for automated installation
+4. **Select installation option** from the automated menu
 
-The custom ISO includes everything needed for installation (no internet required during install) and supports automated installation with pre-configured `router-config.nix`.
+The custom ISO includes everything needed for installation (no internet required during install) and supports automated installation with pre-configured `router-config.nix` on the **same USB drive**!
 
 👉 **See [iso/README.md](iso/README.md)** for detailed build and usage instructions  
 👉 **On Windows/WSL?** See [iso/BUILD-ON-WSL.md](iso/BUILD-ON-WSL.md) for step-by-step guide

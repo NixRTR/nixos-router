@@ -2,6 +2,16 @@
 
 This directory contains everything needed to build a custom NixOS installation ISO specifically for the router project.
 
+## ⚡ Quick Reference
+
+**One USB Drive Setup:**
+1. Build ISO: `./build-iso.sh`
+2. Write to USB with Rufus/dd
+3. Re-mount USB and add your config: `/config/router-config.nix`
+4. Boot and select "Automated Installation"
+
+👉 **See [ADD-CONFIG-TO-USB.md](ADD-CONFIG-TO-USB.md) for detailed instructions**
+
 ## 🎯 Features
 
 The custom ISO provides:
@@ -115,25 +125,37 @@ diskutil eject /dev/diskN
 
 Perfect for rebuilds or multiple routers with the same configuration:
 
-1. **Prepare your configuration:**
+#### Option A: One USB Drive (Easiest!)
+
+1. **Write the ISO to USB** (using Rufus, dd, etc.)
+2. **Add your config to the USB:**
+   - Re-mount the USB drive
+   - Copy `router-config.nix` to `/config/router-config.nix` on the USB
+   - See [ADD-CONFIG-TO-USB.md](ADD-CONFIG-TO-USB.md) for detailed instructions
+3. **Boot from the USB**
+4. **Select "Automated Installation"** from the menu
+
+#### Option B: Two USB Drives (Traditional)
+
+1. **Prepare a second USB with your configuration:**
    ```bash
-   # Copy your working router-config.nix to a USB drive
+   # Copy your working router-config.nix to the root of a USB drive
    cp router-config.nix /path/to/usb/router-config.nix
    ```
-
 2. **Boot the target machine:**
    - Insert BOTH the installation ISO USB and the config USB
    - Boot from the installation ISO
    - The menu will automatically detect your `router-config.nix`
-
 3. **Select "Automated Installation"** from the menu
 
-4. **Wait for completion** - The installer will:
-   - Partition disks
-   - Install NixOS
-   - Apply your router configuration
-   - Set up secrets
-   - Reboot into your configured router
+#### What Happens During Automated Installation
+
+The installer will:
+- Partition disks
+- Install NixOS
+- Apply your router configuration
+- Set up secrets
+- Reboot into your configured router
 
 ### Guided Installation
 

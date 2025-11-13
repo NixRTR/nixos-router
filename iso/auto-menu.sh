@@ -52,9 +52,27 @@ log_error() {
 find_router_config() {
     local config_path=""
     
-    log_info "Scanning for USB drives with router-config.nix..."
+    log_info "Scanning for router-config.nix..."
     
-    # Look for mounted drives
+    # First, check the ISO itself (same USB drive as the boot media)
+    if [ -f "/iso/config/router-config.nix" ]; then
+        config_path="/iso/config/router-config.nix"
+        log_success "Found router-config.nix on boot USB: $config_path"
+        echo "$config_path"
+        return 0
+    fi
+    
+    # Also check /nix/store paths where ISO contents might be
+    for iso_path in /nix/store/*/iso/config/router-config.nix; do
+        if [ -f "$iso_path" ]; then
+            config_path="$iso_path"
+            log_success "Found router-config.nix on boot USB: $config_path"
+            echo "$config_path"
+            return 0
+        fi
+    done
+    
+    # Look for mounted drives (separate USB)
     for mount_point in /media/* /mnt/* /run/media/*; do
         if [ -f "$mount_point/router-config.nix" ]; then
             config_path="$mount_point/router-config.nix"

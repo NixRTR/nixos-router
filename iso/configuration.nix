@@ -51,6 +51,35 @@
     mode = "0755";
   };
 
+  # Create /config directory on the ISO for user configurations
+  # This allows users to add router-config.nix directly to the USB after writing
+  isoImage.contents = [
+    {
+      source = pkgs.writeTextFile {
+        name = "PLACE-CONFIG-HERE.txt";
+        text = ''
+          ═══════════════════════════════════════════════════════════
+           Place Your router-config.nix File Here
+          ═══════════════════════════════════════════════════════════
+
+          For automated installation with ONE USB drive:
+
+          1. Write this ISO to a USB drive
+          2. Re-mount the USB drive on your computer
+          3. Navigate to this /config/ directory
+          4. Copy your router-config.nix file here
+          5. Boot from the USB drive
+          6. The automated menu will detect your config!
+
+          File must be named exactly: router-config.nix
+
+          ═══════════════════════════════════════════════════════════
+        '';
+      };
+      target = "/config/PLACE-CONFIG-HERE.txt";
+    }
+  ];
+
   # Create a helpful README on the ISO
   environment.etc."nixos-router/README.txt" = {
     text = ''
@@ -69,12 +98,25 @@
       If you need to start it manually, run:
         $ sudo router-menu
 
-      AUTOMATED INSTALLATION:
-      ───────────────────────
+      AUTOMATED INSTALLATION (ONE USB DRIVE):
+      ───────────────────────────────────────
 
+      1. Write this ISO to a USB drive (using Rufus, dd, etc.)
+      2. Mount the USB drive on your computer
+      3. Copy your router-config.nix to: /config/router-config.nix
+      4. Unmount and boot from the USB
+      5. Select "Automated Installation" from the menu
+
+      The installer will detect your configuration from the
+      /config/ directory and proceed with minimal interaction.
+
+      AUTOMATED INSTALLATION (TWO USB DRIVES):
+      ────────────────────────────────────────
+
+      Alternatively, you can use a separate USB drive:
       1. Create a router-config.nix file with your settings
-      2. Copy it to the root of a USB drive
-      3. Boot from this ISO with the USB drive inserted
+      2. Copy it to the root of a second USB drive
+      3. Boot from this ISO with both USB drives inserted
       4. Select "Automated Installation" from the menu
 
       The installer will detect your configuration and proceed

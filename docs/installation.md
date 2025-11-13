@@ -49,10 +49,18 @@ Use Rufus (Windows), balenaEtcher, or `dd` (Linux/Mac) to write the ISO to a USB
 
 ### Boot and Install
 
-1. Boot your router hardware from the custom ISO
-2. The automated menu will start automatically
-3. Choose your installation option:
-   - **Automated** (if you have `router-config.nix` on a separate USB)
+1. **(Optional)** Add your `router-config.nix` to the ISO USB:
+   - After writing the ISO, re-mount the USB
+   - Copy `router-config.nix` to `/config/router-config.nix` on the USB
+   - See [../iso/ADD-CONFIG-TO-USB.md](../iso/ADD-CONFIG-TO-USB.md) for detailed steps
+   - This allows **one USB drive** for both ISO and config!
+
+2. Boot your router hardware from the custom ISO
+
+3. The automated menu will start automatically
+
+4. Choose your installation option:
+   - **Automated** (if you have `router-config.nix` on the USB)
    - **Guided** (interactive configuration)
 
 The menu system will handle everything else!
