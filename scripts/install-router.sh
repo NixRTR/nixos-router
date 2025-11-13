@@ -360,6 +360,12 @@ setup_router_config() {
   hostname = "$HOSTNAME";
   timezone = "$TIMEZONE";
   username = "routeradmin";
+  
+  # SSH authorized keys for the router admin user
+  sshKeys = [
+    # Add your SSH public keys here, one per line
+    # Example: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJbG... user@hostname"
+  ];
 
   # WAN configuration
   wan = {
@@ -429,6 +435,12 @@ EOF
   hostname = "$HOSTNAME";
   timezone = "$TIMEZONE";
   username = "routeradmin";
+  
+  # SSH authorized keys for the router admin user
+  sshKeys = [
+    # Add your SSH public keys here, one per line
+    # Example: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJbG... user@hostname"
+  ];
 
   # WAN configuration
   wan = {

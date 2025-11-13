@@ -62,6 +62,26 @@ username = "admin";
 
 The admin user for SSH and console access. Has passwordless sudo.
 
+### SSH Public Keys
+
+```nix
+sshKeys = [
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG... user@laptop"
+  "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC... user@desktop"
+];
+```
+
+Add your SSH public keys here for passwordless authentication. The router admin user will be able to login using these keys.
+
+**How to get your SSH public key:**
+- Linux/Mac: `cat ~/.ssh/id_ed25519.pub` or `cat ~/.ssh/id_rsa.pub`
+- Windows: `type %USERPROFILE%\.ssh\id_ed25519.pub` or use PuTTYgen to export
+
+**Generate a new key if needed:**
+```bash
+ssh-keygen -t ed25519 -C "your_email@example.com"
+```
+
 ---
 
 ## WAN Configuration

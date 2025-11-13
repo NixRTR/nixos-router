@@ -14,6 +14,7 @@ in
     description = "Router administrator";
     extraGroups = [ "wheel" "networkmanager" ];
     # Password is set via activation script from sops secrets
+    openssh.authorizedKeys.keys = routerConfig.sshKeys or [];
   };
 
   # Sudo without password for wheel group
