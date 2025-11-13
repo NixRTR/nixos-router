@@ -8,3 +8,7 @@ tests/windows/ISOs/
 tests/windows/VMs/
 tests/windows/*.vhdx
 tests/windows/*.vmcx
+
+# ISO build artifacts
+iso/result/
+iso/*.iso

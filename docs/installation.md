@@ -9,7 +9,57 @@ This guide covers installing the NixOS router from scratch.
 - USB drive with NixOS installer ISO
 - 15 minutes of time
 
-## Quick Install (Recommended)
+## Installation Methods
+
+You can install the router using either:
+
+1. **🎯 Custom ISO (Recommended)** - Pre-built ISO with automated menu system
+   - No internet required during installation
+   - Supports automated installation with pre-configured settings
+   - Includes all tools and scripts
+   - See [../iso/README.md](../iso/README.md) for build instructions
+
+2. **🌐 Online Installer** - Download and run installation script
+   - Requires internet connection during installation
+   - Smaller initial ISO download
+   - Always uses latest scripts
+
+Both methods result in the same router configuration. Choose based on your preference.
+
+---
+
+## Method 1: Custom ISO Installation
+
+### Build the Custom ISO
+
+From NixOS or NixOS WSL:
+
+```bash
+cd iso
+./build-iso.sh
+```
+
+**Detailed guides:**
+- General: [iso/README.md](../iso/README.md)
+- Windows/WSL: [iso/BUILD-ON-WSL.md](../iso/BUILD-ON-WSL.md)
+
+### Write ISO to USB
+
+Use Rufus (Windows), balenaEtcher, or `dd` (Linux/Mac) to write the ISO to a USB drive.
+
+### Boot and Install
+
+1. Boot your router hardware from the custom ISO
+2. The automated menu will start automatically
+3. Choose your installation option:
+   - **Automated** (if you have `router-config.nix` on a separate USB)
+   - **Guided** (interactive configuration)
+
+The menu system will handle everything else!
+
+---
+
+## Method 2: Online Installer (Quick Install)
 
 ### Step 1: Boot NixOS Installer
 

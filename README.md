@@ -13,7 +13,27 @@ A production-grade, declarative NixOS router configuration with enterprise-level
 
 ## 🚀 Quick Start
 
-Boot from NixOS installer ISO and run:
+### Option 1: Custom ISO (Recommended)
+
+Build and use our custom installation ISO with automated menu system:
+
+1. **Build the ISO** (from NixOS/NixOS WSL):
+   ```bash
+   cd iso
+   ./build-iso.sh
+   ```
+
+2. **Write to USB** and boot from it
+3. **Select installation option** from the automated menu
+
+The custom ISO includes everything needed for installation (no internet required during install) and supports automated installation with pre-configured `router-config.nix`.
+
+👉 **See [iso/README.md](iso/README.md)** for detailed build and usage instructions  
+👉 **On Windows/WSL?** See [iso/BUILD-ON-WSL.md](iso/BUILD-ON-WSL.md) for step-by-step guide
+
+### Option 2: Online Installer
+
+Boot from standard NixOS installer ISO and run:
 
 ```bash
 curl -fsSL https://beard.click/nixos-router > install.sh
