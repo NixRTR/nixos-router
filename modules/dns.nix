@@ -154,6 +154,11 @@ in
             do-udp: yes
             do-tcp: yes
             
+            # Disable chroot (we use systemd sandboxing instead)
+            chroot: ""
+            directory: "/var/lib/unbound/homelab"
+            pidfile: "/var/lib/unbound/homelab/unbound.pid"
+            
             # Cache settings
             cache-min-ttl: 3600
             cache-max-ttl: 86400
@@ -269,6 +274,11 @@ in
             do-ip6: yes
             do-udp: yes
             do-tcp: yes
+            
+            # Disable chroot (we use systemd sandboxing instead)
+            chroot: ""
+            directory: "/var/lib/unbound/lan"
+            pidfile: "/var/lib/unbound/lan/unbound.pid"
             
             # Cache settings
             cache-min-ttl: 3600
