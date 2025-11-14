@@ -198,12 +198,14 @@ in
           Restart = "on-failure";
           RestartSec = "5s";
           
+          # Automatically create /var/lib/unbound/homelab with proper permissions
+          StateDirectory = "unbound/homelab";
+          
           # Security hardening
           NoNewPrivileges = true;
           PrivateTmp = true;
           ProtectSystem = "strict";
           ProtectHome = true;
-          ReadWritePaths = [ "/var/lib/unbound/homelab" ];
           
           # Run as dedicated user
           User = "unbound";
@@ -309,12 +311,14 @@ in
           Restart = "on-failure";
           RestartSec = "5s";
           
+          # Automatically create /var/lib/unbound/lan with proper permissions
+          StateDirectory = "unbound/lan";
+          
           # Security hardening
           NoNewPrivileges = true;
           PrivateTmp = true;
           ProtectSystem = "strict";
           ProtectHome = true;
-          ReadWritePaths = [ "/var/lib/unbound/lan" ];
           
           # Run as dedicated user
           User = "unbound";
@@ -327,6 +331,9 @@ in
         description = "Update Unbound Blocklists for HOMELAB";
         serviceConfig = {
           Type = "oneshot";
+          StateDirectory = "unbound/homelab";
+          User = "unbound";
+          Group = "unbound";
           ExecStart = "${pkgs.writeShellScript "update-blocklists-homelab" ''
             #!/usr/bin/env bash
             set -e
@@ -367,6 +374,9 @@ in
         description = "Update Unbound Blocklists for LAN";
         serviceConfig = {
           Type = "oneshot";
+          StateDirectory = "unbound/lan";
+          User = "unbound";
+          Group = "unbound";
           ExecStart = "${pkgs.writeShellScript "update-blocklists-lan" ''
             #!/usr/bin/env bash
             set -e
