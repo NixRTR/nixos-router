@@ -70,15 +70,65 @@
     ipAddress = "192.168.2.1";
     subnet = "192.168.2.0/24";
     
-    # DNS settings
-    domain = "homelab.local";        # Your local domain name
-    primaryIP = "192.168.2.33";      # IP where *.homelab.local and homelab.local point to
-    
     # DHCP settings
     dhcp = {
       start = "192.168.2.100";
       end = "192.168.2.200";
       leaseTime = "24h";
+    };
+    
+    # DNS settings for this network
+    dns = {
+      # DNS A Records (hostname → IP address)
+      a_records = {
+        "homelab.local" = {
+          ip = "192.168.2.33";
+          comment = "Main homelab domain";
+        };
+        "router.homelab.local" = {
+          ip = "192.168.2.1";
+          comment = "Router address";
+        };
+        # Add more A records here:
+        # "server.homelab.local" = { ip = "192.168.2.50"; comment = "Main server"; };
+        # "nas.homelab.local" = { ip = "192.168.2.40"; comment = "NAS storage"; };
+      };
+      
+      # DNS CNAME Records (alias → canonical name)
+      cname_records = {
+        "*.homelab.local" = {
+          target = "homelab.local";
+          comment = "Wildcard for all subdomains";
+        };
+        # Add more CNAME records here:
+        # "www.homelab.local" = { target = "server.homelab.local"; comment = "Web server alias"; };
+      };
+      
+      # Blocklist configuration
+      blocklists = {
+        enable = true;  # Master switch - set to false to disable all blocking
+        
+        stevenblack = {
+          enable = true;
+          url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+          description = "Ads and malware blocking (250K+ domains)";
+          updateInterval = "24h";  # Optional: defaults to 24h if not set
+        };
+        
+        # Add more blocklists as needed:
+        # oisd = {
+        #   enable = false;
+        #   url = "https://small.oisd.nl/domainswild";
+        #   description = "Curated ads, tracking, and malware (100K+ domains)";
+        # };
+        # 
+        # phishing-army = {
+        #   enable = false;
+        #   url = "https://phishing.army/download/phishing_army_blocklist.txt";
+        #   description = "Phishing and scam protection";
+        #   updateInterval = "12h";  # More frequent updates for security
+        # };
+      };
     };
   };
   
@@ -88,15 +138,66 @@
     ipAddress = "192.168.3.1";
     subnet = "192.168.3.0/24";
     
-    # DNS settings
-    domain = "lan.local";            # Your local domain name
-    primaryIP = "192.168.3.1";       # IP where *.lan.local and lan.local point to
-    
     # DHCP settings
     dhcp = {
       start = "192.168.3.100";
       end = "192.168.3.200";
       leaseTime = "24h";
+    };
+    
+    # DNS settings for this network
+    dns = {
+      # DNS A Records (hostname → IP address)
+      a_records = {
+        "lan.local" = {
+          ip = "192.168.3.1";
+          comment = "Main LAN domain";
+        };
+        "router.lan.local" = {
+          ip = "192.168.3.1";
+          comment = "Router address";
+        };
+        # Add more A records here:
+        # "desktop.lan.local" = { ip = "192.168.3.50"; comment = "Desktop computer"; };
+        # "laptop.lan.local" = { ip = "192.168.3.51"; comment = "Laptop"; };
+      };
+      
+      # DNS CNAME Records (alias → canonical name)
+      cname_records = {
+        "*.lan.local" = {
+          target = "lan.local";
+          comment = "Wildcard for all subdomains";
+        };
+        # Add more CNAME records here:
+        # "www.lan.local" = { target = "router.lan.local"; comment = "Web interface alias"; };
+      };
+      
+      # Blocklist configuration
+      blocklists = {
+        enable = true;  # Master switch - set to false to disable all blocking
+        
+        stevenblack = {
+          enable = true;
+          url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+          description = "Ads and malware blocking (250K+ domains)";
+          # No updateInterval = defaults to 24h
+        };
+        
+        # Add more blocklists as needed:
+        # energized-blu = {
+        #   enable = false;
+        #   url = "https://block.energized.pro/blu/formats/hosts.txt";
+        #   description = "Balanced blocking (200K+ domains)";
+        #   updateInterval = "48h";
+        # };
+        # 
+        # adaway = {
+        #   enable = false;
+        #   url = "https://adaway.org/hosts.txt";
+        #   description = "Mobile-focused ad blocking";
+        #   updateInterval = "1w";  # Weekly updates
+        # };
+      };
     };
   };
 
@@ -146,67 +247,14 @@
     checkInterval = "5m";  # How often to check for IP changes
   };
 
-  # DNS configuration (Unbound)
+  # Global DNS configuration
   dns = {
     enable = true;
     
-    # Upstream DNS servers (with DNS-over-TLS support)
+    # Upstream DNS servers (shared by all networks)
     upstreamServers = [
       "1.1.1.1@853#cloudflare-dns.com"  # Cloudflare DNS over TLS
       "9.9.9.9@853#dns.quad9.net"        # Quad9 DNS over TLS
     ];
-    
-    # Blocklist settings
-    blocklist = {
-      enable = true;
-      
-      # Select which blocklists to use (set to true to enable)
-      lists = {
-        # StevenBlack's unified hosts (ads + malware) - Recommended
-        stevenblack = {
-          enable = true;
-          url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
-          description = "Ads and malware blocking (250K+ domains)";
-        };
-        
-        # OISD - Curated blocklist with low false positives
-        oisd = {
-          enable = false;
-          url = "https://small.oisd.nl/domainswild";
-          description = "Curated ads, tracking, and malware (100K+ domains)";
-        };
-        
-        # Energized Blu - Balanced protection
-        energized-blu = {
-          enable = false;
-          url = "https://block.energized.pro/blu/formats/hosts.txt";
-          description = "Balanced blocking (200K+ domains)";
-        };
-        
-        # AdAway - Mobile ad blocking
-        adaway = {
-          enable = false;
-          url = "https://adaway.org/hosts.txt";
-          description = "Mobile-focused ad blocking";
-        };
-        
-        # Phishing Army - Phishing protection
-        phishing-army = {
-          enable = false;
-          url = "https://phishing.army/download/phishing_army_blocklist.txt";
-          description = "Phishing and scam protection";
-        };
-        
-        # Add your own custom blocklist here:
-        # custom = {
-        #   enable = false;
-        #   url = "https://example.com/blocklist.txt";
-        #   description = "My custom blocklist";
-        # };
-      };
-      
-      # Update interval (systemd timer)
-      updateInterval = "24h";  # Daily updates
-    };
   };
 }

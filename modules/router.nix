@@ -546,7 +546,7 @@ in {
       };
 
       # CPU governor for performance
-      powerManagement.cpuFreqGovernor = "performance";
+      powerManagement.cpuFreqGovernor = "ondemand";
       
       # Enable kernel modules for BBR
       boot.kernelModules = [ "tcp_bbr" ];

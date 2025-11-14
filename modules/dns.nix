@@ -5,9 +5,29 @@ with lib;
 let
   routerConfig = import ../router-config.nix;
   
-  # Get enabled blocklists
-  enabledBlocklists = lib.filterAttrs (name: cfg: cfg.enable or false) (routerConfig.dns.blocklist.lists or {});
-  blocklistUrls = lib.mapAttrsToList (name: cfg: cfg.url) enabledBlocklists;
+  # Get network configs
+  homelabCfg = routerConfig.homelab;
+  lanCfg = routerConfig.lan;
+  
+  # Get DNS configs from each network
+  homelabDns = homelabCfg.dns or {};
+  lanDns = lanCfg.dns or {};
+  
+  # Get enabled blocklists for HOMELAB
+  homelabBlocklistsEnabled = homelabDns.blocklists.enable or false;
+  homelabBlocklistsRaw = homelabDns.blocklists or {};
+  homelabBlocklists = if homelabBlocklistsEnabled then
+    lib.filterAttrs (name: cfg: (name != "enable") && (cfg.enable or false)) homelabBlocklistsRaw
+  else {};
+  homelabBlocklistUrls = lib.mapAttrsToList (name: cfg: cfg.url) homelabBlocklists;
+  
+  # Get enabled blocklists for LAN
+  lanBlocklistsEnabled = lanDns.blocklists.enable or false;
+  lanBlocklistsRaw = lanDns.blocklists or {};
+  lanBlocklists = if lanBlocklistsEnabled then
+    lib.filterAttrs (name: cfg: (name != "enable") && (cfg.enable or false)) lanBlocklistsRaw
+  else {};
+  lanBlocklistUrls = lib.mapAttrsToList (name: cfg: cfg.url) lanBlocklists;
   
   # Helper to generate unbound configuration for a bridge
   mkUnboundInstance = bridgeName: bridgeCfg: {
@@ -78,10 +98,7 @@ in
   config = mkIf (routerConfig.dns.enable or true) {
     
     # Create unbound instances for each bridge
-    systemd.services = let
-      homelabCfg = routerConfig.homelab;
-      lanCfg = routerConfig.lan;
-    in {
+    systemd.services = {
       
       # Unbound for HOMELAB (br0)
       unbound-homelab = {
@@ -105,7 +122,7 @@ in
           ${concatMapStringsSep "\n" (url: ''
             echo "  - Downloading: ${url}"
             ${pkgs.curl}/bin/curl -s -f -L "${url}" >> /tmp/blocklist-homelab-combined.txt || echo "Warning: Failed to download ${url}"
-          '') blocklistUrls}
+          '') homelabBlocklistUrls}
           
           # Convert hosts file to unbound format
           if [ -s /tmp/blocklist-homelab-combined.txt ]; then
@@ -147,14 +164,17 @@ in
             hide-version: yes
             qname-minimisation: yes
             
-            # Local domain
-            private-domain: "${homelabCfg.domain}"
-            local-zone: "${homelabCfg.domain}." static
+            # DNS A Records
+            ${concatStringsSep "\n    " (lib.mapAttrsToList 
+              (name: record: "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}") 
+              (homelabDns.a_records or {})
+            )}
             
-            # DNS entries
-            local-data: "${homelabCfg.domain}. IN A ${homelabCfg.primaryIP}"
-            local-data: "*.${homelabCfg.domain}. IN A ${homelabCfg.primaryIP}"
-            local-data: "router.${homelabCfg.domain}. IN A ${homelabCfg.ipAddress}"
+            # DNS CNAME Records
+            ${concatStringsSep "\n    " (lib.mapAttrsToList 
+              (name: record: "local-data: \"${name}. IN CNAME ${record.target}.\"  # ${record.comment or ""}") 
+              (homelabDns.cname_records or {})
+            )}
             
             # Blocklist
             include: /var/lib/unbound/homelab/blocklist.conf
@@ -213,7 +233,7 @@ in
           ${concatMapStringsSep "\n" (url: ''
             echo "  - Downloading: ${url}"
             ${pkgs.curl}/bin/curl -s -f -L "${url}" >> /tmp/blocklist-lan-combined.txt || echo "Warning: Failed to download ${url}"
-          '') blocklistUrls}
+          '') lanBlocklistUrls}
           
           # Convert hosts file to unbound format
           if [ -s /tmp/blocklist-lan-combined.txt ]; then
@@ -255,14 +275,17 @@ in
             hide-version: yes
             qname-minimisation: yes
             
-            # Local domain
-            private-domain: "${lanCfg.domain}"
-            local-zone: "${lanCfg.domain}." static
+            # DNS A Records
+            ${concatStringsSep "\n    " (lib.mapAttrsToList 
+              (name: record: "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}") 
+              (lanDns.a_records or {})
+            )}
             
-            # DNS entries
-            local-data: "${lanCfg.domain}. IN A ${lanCfg.primaryIP}"
-            local-data: "*.${lanCfg.domain}. IN A ${lanCfg.primaryIP}"
-            local-data: "router.${lanCfg.domain}. IN A ${lanCfg.ipAddress}"
+            # DNS CNAME Records
+            ${concatStringsSep "\n    " (lib.mapAttrsToList 
+              (name: record: "local-data: \"${name}. IN CNAME ${record.target}.\"  # ${record.comment or ""}") 
+              (lanDns.cname_records or {})
+            )}
             
             # Blocklist
             include: /var/lib/unbound/lan/blocklist.conf
@@ -299,27 +322,25 @@ in
         };
       };
       
-      # Timer to update blocklists
-      unbound-blocklist-update = {
-        description = "Update Unbound Blocklists";
+      # Blocklist update service for HOMELAB
+      unbound-blocklist-update-homelab = {
+        description = "Update Unbound Blocklists for HOMELAB";
         serviceConfig = {
           Type = "oneshot";
-          ExecStart = "${pkgs.writeShellScript "update-blocklists" ''
+          ExecStart = "${pkgs.writeShellScript "update-blocklists-homelab" ''
             #!/usr/bin/env bash
             set -e
             
-            echo "=== Updating Unbound Blocklists ==="
-            
-            # Update HOMELAB blocklist
-            echo "Updating HOMELAB blocklist..."
+            echo "=== Updating HOMELAB Blocklists ==="
             > /tmp/blocklist-homelab-combined.txt
             
             ${concatMapStringsSep "\n" (url: ''
               echo "  - Downloading: ${url}"
               ${pkgs.curl}/bin/curl -s -f -L "${url}" >> /tmp/blocklist-homelab-combined.txt || echo "Warning: Failed to download ${url}"
-            '') blocklistUrls}
+            '') homelabBlocklistUrls}
             
             if [ -s /tmp/blocklist-homelab-combined.txt ]; then
+              echo "Processing blocklists..."
               ${pkgs.gawk}/bin/awk '/^(0\.0\.0\.0|127\.0\.0\.1)[[:space:]]/ {
                 if ($2 !~ /^(localhost|local|broadcasthost|ip6-)/) {
                   print "local-zone: \"" $2 ".\" always_nxdomain"
@@ -331,19 +352,35 @@ in
               
               mv /var/lib/unbound/homelab/blocklist.conf.new /var/lib/unbound/homelab/blocklist.conf
               rm /tmp/blocklist-homelab-combined.txt
-              systemctl reload-or-restart unbound-homelab
+              systemctl reload-or-restart unbound-homelab || true
+            else
+              echo "No blocklists downloaded for HOMELAB"
             fi
             
-            # Update LAN blocklist
-            echo "Updating LAN blocklist..."
+            echo "=== HOMELAB blocklist update completed ==="
+          ''}";
+        };
+      };
+      
+      # Blocklist update service for LAN
+      unbound-blocklist-update-lan = {
+        description = "Update Unbound Blocklists for LAN";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${pkgs.writeShellScript "update-blocklists-lan" ''
+            #!/usr/bin/env bash
+            set -e
+            
+            echo "=== Updating LAN Blocklists ==="
             > /tmp/blocklist-lan-combined.txt
             
             ${concatMapStringsSep "\n" (url: ''
               echo "  - Downloading: ${url}"
               ${pkgs.curl}/bin/curl -s -f -L "${url}" >> /tmp/blocklist-lan-combined.txt || echo "Warning: Failed to download ${url}"
-            '') blocklistUrls}
+            '') lanBlocklistUrls}
             
             if [ -s /tmp/blocklist-lan-combined.txt ]; then
+              echo "Processing blocklists..."
               ${pkgs.gawk}/bin/awk '/^(0\.0\.0\.0|127\.0\.0\.1)[[:space:]]/ {
                 if ($2 !~ /^(localhost|local|broadcasthost|ip6-)/) {
                   print "local-zone: \"" $2 ".\" always_nxdomain"
@@ -355,22 +392,35 @@ in
               
               mv /var/lib/unbound/lan/blocklist.conf.new /var/lib/unbound/lan/blocklist.conf
               rm /tmp/blocklist-lan-combined.txt
-              systemctl reload-or-restart unbound-lan
+              systemctl reload-or-restart unbound-lan || true
+            else
+              echo "No blocklists downloaded for LAN"
             fi
             
-            echo "=== Blocklist update completed ==="
+            echo "=== LAN blocklist update completed ==="
           ''}";
         };
       };
     };
     
-    # Timer for blocklist updates
-    systemd.timers.unbound-blocklist-update = {
-      description = "Update Unbound Blocklists";
+    # Timer for HOMELAB blocklist updates
+    systemd.timers.unbound-blocklist-update-homelab = mkIf homelabBlocklistsEnabled {
+      description = "Update Unbound Blocklists for HOMELAB";
       wantedBy = [ "timers.target" ];
       timerConfig = {
         OnBootSec = "5min";
-        OnUnitActiveSec = routerConfig.dns.blocklist.updateInterval or "24h";
+        OnUnitActiveSec = "24h";  # TODO: Use minimum of all blocklist intervals
+        Persistent = true;
+      };
+    };
+    
+    # Timer for LAN blocklist updates
+    systemd.timers.unbound-blocklist-update-lan = mkIf lanBlocklistsEnabled {
+      description = "Update Unbound Blocklists for LAN";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "5min";
+        OnUnitActiveSec = "24h";  # TODO: Use minimum of all blocklist intervals
         Persistent = true;
       };
     };

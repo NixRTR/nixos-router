@@ -208,24 +208,39 @@ homelab = {
   ipAddress = "192.168.2.1";
   subnet = "192.168.2.0/24";
   
-  # DNS settings
-  domain = "homelab.local";        # Your local domain name
-  primaryIP = "192.168.2.33";      # IP where *.homelab.local points to
-  
   # DHCP settings
   dhcp = {
     start = "192.168.2.100";
     end = "192.168.2.200";
     leaseTime = "24h";
   };
+  
+  # DNS settings for this network
+  dns = {
+    # DNS A Records
+    a_records = {
+      "homelab.local" = { ip = "192.168.2.33"; comment = "Main domain"; };
+      "router.homelab.local" = { ip = "192.168.2.1"; comment = "Router"; };
+    };
+    
+    # DNS CNAME Records
+    cname_records = {
+      "*.homelab.local" = { target = "homelab.local"; comment = "Wildcard"; };
+    };
+    
+    # Blocklists
+    blocklists = {
+      enable = true;
+      stevenblack = {
+        enable = true;
+        url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+        description = "Ads and malware blocking";
+        updateInterval = "24h";
+      };
+    };
+  };
 };
 ```
-
-#### DNS Entries Created
-
-- `homelab.local` → `192.168.2.33`
-- `*.homelab.local` → `192.168.2.33` (wildcard)
-- `router.homelab.local` → `192.168.2.1` (router itself)
 
 ### LAN Network
 
@@ -235,24 +250,120 @@ lan = {
   ipAddress = "192.168.3.1";
   subnet = "192.168.3.0/24";
   
-  # DNS settings
-  domain = "lan.local";            # Your local domain name
-  primaryIP = "192.168.3.1";       # IP where *.lan.local points to
-  
   # DHCP settings
   dhcp = {
     start = "192.168.3.100";
     end = "192.168.3.200";
     leaseTime = "24h";
   };
+  
+  # DNS settings for this network
+  dns = {
+    # DNS A Records
+    a_records = {
+      "jeandr.net" = { ip = "192.168.3.31"; comment = "Main domain"; };
+      "router.jeandr.net" = { ip = "192.168.3.1"; comment = "Router"; };
+    };
+    
+    # DNS CNAME Records
+    cname_records = {
+      "*.jeandr.net" = { target = "jeandr.net"; comment = "Wildcard"; };
+    };
+    
+    # Blocklists (different from homelab)
+    blocklists = {
+      enable = true;
+      stevenblack = {
+        enable = true;
+        url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+        description = "Ads and malware blocking";
+      };
+      energized-blu = {
+        enable = true;
+        url = "https://block.energized.pro/blu/formats/hosts.txt";
+        description = "Balanced blocking";
+        updateInterval = "48h";
+      };
+    };
+  };
 };
 ```
 
-#### DNS Entries Created
+### Advanced DNS Examples
 
-- `lan.local` → `192.168.3.1`
-- `*.lan.local` → `192.168.3.1` (wildcard)
-- `router.lan.local` → `192.168.3.1` (router itself)
+#### Using Real Domains
+
+You can use real domains you own:
+
+```nix
+lan = {
+  ipAddress = "192.168.3.1";
+  subnet = "192.168.3.0/24";
+  
+  dns = {
+    a_records = {
+      "jeandr.net" = { ip = "192.168.3.31"; comment = "Main domain"; };
+      "router.jeandr.net" = { ip = "192.168.3.1"; comment = "Router"; };
+      "server.jeandr.net" = { ip = "192.168.3.50"; comment = "Server"; };
+    };
+    
+    cname_records = {
+      "*.jeandr.net" = { target = "jeandr.net"; comment = "Wildcard"; };
+      "www.jeandr.net" = { target = "server.jeandr.net"; comment = "Web"; };
+    };
+  };
+};
+```
+
+#### Multiple Aliases
+
+Create multiple CNAME aliases pointing to the same host:
+
+```nix
+homelab = {
+  dns = {
+    a_records = {
+      "server.homelab.local" = { ip = "192.168.2.50"; comment = "Main server"; };
+    };
+    
+    cname_records = {
+      "www.homelab.local" = { target = "server.homelab.local"; comment = "Web"; };
+      "app.homelab.local" = { target = "server.homelab.local"; comment = "Application"; };
+      "api.homelab.local" = { target = "server.homelab.local"; comment = "API"; };
+    };
+  };
+};
+```
+
+All three aliases (`www`, `app`, `api`) will resolve to the same IP (192.168.2.50).
+
+#### Master Blocklist Switch
+
+Quickly disable all blocking for a network:
+
+```nix
+homelab = {
+  dns = {
+    blocklists = {
+      enable = false;  # Disable ALL blocking
+      
+      # Lists remain defined and ready to re-enable
+      stevenblack = { enable = true; url = "..."; };
+    };
+  };
+};
+```
+
+#### Benefits of This Approach
+
+✅ **Self-contained** - Each network's complete DNS config in one place  
+✅ **Independent** - HOMELAB and LAN don't affect each other  
+✅ **Clear structure** - Easy to see all DNS records at a glance  
+✅ **Self-documenting** - Comments explain what each record is for  
+✅ **Type-safe** - NixOS validates the structure  
+✅ **Full domain names** - Use any domain you want, not just subdomains  
+✅ **Flexible** - Mix A and CNAME records as needed  
+✅ **Version controlled** - All DNS in one config file  
 
 ### DHCP Lease Time
 
@@ -268,81 +379,164 @@ Supported formats:
 
 The router runs **Unbound** DNS resolver with ad-blocking and malware protection.
 
+DNS configuration is **per-network** - each network (HOMELAB and LAN) has its own DNS settings, allowing complete independence:
+
 ```nix
+# Global DNS settings
 dns = {
   enable = true;
-  
-  # Upstream DNS servers (with DNS-over-TLS support)
   upstreamServers = [
-    "1.1.1.1@853#cloudflare-dns.com"  # Cloudflare DNS over TLS
-    "9.9.9.9@853#dns.quad9.net"        # Quad9 DNS over TLS
+    "1.1.1.1@853#cloudflare-dns.com"
+    "9.9.9.9@853#dns.quad9.net"
   ];
+};
+
+# HOMELAB DNS configuration
+homelab = {
+  ipAddress = "192.168.2.1";
+  subnet = "192.168.2.0/24";
   
-  # Blocklist settings
-  blocklist = {
-    enable = true;
-    # Uses StevenBlack's unified hosts list (ads + malware)
-    # Updates daily via systemd timer
+  dns = {
+    a_records = {
+      "homelab.local" = { ip = "192.168.2.33"; comment = "Main domain"; };
+      "router.homelab.local" = { ip = "192.168.2.1"; comment = "Router"; };
+      "server.homelab.local" = { ip = "192.168.2.50"; comment = "Server"; };
+    };
+    
+    cname_records = {
+      "*.homelab.local" = { target = "homelab.local"; comment = "Wildcard"; };
+      "www.homelab.local" = { target = "server.homelab.local"; comment = "Web"; };
+    };
+    
+    blocklists = {
+      enable = true;
+      stevenblack = {
+        enable = true;
+        url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+        description = "Ads and malware";
+        updateInterval = "24h";
+      };
+    };
+  };
+};
+
+# LAN DNS configuration
+lan = {
+  ipAddress = "192.168.3.1";
+  subnet = "192.168.3.0/24";
+  
+  dns = {
+    a_records = {
+      "lan.local" = { ip = "192.168.3.1"; comment = "Main domain"; };
+      "router.lan.local" = { ip = "192.168.3.1"; comment = "Router"; };
+    };
+    
+    cname_records = {
+      "*.lan.local" = { target = "lan.local"; comment = "Wildcard"; };
+    };
+    
+    blocklists = {
+      enable = true;
+      stevenblack = {
+        enable = true;
+        url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+        description = "Ads and malware";
+      };
+      energized-blu = {
+        enable = true;
+        url = "https://block.energized.pro/blu/formats/hosts.txt";
+        description = "Balanced blocking";
+        updateInterval = "48h";
+      };
+    };
   };
 };
 ```
 
+### DNS Record Types
+
+**A Records** - Map hostnames to IP addresses:
+- Use the full domain name as the key
+- Specify the IP address
+- Add comments for documentation
+
+**CNAME Records** - Create aliases:
+- Point one domain to another
+- Use for wildcards (e.g., `*.homelab.local`)
+- Use for convenient aliases (e.g., `www` → `server`)
+
+### Example DNS Resolution
+
+From the config above:
+- `homelab.local` → `192.168.2.33` (A record)
+- `server.homelab.local` → `192.168.2.50` (A record)
+- `www.homelab.local` → `server.homelab.local` → `192.168.2.50` (CNAME → A)
+- `anything.homelab.local` → `homelab.local` → `192.168.2.33` (wildcard CNAME → A)
+
 ### Features
 
-- **Separate DNS instances** for HOMELAB and LAN networks
-- **Local domain resolution** with wildcard support
-- **Ad-blocking** via daily-updated blocklists (StevenBlack hosts)
-- **Privacy** via DNS-over-TLS to upstream servers
-- **DNSSEC validation** for security
-- **Caching** for faster responses
+- **Per-network DNS configuration** - Each network has its own independent DNS settings
+- **Separate DNS instances** - HOMELAB and LAN run isolated Unbound resolvers
+- **Local domain resolution** - Full support for A and CNAME records with wildcards
+- **Independent blocklists** - Each network can have different ad-blocking lists
+- **Per-blocklist update intervals** - Control how often each list updates
+- **Master enable switch** - Disable all blocking for a network with one flag
+- **Privacy** - DNS-over-TLS to upstream servers (Cloudflare, Quad9)
+- **DNSSEC validation** - Built-in security
+- **Caching** - Faster DNS responses
 
 ### Blocklist Configuration
 
-You can enable/disable different blocklists in `router-config.nix`:
+Each network has its own blocklist configuration:
 
 ```nix
-dns = {
-  blocklist = {
-    enable = true;
-    
-    lists = {
-      # StevenBlack - Recommended, balanced protection
+homelab = {
+  dns = {
+    blocklists = {
+      enable = true;  # Master switch
+      
       stevenblack = {
         enable = true;
         url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
         description = "Ads and malware blocking (250K+ domains)";
+        updateInterval = "24h";  # Optional: defaults to 24h
       };
       
-      # OISD - Low false positives
-      oisd = {
-        enable = false;
-        url = "https://small.oisd.nl/domainswild";
-        description = "Curated ads, tracking, and malware (100K+ domains)";
-      };
-      
-      # Energized Blu - More aggressive
-      energized-blu = {
-        enable = false;
-        url = "https://block.energized.pro/blu/formats/hosts.txt";
-        description = "Balanced blocking (200K+ domains)";
-      };
-      
-      # AdAway - Mobile-focused
-      adaway = {
-        enable = false;
-        url = "https://adaway.org/hosts.txt";
-        description = "Mobile-focused ad blocking";
-      };
-      
-      # Phishing Army - Security
       phishing-army = {
-        enable = false;
+        enable = true;
         url = "https://phishing.army/download/phishing_army_blocklist.txt";
         description = "Phishing and scam protection";
+        updateInterval = "12h";  # More frequent for security
       };
     };
-    
-    updateInterval = "24h";  # How often to update
+  };
+};
+
+lan = {
+  dns = {
+    blocklists = {
+      enable = true;  # Master switch
+      
+      stevenblack = {
+        enable = true;
+        url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+        description = "Ads and malware blocking";
+      };
+      
+      energized-blu = {
+        enable = true;
+        url = "https://block.energized.pro/blu/formats/hosts.txt";
+        description = "Balanced blocking (200K+ domains)";
+        updateInterval = "48h";  # Less frequent
+      };
+      
+      adaway = {
+        enable = true;
+        url = "https://adaway.org/hosts.txt";
+        description = "Mobile ad blocking";
+        updateInterval = "1w";  # Weekly
+      };
+    };
   };
 };
 ```
