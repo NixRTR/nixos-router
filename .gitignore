@@ -12,3 +12,8 @@ tests/windows/*.vmcx
 # ISO build artifacts
 iso/result/
 iso/*.iso
+
+# Config files
+configs
+configs/*
+configs/*/*
