@@ -64,30 +64,39 @@
     ];
   };
 
-  # DHCP configuration - per network
-  dhcp = {
-    # HOMELAB (br0 - 192.168.2.0/24)
-    homelab = {
-      interface = "br0";
-      network = "192.168.2.0";
-      prefix = 24;
+  # HOMELAB network configuration
+  homelab = {
+    # Network settings
+    ipAddress = "192.168.2.1";
+    subnet = "192.168.2.0/24";
+    
+    # DNS settings
+    domain = "homelab.local";        # Your local domain name
+    primaryIP = "192.168.2.33";      # IP where *.homelab.local and homelab.local point to
+    
+    # DHCP settings
+    dhcp = {
       start = "192.168.2.100";
       end = "192.168.2.200";
       leaseTime = "24h";
-      gateway = "192.168.2.1";
-      dns = "192.168.2.1";
     };
+  };
+  
+  # LAN network configuration
+  lan = {
+    # Network settings
+    ipAddress = "192.168.3.1";
+    subnet = "192.168.3.0/24";
     
-    # LAN (br1 - 192.168.3.0/24)
-    lan = {
-      interface = "br1";
-      network = "192.168.3.0";
-      prefix = 24;
+    # DNS settings
+    domain = "lan.local";            # Your local domain name
+    primaryIP = "192.168.3.1";       # IP where *.lan.local and lan.local point to
+    
+    # DHCP settings
+    dhcp = {
       start = "192.168.3.100";
       end = "192.168.3.200";
       leaseTime = "24h";
-      gateway = "192.168.3.1";
-      dns = "192.168.3.1";
     };
   };
 
@@ -137,16 +146,67 @@
     checkInterval = "5m";  # How often to check for IP changes
   };
 
-  # DNS stack configuration (dnsdist + PowerDNS + recursor + PowerDNS-Admin)
+  # DNS configuration (Unbound)
   dns = {
     enable = true;
-    routerIPs = [ "192.168.2.1" "192.168.3.1" ];
-    upstreamResolvers = [ "9.9.9.9" "1.1.1.1" ];
-    mariadbRootPassword = "replace-with-secure-root-pw";
-    pdnsDbPassword = "replace-with-secure-pdns-pw";
-    pdnsApiKeyHomelab = "replace-with-real-api-key-homelab";
-    pdnsApiKeyLan = "replace-with-real-api-key-lan";
-    powerdnsAdminSecret = "replace-with-secret";
-    powerdnsAdminLanSecret = "replace-with-secret-lan";
+    
+    # Upstream DNS servers (with DNS-over-TLS support)
+    upstreamServers = [
+      "1.1.1.1@853#cloudflare-dns.com"  # Cloudflare DNS over TLS
+      "9.9.9.9@853#dns.quad9.net"        # Quad9 DNS over TLS
+    ];
+    
+    # Blocklist settings
+    blocklist = {
+      enable = true;
+      
+      # Select which blocklists to use (set to true to enable)
+      lists = {
+        # StevenBlack's unified hosts (ads + malware) - Recommended
+        stevenblack = {
+          enable = true;
+          url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+          description = "Ads and malware blocking (250K+ domains)";
+        };
+        
+        # OISD - Curated blocklist with low false positives
+        oisd = {
+          enable = false;
+          url = "https://small.oisd.nl/domainswild";
+          description = "Curated ads, tracking, and malware (100K+ domains)";
+        };
+        
+        # Energized Blu - Balanced protection
+        energized-blu = {
+          enable = false;
+          url = "https://block.energized.pro/blu/formats/hosts.txt";
+          description = "Balanced blocking (200K+ domains)";
+        };
+        
+        # AdAway - Mobile ad blocking
+        adaway = {
+          enable = false;
+          url = "https://adaway.org/hosts.txt";
+          description = "Mobile-focused ad blocking";
+        };
+        
+        # Phishing Army - Phishing protection
+        phishing-army = {
+          enable = false;
+          url = "https://phishing.army/download/phishing_army_blocklist.txt";
+          description = "Phishing and scam protection";
+        };
+        
+        # Add your own custom blocklist here:
+        # custom = {
+        #   enable = false;
+        #   url = "https://example.com/blocklist.txt";
+        #   description = "My custom blocklist";
+        # };
+      };
+      
+      # Update interval (systemd timer)
+      updateInterval = "24h";  # Daily updates
+    };
   };
 }

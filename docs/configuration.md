@@ -196,52 +196,63 @@ See [Network Isolation](isolation.md) for detailed multi-LAN setup.
 
 ---
 
-## DHCP Configuration
+## Network Configuration (HOMELAB and LAN)
 
-### Single Network
+Each network has its own configuration including IP addressing, DNS domain, and DHCP settings.
 
-```nix
-dhcp = {
-  homelab = {
-    interface = "br0";
-    network = "192.168.1.0";
-    prefix = 24;
-    start = "192.168.1.100";
-    end = "192.168.1.200";
-    leaseTime = "24h";
-    gateway = "192.168.1.1";
-    dns = "192.168.1.1";
-  };
-};
-```
-
-### Multiple Networks
+### HOMELAB Network
 
 ```nix
-dhcp = {
-  homelab = {
-    interface = "br0";
-    network = "192.168.2.0";
-    prefix = 24;
+homelab = {
+  # Network settings
+  ipAddress = "192.168.2.1";
+  subnet = "192.168.2.0/24";
+  
+  # DNS settings
+  domain = "homelab.local";        # Your local domain name
+  primaryIP = "192.168.2.33";      # IP where *.homelab.local points to
+  
+  # DHCP settings
+  dhcp = {
     start = "192.168.2.100";
     end = "192.168.2.200";
     leaseTime = "24h";
-    gateway = "192.168.2.1";
-    dns = "192.168.2.1";
-  };
-  
-  lan = {
-    interface = "br1";
-    network = "192.168.3.0";
-    prefix = 24;
-    start = "192.168.3.100";
-    end = "192.168.3.200";
-    leaseTime = "12h";
-    gateway = "192.168.3.1";
-    dns = "192.168.3.1";
   };
 };
 ```
+
+#### DNS Entries Created
+
+- `homelab.local` → `192.168.2.33`
+- `*.homelab.local` → `192.168.2.33` (wildcard)
+- `router.homelab.local` → `192.168.2.1` (router itself)
+
+### LAN Network
+
+```nix
+lan = {
+  # Network settings
+  ipAddress = "192.168.3.1";
+  subnet = "192.168.3.0/24";
+  
+  # DNS settings
+  domain = "lan.local";            # Your local domain name
+  primaryIP = "192.168.3.1";       # IP where *.lan.local points to
+  
+  # DHCP settings
+  dhcp = {
+    start = "192.168.3.100";
+    end = "192.168.3.200";
+    leaseTime = "24h";
+  };
+};
+```
+
+#### DNS Entries Created
+
+- `lan.local` → `192.168.3.1`
+- `*.lan.local` → `192.168.3.1` (wildcard)
+- `router.lan.local` → `192.168.3.1` (router itself)
 
 ### DHCP Lease Time
 
@@ -250,6 +261,139 @@ Supported formats:
 - `"60m"` - Minutes
 - `"24h"` - Hours
 - `"7d"` - Days
+
+---
+
+## DNS Configuration
+
+The router runs **Unbound** DNS resolver with ad-blocking and malware protection.
+
+```nix
+dns = {
+  enable = true;
+  
+  # Upstream DNS servers (with DNS-over-TLS support)
+  upstreamServers = [
+    "1.1.1.1@853#cloudflare-dns.com"  # Cloudflare DNS over TLS
+    "9.9.9.9@853#dns.quad9.net"        # Quad9 DNS over TLS
+  ];
+  
+  # Blocklist settings
+  blocklist = {
+    enable = true;
+    # Uses StevenBlack's unified hosts list (ads + malware)
+    # Updates daily via systemd timer
+  };
+};
+```
+
+### Features
+
+- **Separate DNS instances** for HOMELAB and LAN networks
+- **Local domain resolution** with wildcard support
+- **Ad-blocking** via daily-updated blocklists (StevenBlack hosts)
+- **Privacy** via DNS-over-TLS to upstream servers
+- **DNSSEC validation** for security
+- **Caching** for faster responses
+
+### Blocklist Configuration
+
+You can enable/disable different blocklists in `router-config.nix`:
+
+```nix
+dns = {
+  blocklist = {
+    enable = true;
+    
+    lists = {
+      # StevenBlack - Recommended, balanced protection
+      stevenblack = {
+        enable = true;
+        url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+        description = "Ads and malware blocking (250K+ domains)";
+      };
+      
+      # OISD - Low false positives
+      oisd = {
+        enable = false;
+        url = "https://small.oisd.nl/domainswild";
+        description = "Curated ads, tracking, and malware (100K+ domains)";
+      };
+      
+      # Energized Blu - More aggressive
+      energized-blu = {
+        enable = false;
+        url = "https://block.energized.pro/blu/formats/hosts.txt";
+        description = "Balanced blocking (200K+ domains)";
+      };
+      
+      # AdAway - Mobile-focused
+      adaway = {
+        enable = false;
+        url = "https://adaway.org/hosts.txt";
+        description = "Mobile-focused ad blocking";
+      };
+      
+      # Phishing Army - Security
+      phishing-army = {
+        enable = false;
+        url = "https://phishing.army/download/phishing_army_blocklist.txt";
+        description = "Phishing and scam protection";
+      };
+    };
+    
+    updateInterval = "24h";  # How often to update
+  };
+};
+```
+
+**Popular Blocklists:**
+
+| List | Domains | Focus | False Positives |
+|------|---------|-------|-----------------|
+| **StevenBlack** | ~250K | Ads + Malware | Low |
+| **OISD** | ~100K | Curated | Very Low |
+| **Energized Blu** | ~200K | Balanced | Medium |
+| **AdAway** | ~50K | Mobile Ads | Low |
+| **Phishing Army** | ~20K | Security | Very Low |
+
+**Tips:**
+- Enable multiple lists for better coverage
+- Lists are combined and deduplicated automatically
+- More lists = more blocking, but slightly higher chance of false positives
+- Start with StevenBlack, add others as needed
+
+### Custom Blocklists
+
+Add your own custom blocklist:
+
+```nix
+dns = {
+  blocklist = {
+    lists = {
+      custom = {
+        enable = true;
+        url = "https://example.com/my-blocklist.txt";
+        description = "My custom blocklist";
+      };
+    };
+  };
+};
+```
+
+Blocklist formats supported:
+- Hosts file format (`0.0.0.0 domain.com`)
+- Domain list format (one domain per line)
+
+### Upstream DNS Options
+
+Popular options:
+- `1.1.1.1@853#cloudflare-dns.com` - Cloudflare (fast, privacy-focused)
+- `9.9.9.9@853#dns.quad9.net` - Quad9 (security-focused, blocks malware)
+- `8.8.8.8@853#dns.google` - Google DNS (fast, reliable)
+- `208.67.222.222@853#resolver1.opendns.com` - OpenDNS
+
+The `@853#hostname` enables DNS-over-TLS for encrypted queries.
 
 ---
 

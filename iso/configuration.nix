@@ -12,6 +12,14 @@
   # Make the ISO bootable on both UEFI and BIOS
   isoImage.makeEfiBootable = true;
   isoImage.makeUsbBootable = true;
+  
+  # Add kernel parameters for better boot compatibility
+  # Note: Ventoy has known compatibility issues with NixOS ISOs
+  # Recommend using direct write (dd/Rufus) instead of Ventoy
+  boot.kernelParams = [
+    "console=tty1"
+    "console=ttyS0,115200n8"  # Serial console support
+  ];
 
   # Branding
   system.stateVersion = "25.05";

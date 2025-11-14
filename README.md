@@ -51,7 +51,7 @@ The installer will guide you through:
 This router is built with a clean modular design. All functionality is organized into focused modules:
 
 - **`router.nix`** - Core networking (WAN, LAN bridges, firewall, NAT)
-- **`powerdns.nix`** - DNS services (Recursor, Authoritative, Admin UI)
+- **`dns.nix`** - DNS services (Unbound with ad-blocking)
 - **`dhcp.nix`** - DHCP server (ISC Kea)
 - **`dashboard.nix`** - Monitoring (Grafana, Prometheus)
 - **`users.nix`** - User account management
@@ -66,7 +66,7 @@ Complete documentation is available in the [`docs/`](docs/) directory:
 
 - **[Installation Guide](docs/installation.md)** - Install and initial setup
 - **[Configuration Guide](docs/configuration.md)** - Configure networks, DHCP, and services
-- **[PowerDNS Guide](docs/powerdns.md)** - DNS management and PowerDNS Admin interface
+- **[DNS Configuration](docs/configuration.md#dns-configuration)** - DNS, local domains, and ad-blocking
 - **[Network Isolation](docs/isolation.md)** - Multi-LAN setup and access control
 - **[Monitoring](docs/monitoring.md)** - Grafana dashboard and metrics
 - **[Optional Features](docs/optional-features.md)** - Dynamic DNS, VPN, and more
@@ -84,7 +84,8 @@ Internet ──▶ [WAN] ──▶ [Router/Firewall] ──┬──▶ [br0] HO
 
 - **Isolated networks** with firewall protection between segments
 - **Dual DHCP servers** for automatic IP assignment
-- **PowerDNS** - Caching resolver + authoritative server with web admin interface
+- **Unbound DNS** - Recursive resolver with ad-blocking, DNSSEC, and DNS-over-TLS
+- **Local domain support** - Wildcard DNS for local services (*.homelab.local)
 - **NAT and port forwarding** for external access
 - **Real-time monitoring** via Grafana + Prometheus
 

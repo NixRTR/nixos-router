@@ -45,7 +45,15 @@ cd iso
 
 ### Write ISO to USB
 
-Use Rufus (Windows), balenaEtcher, or `dd` (Linux/Mac) to write the ISO to a USB drive.
+⚠️ **IMPORTANT:** Use direct write methods only. **Do NOT use Ventoy!** 
+
+Ventoy has known compatibility issues with NixOS ISOs that cause blank screen on boot. Use one of these methods instead:
+
+**Windows:** Use [Rufus](https://rufus.ie/) in **DD Image mode**  
+**Linux/Mac:** Use `dd` command  
+**All Platforms:** Use [balenaEtcher](https://www.balena.io/etcher/)
+
+See [../iso/VENTOY-COMPATIBILITY.md](../iso/VENTOY-COMPATIBILITY.md) for details.
 
 ### Boot and Install
 

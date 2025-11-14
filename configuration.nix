@@ -18,7 +18,7 @@ in
     
     # All modules are now organized in ./modules/
     ./modules/router.nix       # Router networking (WAN, LAN bridges, firewall, NAT)
-    ./modules/pdns-stack.nix   # PowerDNS stack (dnsdist + pdns + recursor + admin via Docker)
+    ./modules/dns.nix          # DNS server (Unbound with blocklists)
     ./modules/dhcp.nix         # DHCP server (Kea)
     ./modules/users.nix        # User account management
     ./modules/secrets.nix      # Secrets management (sops-nix)
@@ -84,10 +84,8 @@ in
     jq             # Used by DynDNS timer for JSON parsing
   ];
 
-  services.pdnsStack = ({ enable = true; } // (routerConfig.dns or {}));
-
-  networking.firewall.allowedUDPPorts = lib.mkAfter [ 53 ];
-  networking.firewall.allowedTCPPorts = lib.mkAfter [ 53 8080 8081 ];
+  # DNS is configured via modules/dns.nix (reads from routerConfig.dns)
+  # Firewall rules for DNS (port 53) are handled by the DNS module
 
   # Enable SSH for remote administration
   services.openssh.enable = true;

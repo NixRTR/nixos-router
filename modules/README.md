@@ -20,18 +20,21 @@ This directory contains modular components of the NixOS router configuration. Ea
 - Enables NAT for internet access
 - Configures hardware offloading and TCP optimizations
 
-### `powerdns.nix`
-**DNS Services**
-- PowerDNS Recursor: Recursive DNS resolver with caching
-- PowerDNS Authoritative: Local zone management
-- PowerDNS Admin: Web interface for DNS management (port 9191)
-- Automated initialization and password synchronization
+### `dns.nix`
+**DNS Services (Unbound)**
+- Recursive DNS resolver with caching
+- Ad-blocking and malware protection via blocklists
+- Local domain support with wildcard DNS
+- DNSSEC validation
+- DNS-over-TLS for privacy
 
 **What it does:**
-- Listens on all bridge interfaces (port 53)
-- Forwards queries to upstream DNS (Cloudflare, Google, Quad9)
-- Provides web-based DNS management
-- Syncs admin credentials with system user
+- Runs separate DNS instances for HOMELAB and LAN networks
+- Listens on bridge interfaces (port 53)
+- Resolves local domains (*.homelab.local, *.lan.local)
+- Forwards queries to upstream DNS with encryption
+- Blocks ads and malware via daily-updated blocklists (StevenBlack hosts)
+- Provides DNS entries: domain, *.domain, and router.domain
 
 ### `dhcp.nix`
 **DHCP Server (ISC Kea)**
@@ -115,7 +118,7 @@ configuration.nix
     ├── secrets.nix (loaded early for sops encryption)
     ├── users.nix (depends on secrets)
     ├── router.nix (core networking, creates bridges)
-    ├── powerdns.nix (depends on router bridges)
+    ├── dns.nix (depends on router bridges)
     ├── dhcp.nix (depends on router bridges)
     ├── dashboard.nix (depends on router bridges for monitoring)
     └── linode-dyndns.nix (optional, depends on secrets)

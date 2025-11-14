@@ -6,11 +6,13 @@ This directory contains everything needed to build a custom NixOS installation I
 
 **One USB Drive Setup:**
 1. Build ISO: `./build-iso.sh`
-2. Write to USB with Rufus/dd
+2. Write to USB with Rufus (DD mode) or `dd` command
 3. Re-mount USB and add your config: `/config/router-config.nix`
 4. Boot and select "Automated Installation"
 
 👉 **See [ADD-CONFIG-TO-USB.md](ADD-CONFIG-TO-USB.md) for detailed instructions**
+
+⚠️ **IMPORTANT:** Do not use Ventoy with this ISO! See [VENTOY-COMPATIBILITY.md](VENTOY-COMPATIBILITY.md)
 
 ## 🎯 Features
 
@@ -75,6 +77,10 @@ The ISO will be in `result/iso/nixos-router-installer.iso`
 
 ## 💿 Writing the ISO to USB
 
+⚠️ **IMPORTANT:** Use direct write methods only. **Do NOT use Ventoy!**
+
+NixOS ISOs have known compatibility issues with Ventoy that result in a blank screen on boot. See [VENTOY-COMPATIBILITY.md](VENTOY-COMPATIBILITY.md) for details and workarounds.
+
 ### On Windows (from WSL or native)
 
 Use **Rufus** (recommended):
@@ -82,7 +88,7 @@ Use **Rufus** (recommended):
 2. Select your USB drive
 3. Select the ISO file
 4. Click "START"
-5. Choose "Write in DD Image mode" when prompted
+5. **Choose "Write in DD Image mode" when prompted** ← Critical!
 
 Or use **balenaEtcher**:
 1. Download from https://www.balena.io/etcher/
