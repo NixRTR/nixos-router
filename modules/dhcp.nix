@@ -9,6 +9,22 @@ let
   bridges = routerConfig.lan.bridges;
   bridgeNames = map (b: b.name) bridges;
 
+  # Helper function to extract domain from first A record
+  # Takes the domain from the first A record key (e.g., "jeandr.net" from "server.jeandr.net")
+  extractDomain = aRecords:
+    if aRecords == {} || aRecords == null then "local"
+    else
+      let
+        firstRecord = builtins.head (builtins.attrNames aRecords);
+        parts = lib.splitString "." firstRecord;
+        # Get last two parts (e.g., "jeandr.net" from "server.jeandr.net")
+        # Or just use the full name if it's already a domain
+        numParts = builtins.length parts;
+      in
+        if numParts >= 2 then
+          "${builtins.elemAt parts (numParts - 2)}.${builtins.elemAt parts (numParts - 1)}"
+        else firstRecord;
+
   # Helper function to convert lease time string to seconds
   leaseToSeconds = lease:
     let
@@ -41,7 +57,7 @@ let
       option-data = [
         { name = "routers"; data = routerConfig.homelab.ipAddress; }
         { name = "domain-name-servers"; data = routerConfig.homelab.ipAddress; }
-        { name = "domain-name"; data = routerConfig.homelab.domain; }
+        { name = "domain-name"; data = extractDomain (routerConfig.homelab.dns.a_records or {}); }
       ];
       valid-lifetime = leaseToSeconds routerConfig.homelab.dhcp.leaseTime;
     }
@@ -55,7 +71,7 @@ let
       option-data = [
         { name = "routers"; data = routerConfig.lan.ipAddress; }
         { name = "domain-name-servers"; data = routerConfig.lan.ipAddress; }
-        { name = "domain-name"; data = routerConfig.lan.domain; }
+        { name = "domain-name"; data = extractDomain (routerConfig.lan.dns.a_records or {}); }
       ];
       valid-lifetime = leaseToSeconds routerConfig.lan.dhcp.leaseTime;
     }
