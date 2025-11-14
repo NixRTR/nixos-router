@@ -181,6 +181,9 @@ in
               (homelabDns.cname_records or {})
             )}
             
+            # Whitelist - domains that should never be blocked
+            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" transparent  # Whitelisted") (homelabDns.whitelist or [])}
+            
             # Blocklist
             include: /var/lib/unbound/homelab/blocklist.conf
             
@@ -301,6 +304,9 @@ in
               (name: record: "local-data: \"${name}. IN CNAME ${record.target}.\"  # ${record.comment or ""}") 
               (lanDns.cname_records or {})
             )}
+            
+            # Whitelist - domains that should never be blocked
+            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" transparent  # Whitelisted") (lanDns.whitelist or [])}
             
             # Blocklist
             include: /var/lib/unbound/lan/blocklist.conf

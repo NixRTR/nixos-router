@@ -22,8 +22,8 @@ in
 
     # Define secrets
     secrets = {
-      # User password (always required)
-      password = {
+      # User password hash (hashed with mkpasswd -m sha-512)
+      password-hash = {
         neededForUsers = true;
       };
     } 

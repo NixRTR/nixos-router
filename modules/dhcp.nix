@@ -56,7 +56,7 @@ let
       }];
       option-data = [
         { name = "routers"; data = routerConfig.homelab.ipAddress; }
-        { name = "domain-name-servers"; data = routerConfig.homelab.ipAddress; }
+        { name = "domain-name-servers"; data = builtins.concatStringsSep ", " (routerConfig.homelab.dhcp.dnsServers or [ routerConfig.homelab.ipAddress ]); }
         { name = "domain-name"; data = extractDomain (routerConfig.homelab.dns.a_records or {}); }
       ];
       valid-lifetime = leaseToSeconds routerConfig.homelab.dhcp.leaseTime;
@@ -70,7 +70,7 @@ let
       }];
       option-data = [
         { name = "routers"; data = routerConfig.lan.ipAddress; }
-        { name = "domain-name-servers"; data = routerConfig.lan.ipAddress; }
+        { name = "domain-name-servers"; data = builtins.concatStringsSep ", " (routerConfig.lan.dhcp.dnsServers or [ routerConfig.lan.ipAddress ]); }
         { name = "domain-name"; data = extractDomain (routerConfig.lan.dns.a_records or {}); }
       ];
       valid-lifetime = leaseToSeconds routerConfig.lan.dhcp.leaseTime;

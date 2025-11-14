@@ -75,6 +75,8 @@
       start = "192.168.2.100";
       end = "192.168.2.200";
       leaseTime = "24h";
+      # DNS servers provided to DHCP clients (defaults to router IP if not set)
+      dnsServers = [ "192.168.2.1" ];  # Unbound DNS on this network
     };
     
     # DNS settings for this network
@@ -129,6 +131,13 @@
         #   updateInterval = "12h";  # More frequent updates for security
         # };
       };
+      
+      # Whitelist - domains that should never be blocked (overrides blocklists)
+      whitelist = [
+        # Add domains that are incorrectly blocked by blocklists
+        # Example: "example.com"
+        # Example: "cdn.example.com"
+      ];
     };
   };
   
@@ -143,6 +152,8 @@
       start = "192.168.3.100";
       end = "192.168.3.200";
       leaseTime = "24h";
+      # DNS servers provided to DHCP clients (defaults to router IP if not set)
+      dnsServers = [ "192.168.3.1" ];  # Unbound DNS on this network
     };
     
     # DNS settings for this network
@@ -198,6 +209,13 @@
         #   updateInterval = "1w";  # Weekly updates
         # };
       };
+      
+      # Whitelist - domains that should never be blocked (overrides blocklists)
+      whitelist = [
+        # Add domains that are incorrectly blocked by blocklists
+        # Example: "example.com"
+        # Example: "cdn.example.com"
+      ];
     };
   };
 

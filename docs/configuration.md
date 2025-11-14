@@ -213,6 +213,8 @@ homelab = {
     start = "192.168.2.100";
     end = "192.168.2.200";
     leaseTime = "24h";
+    # DNS servers provided to DHCP clients (defaults to router IP if not set)
+    dnsServers = [ "192.168.2.1" ];  # Unbound DNS on this network
   };
   
   # DNS settings for this network
@@ -255,6 +257,8 @@ lan = {
     start = "192.168.3.100";
     end = "192.168.3.200";
     leaseTime = "24h";
+    # DNS servers provided to DHCP clients (defaults to router IP if not set)
+    dnsServers = [ "192.168.3.1" ];  # Unbound DNS on this network
   };
   
   # DNS settings for this network
@@ -364,6 +368,29 @@ homelab = {
 ✅ **Full domain names** - Use any domain you want, not just subdomains  
 ✅ **Flexible** - Mix A and CNAME records as needed  
 ✅ **Version controlled** - All DNS in one config file  
+
+### DHCP DNS Servers
+
+Configure which DNS servers are provided to DHCP clients:
+
+```nix
+homelab = {
+  dhcp = {
+    dnsServers = [ "192.168.2.1" ];  # Send router IP (Unbound)
+  };
+};
+```
+
+**Options:**
+- **Router DNS (recommended)**: `[ "192.168.2.1" ]` - Clients use Unbound with ad-blocking
+- **External DNS**: `[ "1.1.1.1", "8.8.8.8" ]` - Bypass router DNS entirely
+- **Multiple servers**: `[ "192.168.2.1", "1.1.1.1" ]` - Primary and fallback
+- **Default**: If not specified, defaults to the router's IP address for that network
+
+**Why use router DNS?**
+- ✅ Ad-blocking and malware protection (via Unbound blocklists)
+- ✅ Local DNS records work (e.g., `jeandr.net`)
+- ✅ Privacy via DNS-over-TLS to upstream servers
 
 ### DHCP Lease Time
 
@@ -550,6 +577,39 @@ lan = {
 | **Energized Blu** | ~200K | Balanced | Medium |
 | **AdAway** | ~50K | Mobile Ads | Low |
 | **Phishing Army** | ~20K | Security | Very Low |
+
+### Whitelist (Unblocking Domains)
+
+Sometimes legitimate domains get caught by blocklists (false positives). Use the whitelist to override blocklists:
+
+```nix
+homelab = {
+  dns = {
+    blocklists = {
+      enable = true;
+      stevenblack.enable = true;
+    };
+    
+    # Whitelist - these domains will NEVER be blocked
+    whitelist = [
+      "example.com"
+      "cdn.example.com"
+      "tracking.legitimateservice.com"
+    ];
+  };
+};
+```
+
+**How it works:**
+- Whitelist is checked **before** blocklists
+- Uses Unbound's `transparent` zone type - resolves normally
+- Applies per-network (HOMELAB and LAN can have different whitelists)
+
+**Common use cases:**
+- CDNs that serve both ads and content
+- Analytics services you need to work
+- Domains incorrectly categorized by blocklists
+- Testing - temporarily whitelist to see if blocking is causing issues
 
 **Tips:**
 - Enable multiple lists for better coverage
