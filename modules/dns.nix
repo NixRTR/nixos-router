@@ -13,6 +13,24 @@ let
   homelabDns = homelabCfg.dns or {};
   lanDns = lanCfg.dns or {};
   
+  # Helper to extract unique base domains from A records
+  extractBaseDomains = aRecords:
+    let
+      domains = lib.attrNames aRecords;
+      baseDomains = lib.unique (map (name:
+        let
+          parts = lib.splitString "." name;
+          numParts = builtins.length parts;
+        in
+          if numParts >= 2 then
+            "${builtins.elemAt parts (numParts - 2)}.${builtins.elemAt parts (numParts - 1)}"
+          else name
+      ) domains);
+    in baseDomains;
+  
+  homelabBaseDomains = extractBaseDomains (homelabDns.a_records or {});
+  lanBaseDomains = extractBaseDomains (lanDns.a_records or {});
+  
   # Get enabled blocklists for HOMELAB
   homelabBlocklistsEnabled = homelabDns.blocklists.enable or false;
   homelabBlocklistsRaw = homelabDns.blocklists or {};
@@ -172,6 +190,9 @@ in
             hide-version: yes
             qname-minimisation: yes
             
+            # Local zones - declare these domains as locally served
+            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" static") homelabBaseDomains}
+            
             # DNS A Records
             ${concatStringsSep "\n    " (lib.mapAttrsToList 
               (name: record: "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}") 
@@ -298,6 +319,9 @@ in
             hide-identity: yes
             hide-version: yes
             qname-minimisation: yes
+            
+            # Local zones - declare these domains as locally served
+            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" static") lanBaseDomains}
             
             # DNS A Records
             ${concatStringsSep "\n    " (lib.mapAttrsToList 
