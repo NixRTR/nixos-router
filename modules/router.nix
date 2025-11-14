@@ -614,8 +614,8 @@ in {
           config = ''
             plugin ${pkgs.rpPPPoE}/lib/rp-pppoe.so
             nic-${wanInterface}
-            user PPPOE_USERNAME_PLACEHOLDER
-            password PPPOE_PASSWORD_PLACEHOLDER
+            user "PPPOE_USERNAME_PLACEHOLDER"
+            password "PPPOE_PASSWORD_PLACEHOLDER"
             noauth
             persist
             maxfail 0
