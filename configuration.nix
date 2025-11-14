@@ -9,6 +9,18 @@ let
   routerConfig = import ./router-config.nix;
   pppoeEnabled = routerConfig.wan.type == "pppoe";
 
+  # Extract plain IP addresses from DNS-over-TLS format
+  # e.g., "1.1.1.1@853#cloudflare-dns.com" -> "1.1.1.1"
+  extractDnsIp = server:
+    let
+      # Split on @ to get IP part
+      parts = lib.splitString "@" server;
+      ip = builtins.head parts;
+    in ip;
+  
+  # Get plain IPs for router's own DNS resolution
+  routerDnsServers = map extractDnsIp (routerConfig.dns.upstreamServers or [ "1.1.1.1" "9.9.9.9" ]);
+
 in
 
 {
@@ -40,6 +52,9 @@ in
 
   # Disable systemd-resolved (conflicts with Unbound DNS)
   services.resolved.enable = false;
+  
+  # Configure DNS for the router itself (clients use Unbound, router uses upstream directly)
+  networking.nameservers = routerDnsServers;
 
   # Allow unfree packages (if needed for hardware drivers, etc.)
   nixpkgs.config.allowUnfree = true;
