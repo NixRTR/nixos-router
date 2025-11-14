@@ -38,6 +38,9 @@ in
   time.timeZone = routerConfig.timezone;
   i18n.defaultLocale = "en_US.UTF-8";
 
+  # Disable systemd-resolved (conflicts with Unbound DNS)
+  services.resolved.enable = false;
+
   # Allow unfree packages (if needed for hardware drivers, etc.)
   nixpkgs.config.allowUnfree = true;
 
