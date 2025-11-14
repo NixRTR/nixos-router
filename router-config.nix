@@ -6,7 +6,7 @@
   hostname = "nixos-router";
   timezone = "America/Anchorage";
   username = "routeradmin";
-  
+
   # SSH authorized keys for the router admin user
   sshKeys = [
     # Add your SSH public keys here, one per line
@@ -94,8 +94,8 @@
         # Add more A records here:
         # "server.homelab.local" = { ip = "192.168.2.50"; comment = "Main server"; };
         # "nas.homelab.local" = { ip = "192.168.2.40"; comment = "NAS storage"; };
-      };
-      
+  };
+
       # DNS CNAME Records (alias → canonical name)
       cname_records = {
         "*.homelab.local" = {
@@ -148,10 +148,10 @@
     subnet = "192.168.3.0/24";
     
     # DHCP settings
-    dhcp = {
+  dhcp = {
       start = "192.168.3.100";
       end = "192.168.3.200";
-      leaseTime = "24h";
+    leaseTime = "24h";
       # DNS servers provided to DHCP clients (defaults to router IP if not set)
       dnsServers = [ "192.168.3.1" ];  # Unbound DNS on this network
     };
