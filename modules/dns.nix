@@ -159,6 +159,9 @@ in
             directory: "/var/lib/unbound/homelab"
             pidfile: "/var/lib/unbound/homelab/unbound.pid"
             
+            # SSL/TLS settings for DNS-over-TLS
+            tls-cert-bundle: "/etc/ssl/certs/ca-bundle.crt"
+            
             # Cache settings
             cache-min-ttl: 3600
             cache-max-ttl: 86400
@@ -282,6 +285,9 @@ in
             chroot: ""
             directory: "/var/lib/unbound/lan"
             pidfile: "/var/lib/unbound/lan/unbound.pid"
+            
+            # SSL/TLS settings for DNS-over-TLS
+            tls-cert-bundle: "/etc/ssl/certs/ca-bundle.crt"
             
             # Cache settings
             cache-min-ttl: 3600

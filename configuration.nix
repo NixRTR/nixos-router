@@ -100,6 +100,7 @@ in
     speedtest-cli  # Used regularly by monitoring timer
     curl           # Used by DynDNS timer (every 5 min) and health checks
     jq             # Used by DynDNS timer for JSON parsing
+    cacert         # CA certificates for SSL/TLS (required for Unbound DNS-over-TLS)
   ];
 
   # DNS is configured via modules/dns.nix (reads from routerConfig.dns)
