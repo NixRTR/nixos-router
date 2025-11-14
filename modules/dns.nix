@@ -201,15 +201,18 @@ in
           # Automatically create /var/lib/unbound/homelab with proper permissions
           StateDirectory = "unbound/homelab";
           
+          # Run as dedicated user (not root)
+          User = "unbound";
+          Group = "unbound";
+          
+          # Allow binding to privileged port 53 without running as root
+          AmbientCapabilities = "CAP_NET_BIND_SERVICE";
+          
           # Security hardening
           NoNewPrivileges = true;
           PrivateTmp = true;
           ProtectSystem = "strict";
           ProtectHome = true;
-          
-          # Run as dedicated user
-          User = "unbound";
-          Group = "unbound";
         };
       };
       
@@ -314,15 +317,18 @@ in
           # Automatically create /var/lib/unbound/lan with proper permissions
           StateDirectory = "unbound/lan";
           
+          # Run as dedicated user (not root)
+          User = "unbound";
+          Group = "unbound";
+          
+          # Allow binding to privileged port 53 without running as root
+          AmbientCapabilities = "CAP_NET_BIND_SERVICE";
+          
           # Security hardening
           NoNewPrivileges = true;
           PrivateTmp = true;
           ProtectSystem = "strict";
           ProtectHome = true;
-          
-          # Run as dedicated user
-          User = "unbound";
-          Group = "unbound";
         };
       };
       

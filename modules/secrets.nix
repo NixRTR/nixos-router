@@ -45,6 +45,19 @@ in
         mode = "0400";
       };
     };
+    
+    # Templates - generate files with secrets substituted
+    templates = optionalAttrs pppoeEnabled {
+      # PPPoE peer configuration with credentials
+      "pppoe-peer.conf" = {
+        content = ''
+          user ${config.sops.placeholder."pppoe-username"}
+          password ${config.sops.placeholder."pppoe-password"}
+        '';
+        owner = "root";
+        mode = "0400";
+      };
+    };
   };
 }
 

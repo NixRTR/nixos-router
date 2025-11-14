@@ -614,8 +614,8 @@ in {
           config = ''
             plugin ${pkgs.rpPPPoE}/lib/rp-pppoe.so
             nic-${wanInterface}
-            user "PPPOE_USERNAME_PLACEHOLDER"
-            password "PPPOE_PASSWORD_PLACEHOLDER"
+            # Credentials are injected from sops template
+            file ${config.sops.templates."pppoe-peer.conf".path}
             noauth
             persist
             maxfail 0
@@ -632,27 +632,6 @@ in {
             ${optionalString (pppoeCfg.mtu != null) "mru ${toString pppoeCfg.mtu}"}
           '';
         };
-      };
-
-      # Inject actual credentials at activation time
-      system.activationScripts.setup-pppoe-credentials = {
-        text = ''
-          if [ -f ${pppoeCfg.user} ] && [ -f ${pppoeCfg.passwordFile} ]; then
-            USERNAME=$(cat ${pppoeCfg.user})
-            PASSWORD=$(cat ${pppoeCfg.passwordFile})
-            
-            # Update peer config with actual credentials
-            PEER_FILE="/etc/ppp/peers/${wanInterface}"
-            if [ -f "$PEER_FILE" ]; then
-              # Use temp file approach - no need for sed -i (GNU extension)
-              TEMP_FILE=$(mktemp)
-              ${pkgs.gnused}/bin/sed "s/PPPOE_USERNAME_PLACEHOLDER/$USERNAME/g; s/PPPOE_PASSWORD_PLACEHOLDER/$PASSWORD/g" "$PEER_FILE" > "$TEMP_FILE"
-              mv "$TEMP_FILE" "$PEER_FILE"
-              chmod 600 "$PEER_FILE"
-            fi
-          fi
-        '';
-        deps = [];
       };
     })
   ]);
