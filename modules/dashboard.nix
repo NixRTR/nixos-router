@@ -161,13 +161,25 @@ in
     # Run speedtest when WAN gets IP address
     systemd.services.speedtest-on-wan-up = mkIf cfg.speedtest.enable {
       description = "Trigger speedtest when WAN is online";
-      after = [ "network-online.target" ];
+      # Wait for network to be fully online
+      after = [ "network-online.target" ]
+        ++ optional (routerCfg.wan.type == "pppoe") "pppd@${routerCfg.wan.interface}.service";
       wants = [ "network-online.target" ];
+      # For PPPoE, require the PPPoE connection to be up
+      requires = optional (routerCfg.wan.type == "pppoe") "pppd@${routerCfg.wan.interface}.service";
       wantedBy = [ "multi-user.target" ];
+      
+      # Add delay to ensure connection is stable before running speedtest
+      script = ''
+        echo "[INFO] Waiting for WAN connection to stabilize..."
+        sleep 30
+        echo "[INFO] Triggering speedtest..."
+        systemctl start speedtest.service || true
+      '';
+      
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        ExecStart = "systemctl start speedtest.service";
       };
     };
 

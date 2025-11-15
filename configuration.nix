@@ -9,17 +9,21 @@ let
   routerConfig = import ./router-config.nix;
   pppoeEnabled = routerConfig.wan.type == "pppoe";
 
-  # Extract plain IP addresses from DNS-over-TLS format
-  # e.g., "1.1.1.1@853#cloudflare-dns.com" -> "1.1.1.1"
-  extractDnsIp = server:
-    let
-      # Split on @ to get IP part
-      parts = lib.splitString "@" server;
-      ip = builtins.head parts;
-    in ip;
+  # Helper to extract primary domain from DNS A records
+  extractPrimaryDomain = aRecords:
+    if aRecords == {} || aRecords == null then null
+    else
+      let
+        firstRecord = builtins.head (builtins.attrNames aRecords);
+        parts = lib.splitString "." firstRecord;
+        numParts = builtins.length parts;
+      in
+        if numParts >= 2 then
+          "${builtins.elemAt parts (numParts - 2)}.${builtins.elemAt parts (numParts - 1)}"
+        else null;
   
-  # Get plain IPs for router's own DNS resolution
-  routerDnsServers = map extractDnsIp (routerConfig.dns.upstreamServers or [ "1.1.1.1" "9.9.9.9" ]);
+  # Get primary domain for search suffix (from HOMELAB network)
+  primaryDomain = extractPrimaryDomain (routerConfig.homelab.dns.a_records or {});
 
 in
 
@@ -53,8 +57,15 @@ in
   # Disable systemd-resolved (conflicts with Unbound DNS)
   services.resolved.enable = false;
   
-  # Configure DNS for the router itself (clients use Unbound, router uses upstream directly)
-  networking.nameservers = routerDnsServers;
+  # Configure DNS for the router itself
+  # Use router's own Unbound DNS servers (for caching, ad-blocking, local domains)
+  networking.nameservers = [ 
+    routerConfig.homelab.ipAddress  # 192.168.2.1 - HOMELAB Unbound
+    routerConfig.lan.ipAddress       # 192.168.3.1 - LAN Unbound
+  ];
+  
+  # Add search domain so we can use short hostnames (e.g., "ssh hera" instead of "ssh hera.jeandr.net")
+  networking.search = lib.optional (primaryDomain != null) primaryDomain;
 
   # Allow unfree packages (if needed for hardware drivers, etc.)
   nixpkgs.config.allowUnfree = true;
