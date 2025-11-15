@@ -6,7 +6,8 @@ A production-grade, declarative NixOS router configuration with enterprise-level
 
 - **🌐 Multi-Network Support** - Isolated LAN segments with selective access control
 - **🚀 Performance Optimized** - BBR congestion control, MSS clamping, hardware offloading
-- **📊 Full Monitoring** - Grafana dashboard with real-time metrics
+- **📊 Modern Web Dashboard** - Real-time monitoring with React + FastAPI (NEW!)
+- **📈 Historical Metrics** - 30 days of bandwidth and system data in PostgreSQL
 - **🔒 Security Hardened** - Encrypted secrets, SYN flood protection, reverse path filtering
 - **🔧 Easy Management** - One-command install and updates
 - **☁️ Dynamic DNS** - Automatic Linode DNS updates for changing WAN IPs
@@ -53,12 +54,31 @@ This router is built with a clean modular design. All functionality is organized
 - **`router.nix`** - Core networking (WAN, LAN bridges, firewall, NAT)
 - **`dns.nix`** - DNS services (Unbound with ad-blocking)
 - **`dhcp.nix`** - DHCP server (ISC Kea)
-- **`dashboard.nix`** - Monitoring (Grafana, Prometheus)
+- **`webui.nix`** - **NEW!** Modern web dashboard (FastAPI + React)
+- **`dashboard.nix`** - Legacy monitoring (Grafana, Prometheus)
 - **`users.nix`** - User account management
 - **`secrets.nix`** - Encrypted secrets (sops-nix)
 - **`linode-dyndns.nix`** - Dynamic DNS updates
 
 See [`modules/README.md`](modules/README.md) for detailed information about each module.
+
+### Web Dashboard
+
+Access real-time router metrics via beautiful web interface:
+
+```
+http://router-ip:8080
+```
+
+Features:
+- Real-time system metrics (CPU, memory, load, uptime)
+- Live bandwidth monitoring per interface
+- Service status (Unbound, Kea DHCP, PPPoE)
+- DHCP client list with search
+- 30 days of historical data and charts
+- Mobile-responsive design with dark mode
+
+See [`webui/README.md`](webui/README.md) for full documentation.
 
 ## 📚 Documentation
 
@@ -68,7 +88,8 @@ Complete documentation is available in the [`docs/`](docs/) directory:
 - **[Configuration Guide](docs/configuration.md)** - Configure networks, DHCP, and services
 - **[DNS Configuration](docs/configuration.md#dns-configuration)** - DNS, local domains, and ad-blocking
 - **[Network Isolation](docs/isolation.md)** - Multi-LAN setup and access control
-- **[Monitoring](docs/monitoring.md)** - Grafana dashboard and metrics
+- **[Web Dashboard](docs/configuration.md#web-ui-dashboard)** - Modern React-based monitoring interface
+- **[Monitoring](docs/monitoring.md)** - Legacy Grafana dashboard and metrics
 - **[Optional Features](docs/optional-features.md)** - Dynamic DNS, VPN, and more
 - **[Performance](docs/performance.md)** - Optimization details and tuning
 - **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions

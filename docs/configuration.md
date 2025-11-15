@@ -915,6 +915,160 @@ linode-api-token: "your-linode-api-token"
 
 ---
 
+## Web UI Dashboard
+
+The router includes a modern web-based monitoring dashboard built with FastAPI and React.
+
+### Configuration
+
+```nix
+webui = {
+  # Enable/disable the web dashboard
+  enable = true;
+
+  # Port for the web interface (default: 8080)
+  port = 8080;
+
+  # How often to collect metrics (in seconds)
+  # Lower = more frequent updates, higher CPU usage
+  # Higher = less frequent updates, lower CPU usage
+  collectionInterval = 2;
+
+  # Database settings (PostgreSQL - auto-configured)
+  database = {
+    host = "localhost";
+    port = 5432;
+    name = "router_webui";
+    user = "router_webui";
+  };
+
+  # How long to keep historical data (in days)
+  retentionDays = 30;
+};
+```
+
+### Features
+
+**Real-time Monitoring (2-second updates):**
+- System metrics (CPU, memory, load average, uptime)
+- Network bandwidth per interface (WAN, HOMELAB, LAN)
+- Service status (Unbound, Kea DHCP, PPPoE connection)
+- DHCP client list with search/filter
+
+**Historical Data:**
+- 30 days of metrics stored in PostgreSQL
+- Bandwidth charts (hourly, daily, weekly, monthly)
+- Interface statistics over time
+- Service uptime tracking
+
+**Modern UI:**
+- Built with Flowbite React components
+- Responsive design (mobile-friendly)
+- Dark mode support
+- Real-time WebSocket updates
+
+### Accessing the Dashboard
+
+After enabling, access at:
+```
+http://<router-ip>:8080
+```
+
+**Login:** Use your system username and password (the same account configured in `username`)
+
+### Examples
+
+**Enable with defaults:**
+```nix
+webui = {
+  enable = true;
+};
+```
+
+**Custom port and slower updates:**
+```nix
+webui = {
+  enable = true;
+  port = 3000;
+  collectionInterval = 5;  # Update every 5 seconds instead of 2
+};
+```
+
+**Disable WebUI:**
+```nix
+webui = {
+  enable = false;
+};
+```
+
+### Security
+
+**Authentication:**
+- Uses PAM (system user authentication)
+- Any user with a valid system account can login
+- JWT tokens for secure sessions (24-hour expiration)
+
+**Access Control:**
+- Firewall rules are automatically configured
+- To restrict to specific networks, manually configure firewall
+- For HTTPS, set up Nginx reverse proxy
+
+**Example: Restrict to HOMELAB network only**
+
+Edit `/etc/nixos/configuration.nix`:
+```nix
+networking.firewall.interfaces."br0".allowedTCPPorts = [ 8080 ];
+# WebUI only accessible from HOMELAB (192.168.2.0/24)
+```
+
+### Troubleshooting
+
+**Can't connect to WebUI:**
+```bash
+# Check service status
+sudo systemctl status router-webui-backend
+
+# View logs
+sudo journalctl -u router-webui-backend -n 50
+
+# Verify port is open
+sudo ss -tlnp | grep 8080
+```
+
+**Database issues:**
+```bash
+# Check PostgreSQL
+sudo systemctl status postgresql
+
+# Verify database exists
+sudo -u postgres psql -l | grep router_webui
+
+# Reinitialize database
+sudo systemctl restart router-webui-initdb
+```
+
+**Performance tuning:**
+
+If the router feels slow with WebUI enabled:
+```nix
+webui = {
+  enable = true;
+  collectionInterval = 5;  # Reduce collection frequency
+};
+```
+
+### Architecture
+
+- **Backend:** FastAPI (Python) with PostgreSQL
+- **Frontend:** React + TypeScript with Flowbite components
+- **Communication:** WebSockets for real-time updates
+- **Data:** Time-series metrics stored in PostgreSQL
+- **Memory:** ~50-80MB RAM usage
+
+For full documentation, see: `webui/README.md`
+
+---
+
 ## Applying Changes
 
 After editing `router-config.nix`:

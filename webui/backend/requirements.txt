@@ -1,0 +1,28 @@
+# FastAPI backend dependencies for Router WebUI
+
+# Core web framework
+fastapi==0.108.0
+uvicorn[standard]==0.25.0
+websockets==12.0
+
+# Database
+sqlalchemy[asyncio]==2.0.23
+asyncpg==0.29.0
+alembic==1.13.0
+
+# System monitoring
+psutil==5.9.6
+
+# Data validation
+pydantic==2.5.2
+pydantic-settings==2.1.0
+
+# Authentication
+python-jose[cryptography]==3.3.0
+python-pam==2.0.2
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2
+

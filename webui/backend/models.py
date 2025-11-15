@@ -1,0 +1,136 @@
+"""
+Pydantic models for data validation and serialization
+"""
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, field_validator
+from ipaddress import IPv4Address
+import re
+
+
+class SystemMetrics(BaseModel):
+    """System-wide metrics"""
+    timestamp: datetime
+    cpu_percent: float = Field(..., ge=0, le=100)
+    memory_percent: float = Field(..., ge=0, le=100)
+    memory_used_mb: int = Field(..., ge=0)
+    memory_total_mb: int = Field(..., ge=0)
+    load_avg_1m: float = Field(..., ge=0)
+    load_avg_5m: float = Field(..., ge=0)
+    load_avg_15m: float = Field(..., ge=0)
+    uptime_seconds: int = Field(..., ge=0)
+
+
+class InterfaceStats(BaseModel):
+    """Network interface statistics"""
+    timestamp: datetime
+    interface: str = Field(..., min_length=1, max_length=32)
+    rx_bytes: int = Field(..., ge=0)
+    tx_bytes: int = Field(..., ge=0)
+    rx_packets: int = Field(..., ge=0)
+    tx_packets: int = Field(..., ge=0)
+    rx_errors: int = Field(..., ge=0)
+    tx_errors: int = Field(..., ge=0)
+    rx_dropped: int = Field(..., ge=0)
+    tx_dropped: int = Field(..., ge=0)
+    rx_rate_mbps: Optional[float] = Field(default=None, ge=0)
+    tx_rate_mbps: Optional[float] = Field(default=None, ge=0)
+
+
+class DHCPLease(BaseModel):
+    """DHCP lease information"""
+    network: str = Field(..., pattern="^(homelab|lan)$")
+    ip_address: str
+    mac_address: str
+    hostname: Optional[str] = None
+    lease_start: Optional[datetime] = None
+    lease_end: Optional[datetime] = None
+    last_seen: datetime
+    is_static: bool = False
+
+    @field_validator('mac_address')
+    @classmethod
+    def validate_mac(cls, v: str) -> str:
+        """Validate MAC address format"""
+        mac_pattern = r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
+        if not re.match(mac_pattern, v):
+            raise ValueError('Invalid MAC address format')
+        return v.lower().replace('-', ':')
+
+    @field_validator('ip_address')
+    @classmethod
+    def validate_ip(cls, v: str) -> str:
+        """Validate IP address"""
+        try:
+            IPv4Address(v)
+            return v
+        except ValueError:
+            raise ValueError('Invalid IPv4 address')
+
+
+class ServiceStatus(BaseModel):
+    """Systemd service status"""
+    timestamp: datetime
+    service_name: str = Field(..., min_length=1, max_length=128)
+    is_active: bool
+    is_enabled: bool
+    pid: Optional[int] = Field(default=None, ge=0)
+    memory_mb: Optional[float] = Field(default=None, ge=0)
+    cpu_percent: Optional[float] = Field(default=None, ge=0)
+
+
+class DNSMetrics(BaseModel):
+    """DNS server metrics from Unbound"""
+    timestamp: datetime
+    instance: str = Field(..., pattern="^(homelab|lan)$")
+    total_queries: int = Field(..., ge=0)
+    cache_hits: int = Field(..., ge=0)
+    cache_misses: int = Field(..., ge=0)
+    blocked_queries: int = Field(..., ge=0)
+    queries_per_second: float = Field(..., ge=0)
+    cache_hit_rate: float = Field(..., ge=0, le=100)
+
+
+class MetricsSnapshot(BaseModel):
+    """Complete snapshot of all metrics for WebSocket broadcast"""
+    timestamp: datetime
+    system: SystemMetrics
+    interfaces: List[InterfaceStats]
+    services: List[ServiceStatus]
+    dhcp_clients: List[DHCPLease]
+    dns_stats: List[DNSMetrics]
+
+
+class HistoryQuery(BaseModel):
+    """Query parameters for historical data"""
+    start: datetime
+    end: datetime
+    interval: Optional[int] = Field(default=60, ge=1, le=3600)  # seconds
+
+
+class LoginRequest(BaseModel):
+    """Login request"""
+    username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=1)
+
+
+class LoginResponse(BaseModel):
+    """Login response"""
+    access_token: str
+    token_type: str = "bearer"
+    username: str
+
+
+class ConfigChange(BaseModel):
+    """Configuration change request (Stage 2)"""
+    change_type: str = Field(..., pattern="^(dhcp|dns|firewall|network)$")
+    change_data: Dict[str, Any]
+
+
+class ConfigChangeResponse(BaseModel):
+    """Configuration change response"""
+    id: int
+    timestamp: datetime
+    applied: bool
+    error_message: Optional[str] = None
+

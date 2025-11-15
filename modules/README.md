@@ -48,8 +48,33 @@ This directory contains modular components of the NixOS router configuration. Ea
 - Provides network configuration (gateway, DNS) via DHCP options
 - Maintains lease database
 
+### `webui.nix` **NEW!**
+**Modern Web Dashboard (FastAPI + React)**
+- Real-time monitoring via WebSockets (2-second updates)
+- PostgreSQL database for 30 days of historical data
+- System user authentication (PAM + JWT)
+- Beautiful Flowbite React interface
+
+**What it does:**
+- Provides modern web-based monitoring at http://router-ip:8080
+- Displays system metrics (CPU, memory, load, uptime)
+- Shows live bandwidth per interface (WAN, HOMELAB, LAN)
+- Lists DHCP clients with search and filter
+- Monitors service status (Unbound, Kea DHCP, PPPoE)
+- Stores historical metrics for trend analysis
+- Mobile-responsive design with dark mode support
+
+**Key features:**
+- FastAPI backend with Python data collectors
+- React + TypeScript frontend with Flowbite components
+- WebSocket-based real-time updates
+- PostgreSQL time-series storage
+- Automatic database cleanup (30-day retention)
+
+See `../webui/README.md` for full documentation.
+
 ### `dashboard.nix`
-**Monitoring and Metrics**
+**Legacy Monitoring and Metrics**
 - Grafana: Web-based monitoring dashboard (port 3000)
 - Prometheus: Metrics collection and storage
 - Node Exporter: System and network metrics
@@ -60,6 +85,8 @@ This directory contains modular components of the NixOS router configuration. Ea
 - Collects CPU, memory, network, and disk metrics
 - Runs automated speed tests every 6 hours
 - Creates visualizations for network traffic and system health
+
+**Note:** Consider using `webui.nix` instead for a more modern interface.
 
 ### `linode-dyndns.nix`
 **Dynamic DNS Updates**
@@ -120,7 +147,8 @@ configuration.nix
     ├── router.nix (core networking, creates bridges)
     ├── dns.nix (depends on router bridges)
     ├── dhcp.nix (depends on router bridges)
-    ├── dashboard.nix (depends on router bridges for monitoring)
+    ├── webui.nix (optional, modern monitoring dashboard)
+    ├── dashboard.nix (optional, legacy monitoring with Grafana)
     └── linode-dyndns.nix (optional, depends on secrets)
 ```
 

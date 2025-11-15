@@ -40,6 +40,7 @@ in
     ./modules/secrets.nix      # Secrets management (sops-nix)
     ./modules/dashboard.nix    # Monitoring (Grafana, Prometheus)
     ./modules/linode-dyndns.nix # Dynamic DNS updates
+    ./modules/webui.nix        # Web UI monitoring dashboard
     ];
 
   # Enable Nix flakes and modern command syntax
@@ -116,6 +117,19 @@ in
 
   # DNS is configured via modules/dns.nix (reads from routerConfig.dns)
   # Firewall rules for DNS (port 53) are handled by the DNS module
+
+  # WebUI configuration (from router-config.nix)
+  services.router-webui = lib.mkIf (routerConfig.webui.enable or false) {
+    enable = true;
+    port = routerConfig.webui.port or 8080;
+    collectionInterval = routerConfig.webui.collectionInterval or 2;
+    database = {
+      host = routerConfig.webui.database.host or "localhost";
+      port = routerConfig.webui.database.port or 5432;
+      name = routerConfig.webui.database.name or "router_webui";
+      user = routerConfig.webui.database.user or "router_webui";
+    };
+  };
 
   # Enable SSH for remote administration
   services.openssh.enable = true;
