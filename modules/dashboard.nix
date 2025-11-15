@@ -167,19 +167,25 @@ in
       wants = [ "network-online.target" ];
       # For PPPoE, require the PPPoE connection to be up
       requires = optional (routerCfg.wan.type == "pppoe") "pppd-${routerCfg.wan.interface}.service";
-      wantedBy = [ "multi-user.target" ];
       
-      # Add delay to ensure connection is stable before running speedtest
+      # Simple oneshot that completes immediately
       script = ''
-        echo "[INFO] Waiting for WAN connection to stabilize..."
-        sleep 30
-        echo "[INFO] Triggering speedtest..."
+        echo "[INFO] Triggering speedtest (async)..."
         systemctl start speedtest.service || true
       '';
       
       serviceConfig = {
         Type = "oneshot";
-        RemainAfterExit = true;
+      };
+    };
+    
+    # Timer to run on-wan-up service after boot (non-blocking)
+    systemd.timers.speedtest-on-wan-up = mkIf cfg.speedtest.enable {
+      description = "Trigger speedtest after WAN is stable";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "2min";  # Wait 2 minutes after boot for WAN to stabilize
+        Unit = "speedtest-on-wan-up.service";
       };
     };
 

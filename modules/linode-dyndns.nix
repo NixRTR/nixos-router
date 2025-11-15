@@ -195,19 +195,25 @@ in
       wants = [ "network-online.target" ];
       # For PPPoE, require the PPPoE connection to be up
       requires = optional (routerConfig.wan.type == "pppoe") "pppd-${cfg.wanInterface}.service";
-      wantedBy = [ "multi-user.target" ];
       
-      # Add delay to ensure connection is stable
+      # Simple oneshot that completes immediately
       script = ''
-        echo "[INFO] Waiting for WAN connection to stabilize..."
-        sleep 30
-        echo "[INFO] Triggering Linode DynDNS update..."
+        echo "[INFO] Triggering Linode DynDNS update (async)..."
         systemctl start linode-dyndns.service || true
       '';
       
       serviceConfig = {
         Type = "oneshot";
-        RemainAfterExit = true;
+      };
+    };
+    
+    # Timer to run on-wan-up service after boot (non-blocking)
+    systemd.timers.linode-dyndns-on-wan-up = mkIf cfg.enable {
+      description = "Trigger Linode DynDNS update after WAN is stable";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "1min";  # Wait 1 minute after boot for WAN to stabilize
+        Unit = "linode-dyndns-on-wan-up.service";
       };
     };
 
