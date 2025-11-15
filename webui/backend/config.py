@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     # Historical Data Retention
     metrics_retention_days: int = 30
     
-    # CORS
+    # CORS (for development - production serves from same origin)
     cors_origins: list = ["http://localhost:3000", "http://localhost:5173"]
     
     class Config:

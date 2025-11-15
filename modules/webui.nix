@@ -26,8 +26,32 @@ let
   # Backend source
   backendSrc = ../webui/backend;
   
-  # Frontend build (if exists)
+  # Frontend build
   frontendSrc = ../webui/frontend;
+  
+  # Build frontend with npm
+  frontendBuild = pkgs.stdenv.mkDerivation {
+    name = "router-webui-frontend";
+    src = frontendSrc;
+    
+    buildInputs = [ pkgs.nodejs_20 ];
+    
+    buildPhase = ''
+      export HOME=$TMPDIR
+      export npm_config_cache=$TMPDIR/.npm
+      
+      # Install dependencies
+      npm install --legacy-peer-deps
+      
+      # Build the frontend
+      npm run build
+    '';
+    
+    installPhase = ''
+      mkdir -p $out
+      cp -r dist/* $out/
+    '';
+  };
   
 in
 
@@ -120,6 +144,27 @@ in
       "d /var/lib/router-webui/frontend 0755 router-webui router-webui -"
     ];
     
+    # Copy frontend build to state directory
+    systemd.services.router-webui-frontend-install = {
+      description = "Install Router WebUI Frontend";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "router-webui-backend.service" ];
+      after = [ "local-fs.target" ];
+      
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+      };
+      
+      script = ''
+        echo "Installing Router WebUI frontend..."
+        rm -rf /var/lib/router-webui/frontend/*
+        cp -r ${frontendBuild}/* /var/lib/router-webui/frontend/
+        chown -R router-webui:router-webui /var/lib/router-webui/frontend
+        echo "Frontend installed successfully"
+      '';
+    };
+    
     # Database initialization service
     systemd.services.router-webui-initdb = {
       description = "Router WebUI Database Initialization";
@@ -168,9 +213,9 @@ in
     # Backend service
     systemd.services.router-webui-backend = {
       description = "Router WebUI Backend (FastAPI)";
-      after = [ "network.target" "postgresql.service" "router-webui-initdb.service" "router-webui-jwt-init.service" ];
+      after = [ "network.target" "postgresql.service" "router-webui-initdb.service" "router-webui-jwt-init.service" "router-webui-frontend-install.service" ];
       wants = [ "postgresql.service" ];
-      requires = [ "router-webui-jwt-init.service" ];
+      requires = [ "router-webui-jwt-init.service" "router-webui-frontend-install.service" ];
       wantedBy = [ "multi-user.target" ];
       
       environment = {
