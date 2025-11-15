@@ -17,8 +17,10 @@ let
     pydantic
     pydantic-settings
     python-jose
-    python-pam
+    passlib
     alembic
+    bcrypt
+    pamela  # PAM authentication support
   ]);
   
   # Backend source
@@ -87,16 +89,30 @@ in
         name = cfg.database.user;
         ensureDBOwnership = true;
       }];
+      
+      # Allow local trust authentication for the router_webui user
+      authentication = pkgs.lib.mkOverride 10 ''
+        local all all trust
+        host all all 127.0.0.1/32 trust
+        host all all ::1/128 trust
+      '';
     };
     
     # Create system user for the service
     users.users.router-webui = {
       isSystemUser = true;
       group = "router-webui";
+      extraGroups = [ "shadow" ];  # Required for PAM authentication
       description = "Router WebUI service user";
     };
     
     users.groups.router-webui = {};
+    
+    # Configure PAM to allow router-webui user to authenticate
+    security.pam.services.router-webui = {
+      allowNullPassword = false;
+      unixAuth = true;
+    };
     
     # Create state directory
     systemd.tmpfiles.rules = [
@@ -113,7 +129,7 @@ in
       
       serviceConfig = {
         Type = "oneshot";
-        User = cfg.database.user;
+        User = "postgres";  # Run as postgres user to execute database commands
         RemainAfterExit = true;
       };
       
@@ -124,16 +140,37 @@ in
           sleep 1
         done
         
-        # Run database schema
-        ${pkgs.postgresql}/bin/psql -h ${cfg.database.host} -p ${toString cfg.database.port} -d ${cfg.database.name} < ${backendSrc}/schema.sql || true
+        # Run database schema as the router_webui database user
+        ${pkgs.postgresql}/bin/psql -U ${cfg.database.user} -d ${cfg.database.name} -f ${backendSrc}/schema.sql || true
+      '';
+    };
+    
+    # JWT secret generation service
+    systemd.services.router-webui-jwt-init = {
+      description = "Generate JWT secret for Router WebUI";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "router-webui-backend.service" ];
+      
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+      };
+      
+      script = ''
+        if [ ! -f /var/lib/router-webui/jwt-secret ]; then
+          ${pkgs.openssl}/bin/openssl rand -hex 32 > /var/lib/router-webui/jwt-secret
+          chmod 600 /var/lib/router-webui/jwt-secret
+          chown router-webui:router-webui /var/lib/router-webui/jwt-secret
+        fi
       '';
     };
     
     # Backend service
     systemd.services.router-webui-backend = {
       description = "Router WebUI Backend (FastAPI)";
-      after = [ "network.target" "postgresql.service" "router-webui-initdb.service" ];
+      after = [ "network.target" "postgresql.service" "router-webui-initdb.service" "router-webui-jwt-init.service" ];
       wants = [ "postgresql.service" ];
+      requires = [ "router-webui-jwt-init.service" ];
       wantedBy = [ "multi-user.target" ];
       
       environment = {
@@ -143,6 +180,7 @@ in
         PORT = toString cfg.port;
         KEA_LEASE_FILE = "/var/lib/kea/dhcp4.leases";
         ROUTER_CONFIG_FILE = "/etc/nixos/router-config.nix";
+        JWT_SECRET_FILE = "/var/lib/router-webui/jwt-secret";
       };
       
       serviceConfig = {

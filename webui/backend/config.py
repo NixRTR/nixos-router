@@ -3,6 +3,7 @@ Application configuration using Pydantic Settings
 """
 from pydantic_settings import BaseSettings
 from typing import Optional
+import os
 
 
 class Settings(BaseSettings):
@@ -21,6 +22,7 @@ class Settings(BaseSettings):
     
     # JWT Authentication
     jwt_secret_key: str = "change-this-in-production"
+    jwt_secret_file: Optional[str] = None  # Path to JWT secret file
     jwt_algorithm: str = "HS256"
     jwt_expiration_minutes: int = 60 * 24  # 24 hours
     
@@ -44,6 +46,24 @@ class Settings(BaseSettings):
         case_sensitive = False
 
 
+# Helper function to load JWT secret from file
+def load_jwt_secret(settings_obj: Settings) -> str:
+    """Load JWT secret from file if specified, otherwise use default"""
+    if settings_obj.jwt_secret_file and os.path.exists(settings_obj.jwt_secret_file):
+        try:
+            with open(settings_obj.jwt_secret_file, 'r') as f:
+                secret = f.read().strip()
+                if secret:
+                    return secret
+        except Exception as e:
+            print(f"Warning: Could not read JWT secret from {settings_obj.jwt_secret_file}: {e}")
+    
+    return settings_obj.jwt_secret_key
+
+
 # Global settings instance
 settings = Settings()
+
+# Load JWT secret from file if available
+settings.jwt_secret_key = load_jwt_secret(settings)
 

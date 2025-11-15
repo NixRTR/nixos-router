@@ -31,9 +31,9 @@ def verify_system_user(username: str, password: str) -> bool:
         
         # Try PAM authentication
         try:
-            import pam
-            p = pam.pam()
-            return p.authenticate(username, password)
+            import pamela
+            pamela.authenticate(username, password, service='login')
+            return True
         except ImportError:
             # PAM not available (e.g., on Windows for development)
             # In development, accept any password for existing system user
@@ -43,6 +43,9 @@ def verify_system_user(username: str, password: str) -> bool:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="PAM authentication not available"
             )
+        except pamela.PAMError:
+            # Authentication failed
+            return False
             
     except KeyError:
         # User doesn't exist
