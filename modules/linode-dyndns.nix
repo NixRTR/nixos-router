@@ -101,11 +101,20 @@ in
         
         LINODE_TOKEN=$(cat "${cfg.tokenFile}")
         
-        # Get current public IP
-        PUBLIC_IP=$(${pkgs.curl}/bin/curl -s https://api.ipify.org)
+        # Get current public IP with retry logic
+        echo "[INFO] Attempting to get public IP..."
+        PUBLIC_IP=""
+        for i in {1..5}; do
+          PUBLIC_IP=$(${pkgs.curl}/bin/curl -s --connect-timeout 10 --max-time 30 https://api.ipify.org || true)
+          if [ -n "$PUBLIC_IP" ]; then
+            break
+          fi
+          echo "[WARN] Failed to get public IP (attempt $i/5), retrying in 10 seconds..."
+          sleep 10
+        done
         
         if [ -z "$PUBLIC_IP" ]; then
-          echo "[ERROR] Failed to get public IP address"
+          echo "[ERROR] Failed to get public IP address after 5 attempts"
           exit 1
         fi
         
@@ -180,13 +189,25 @@ in
     # Trigger update when WAN interface gets IP address
     systemd.services.linode-dyndns-on-wan-up = mkIf cfg.enable {
       description = "Trigger Linode DNS update when WAN gets IP";
-      after = [ "network-online.target" ];
+      # Wait for network to be fully online
+      after = [ "network-online.target" ] 
+        ++ optional (routerConfig.wan.type == "pppoe") "pppd@${cfg.wanInterface}.service";
       wants = [ "network-online.target" ];
+      # For PPPoE, require the PPPoE connection to be up
+      requires = optional (routerConfig.wan.type == "pppoe") [ "pppd@${cfg.wanInterface}.service" ];
       wantedBy = [ "multi-user.target" ];
+      
+      # Add delay to ensure connection is stable
+      script = ''
+        echo "[INFO] Waiting for WAN connection to stabilize..."
+        sleep 30
+        echo "[INFO] Triggering Linode DynDNS update..."
+        systemctl start linode-dyndns.service || true
+      '';
+      
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        ExecStart = "systemctl start linode-dyndns.service";
       };
     };
 
