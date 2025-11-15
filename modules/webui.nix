@@ -175,7 +175,7 @@ in
       
       environment = {
         DATABASE_URL = "postgresql+asyncpg://${cfg.database.user}@${cfg.database.host}:${toString cfg.database.port}/${cfg.database.name}";
-        PYTHONPATH = "${backendSrc}";
+        PYTHONPATH = "${../webui}";
         COLLECTION_INTERVAL = toString cfg.collectionInterval;
         PORT = toString cfg.port;
         KEA_LEASE_FILE = "/var/lib/kea/dhcp4.leases";
@@ -187,8 +187,8 @@ in
         Type = "simple";
         User = "router-webui";
         Group = "router-webui";
-        WorkingDirectory = backendSrc;
-        ExecStart = "${pythonEnv}/bin/python -m uvicorn main:app --host 0.0.0.0 --port ${toString cfg.port}";
+        WorkingDirectory = "${../webui}";
+        ExecStart = "${pythonEnv}/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port ${toString cfg.port}";
         Restart = "always";
         RestartSec = "10s";
         
