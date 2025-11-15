@@ -163,10 +163,10 @@ in
       description = "Trigger speedtest when WAN is online";
       # Wait for network to be fully online
       after = [ "network-online.target" ]
-        ++ optional (routerCfg.wan.type == "pppoe") "pppd@${routerCfg.wan.interface}.service";
+        ++ optional (routerCfg.wan.type == "pppoe") "pppd-${routerCfg.wan.interface}.service";
       wants = [ "network-online.target" ];
       # For PPPoE, require the PPPoE connection to be up
-      requires = optional (routerCfg.wan.type == "pppoe") "pppd@${routerCfg.wan.interface}.service";
+      requires = optional (routerCfg.wan.type == "pppoe") "pppd-${routerCfg.wan.interface}.service";
       wantedBy = [ "multi-user.target" ];
       
       # Add delay to ensure connection is stable before running speedtest

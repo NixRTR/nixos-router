@@ -191,10 +191,10 @@ in
       description = "Trigger Linode DNS update when WAN gets IP";
       # Wait for network to be fully online
       after = [ "network-online.target" ] 
-        ++ optional (routerConfig.wan.type == "pppoe") "pppd@${cfg.wanInterface}.service";
+        ++ optional (routerConfig.wan.type == "pppoe") "pppd-${cfg.wanInterface}.service";
       wants = [ "network-online.target" ];
       # For PPPoE, require the PPPoE connection to be up
-      requires = optional (routerConfig.wan.type == "pppoe") "pppd@${cfg.wanInterface}.service";
+      requires = optional (routerConfig.wan.type == "pppoe") "pppd-${cfg.wanInterface}.service";
       wantedBy = [ "multi-user.target" ];
       
       # Add delay to ensure connection is stable
