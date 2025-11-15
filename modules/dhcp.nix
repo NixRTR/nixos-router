@@ -60,6 +60,12 @@ let
         { name = "domain-name"; data = extractDomain (routerConfig.homelab.dns.a_records or {}); }
       ];
       valid-lifetime = leaseToSeconds routerConfig.homelab.dhcp.leaseTime;
+      # Static reservations for HOMELAB
+      reservations = map (res: {
+        hostname = res.hostname;
+        hw-address = res.hwAddress;
+        ip-address = res.ipAddress;
+      }) (routerConfig.homelab.dhcp.reservations or []);
     }
     # LAN network
     {
@@ -74,6 +80,12 @@ let
         { name = "domain-name"; data = extractDomain (routerConfig.lan.dns.a_records or {}); }
       ];
       valid-lifetime = leaseToSeconds routerConfig.lan.dhcp.leaseTime;
+      # Static reservations for LAN
+      reservations = map (res: {
+        hostname = res.hostname;
+        hw-address = res.hwAddress;
+        ip-address = res.ipAddress;
+      }) (routerConfig.lan.dhcp.reservations or []);
     }
   ];
 

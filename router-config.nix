@@ -77,6 +77,19 @@
       leaseTime = "24h";
       # DNS servers provided to DHCP clients (defaults to router IP if not set)
       dnsServers = [ "192.168.2.1" ];  # Unbound DNS on this network
+      
+      # Dynamic DNS domain for DHCP clients (optional)
+      # If set, ALL DHCP clients get automatic DNS entries
+      # Example: client with hostname "phone" gets "phone.dhcp.homelab.local"
+      # If no hostname provided, uses: "dhcp-<last-octet>.dhcp.homelab.local"
+      dynamicDomain = "dhcp.homelab.local";  # Set to "" to disable dynamic DNS
+      
+      # Static DHCP reservations (optional)
+      # Assign fixed IP addresses to specific MAC addresses
+      reservations = [
+        # Example: { hostname = "server"; hwAddress = "00:11:22:33:44:55"; ipAddress = "192.168.2.50"; }
+        # Example: { hostname = "nas"; hwAddress = "aa:bb:cc:dd:ee:ff"; ipAddress = "192.168.2.40"; }
+      ];
     };
     
     # DNS settings for this network
@@ -148,12 +161,21 @@
     subnet = "192.168.3.0/24";
     
     # DHCP settings
-  dhcp = {
+    dhcp = {
       start = "192.168.3.100";
       end = "192.168.3.200";
-    leaseTime = "24h";
+      leaseTime = "24h";
       # DNS servers provided to DHCP clients (defaults to router IP if not set)
       dnsServers = [ "192.168.3.1" ];  # Unbound DNS on this network
+      
+      # Dynamic DNS domain for DHCP clients (optional)
+      dynamicDomain = "dhcp.lan.local";  # Set to "" to disable dynamic DNS
+      
+      # Static DHCP reservations (optional)
+      reservations = [
+        # Example: { hostname = "desktop"; hwAddress = "11:22:33:44:55:66"; ipAddress = "192.168.3.50"; }
+        # Example: { hostname = "laptop"; hwAddress = "aa:bb:cc:dd:ee:ff"; ipAddress = "192.168.3.51"; }
+      ];
     };
     
     # DNS settings for this network

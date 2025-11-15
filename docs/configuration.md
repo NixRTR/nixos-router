@@ -400,6 +400,157 @@ Supported formats:
 - `"24h"` - Hours
 - `"7d"` - Days
 
+### Static DHCP Reservations
+
+Assign fixed IP addresses to specific devices based on their MAC address:
+
+```nix
+homelab = {
+  dhcp = {
+    start = "192.168.2.100";
+    end = "192.168.2.200";
+    leaseTime = "24h";
+    dnsServers = [ "192.168.2.1" ];
+    
+    # Static reservations
+    reservations = [
+      {
+        hostname = "hera";
+        hwAddress = "00:11:22:33:44:55";
+        ipAddress = "192.168.2.33";
+      }
+      {
+        hostname = "triton";
+        hwAddress = "aa:bb:cc:dd:ee:ff";
+        ipAddress = "192.168.2.31";
+      }
+    ];
+  };
+};
+```
+
+#### 🎉 Automatic DNS Integration
+
+**DHCP reservations automatically create DNS A records in Unbound!**
+
+The router automatically generates DNS entries for all DHCP reservations. For example, the reservation above automatically creates:
+
+```
+hera.jeandr.net → 192.168.2.33
+triton.jeandr.net → 192.168.2.31
+```
+
+**How it works:**
+1. Router extracts the base domain from your existing DNS A records (e.g., `jeandr.net` from `router.jeandr.net`)
+2. For each DHCP reservation, creates: `hostname.domain → IP`
+3. Merges with manually defined A records (manual overrides DHCP if same hostname)
+
+**Benefits:**
+- ✅ **No duplication** - Define hostname and IP once
+- ✅ **Automatic sync** - Change IP in DHCP, DNS updates automatically  
+- ✅ **Consistent naming** - DHCP and DNS always match
+- ✅ **Still flexible** - Manual A records can override if needed
+
+**Example:**
+
+```nix
+homelab = {
+  dns = {
+    a_records = {
+      "jeandr.net" = { ip = "192.168.2.33"; comment = "Main domain"; };
+      "router.jeandr.net" = { ip = "192.168.2.1"; comment = "Router"; };
+    };
+    cname_records = {
+      "*.jeandr.net" = { target = "jeandr.net"; comment = "Wildcard"; };
+    };
+  };
+  
+  dhcp = {
+    reservations = [
+      { hostname = "hera"; hwAddress = "..."; ipAddress = "192.168.2.33"; }
+      { hostname = "triton"; hwAddress = "..."; ipAddress = "192.168.2.31"; }
+      { hostname = "nas"; hwAddress = "..."; ipAddress = "192.168.2.40"; }
+    ];
+  };
+};
+```
+
+**Automatic DNS entries created:**
+- `hera.jeandr.net` → 192.168.2.33 (DHCP reservation)
+- `triton.jeandr.net` → 192.168.2.31 (DHCP reservation)
+- `nas.jeandr.net` → 192.168.2.40 (DHCP reservation)
+
+**Combined with manual A records, you get:**
+- `jeandr.net` → 192.168.2.33 (manual A record)
+- `router.jeandr.net` → 192.168.2.1 (manual A record)
+- `hera.jeandr.net` → 192.168.2.33 (auto-generated from DHCP)
+- `triton.jeandr.net` → 192.168.2.31 (auto-generated from DHCP)
+- `nas.jeandr.net` → 192.168.2.40 (auto-generated from DHCP)
+- `anything-else.jeandr.net` → 192.168.2.33 (wildcard CNAME)
+
+**Override behavior:**
+
+If you need a different DNS entry for the same hostname, manual A records take precedence:
+
+```nix
+dns = {
+  a_records = {
+    "hera.jeandr.net" = { ip = "192.168.2.100"; comment = "Different IP for DNS"; };
+  };
+};
+
+dhcp = {
+  reservations = [
+    { hostname = "hera"; hwAddress = "..."; ipAddress = "192.168.2.33"; }  # DHCP gets .33
+  ];
+};
+```
+
+Result:
+- DHCP: hera gets IP 192.168.2.33
+- DNS: hera.jeandr.net resolves to 192.168.2.100 (manual override)
+
+**How to find MAC addresses:**
+- **Linux**: `ip link show` or `ifconfig`
+- **Windows**: `ipconfig /all`
+- **Router**: Check DHCP leases at `http://router-ip:3000` (Grafana dashboard)
+
+**Best practices:**
+- ✅ Reserve IPs **outside** the DHCP pool range
+- ✅ Use descriptive hostnames
+- ✅ Keep a backup list of MAC addresses
+- ⚠️ Make sure reserved IPs are in the subnet (e.g., 192.168.2.x for HOMELAB)
+
+**Example configuration:**
+```nix
+# HOMELAB: Servers with static IPs (192.168.2.10-50)
+homelab = {
+  dhcp = {
+    start = "192.168.2.100";  # Dynamic range starts at 100
+    end = "192.168.2.200";
+    
+    reservations = [
+      { hostname = "server1"; hwAddress = "00:11:22:33:44:55"; ipAddress = "192.168.2.10"; }
+      { hostname = "server2"; hwAddress = "aa:bb:cc:dd:ee:ff"; ipAddress = "192.168.2.11"; }
+      { hostname = "nas"; hwAddress = "11:22:33:44:55:66"; ipAddress = "192.168.2.20"; }
+    ];
+  };
+};
+
+# LAN: Workstations with static IPs
+lan = {
+  dhcp = {
+    start = "192.168.3.100";
+    end = "192.168.3.200";
+    
+    reservations = [
+      { hostname = "workstation"; hwAddress = "aa:11:bb:22:cc:33"; ipAddress = "192.168.3.50"; }
+      { hostname = "laptop"; hwAddress = "bb:22:cc:33:dd:44"; ipAddress = "192.168.3.51"; }
+    ];
+  };
+};
+```
+
 ---
 
 ## DNS Configuration

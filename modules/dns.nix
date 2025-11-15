@@ -28,8 +28,53 @@ let
       ) domains);
     in baseDomains;
   
-  homelabBaseDomains = extractBaseDomains (homelabDns.a_records or {});
-  lanBaseDomains = extractBaseDomains (lanDns.a_records or {});
+  # Helper to extract the primary domain (most common base domain) from A records
+  extractPrimaryDomain = aRecords:
+    let
+      domains = lib.attrNames aRecords;
+    in
+      if domains == [] then "local"
+      else
+        let
+          firstRecord = builtins.head domains;
+          parts = lib.splitString "." firstRecord;
+          numParts = builtins.length parts;
+        in
+          if numParts >= 2 then
+            "${builtins.elemAt parts (numParts - 2)}.${builtins.elemAt parts (numParts - 1)}"
+          else firstRecord;
+  
+  # Helper to convert DHCP reservations to DNS A records
+  dhcpReservationsToARecords = reservations: domain:
+    lib.listToAttrs (map (res: {
+      name = "${res.hostname}.${domain}";
+      value = {
+        ip = res.ipAddress;
+        comment = "DHCP reservation for ${res.hostname}";
+      };
+    }) reservations);
+  
+  # Get primary domains for each network
+  homelabPrimaryDomain = extractPrimaryDomain (homelabDns.a_records or {});
+  lanPrimaryDomain = extractPrimaryDomain (lanDns.a_records or {});
+  
+  # Convert DHCP reservations to DNS A records
+  homelabDhcpARecords = dhcpReservationsToARecords (homelabCfg.dhcp.reservations or []) homelabPrimaryDomain;
+  lanDhcpARecords = dhcpReservationsToARecords (lanCfg.dhcp.reservations or []) lanPrimaryDomain;
+  
+  # Merge DHCP-generated A records with manual A records (manual takes precedence if specified)
+  homelabAllARecords = homelabDhcpARecords // (homelabDns.a_records or {});
+  lanAllARecords = lanDhcpARecords // (lanDns.a_records or {});
+  
+  # Extract base domains from merged A records (for local-zone declarations)
+  homelabBaseDomains = lib.unique (
+    (extractBaseDomains homelabAllARecords) ++
+    (lib.optional ((homelabCfg.dhcp.dynamicDomain or "") != "") homelabCfg.dhcp.dynamicDomain)
+  );
+  lanBaseDomains = lib.unique (
+    (extractBaseDomains lanAllARecords) ++
+    (lib.optional ((lanCfg.dhcp.dynamicDomain or "") != "") lanCfg.dhcp.dynamicDomain)
+  );
   
   # Get enabled blocklists for HOMELAB
   homelabBlocklistsEnabled = homelabDns.blocklists.enable or false;
@@ -161,6 +206,53 @@ in
             touch /var/lib/unbound/homelab/blocklist.conf
           fi
           
+          # Generate dynamic DNS entries from DHCP leases
+          echo "Generating dynamic DNS entries from DHCP leases..."
+          > /var/lib/unbound/homelab/dynamic-dns.conf
+          
+          ${if (homelabCfg.dhcp.dynamicDomain or "") != "" then ''
+            if [ -f /var/lib/kea/dhcp4.leases ]; then
+              ${pkgs.gawk}/bin/awk -v domain="${homelabCfg.dhcp.dynamicDomain}" -v subnet="${homelabCfg.subnet}" '
+                BEGIN {
+                  split(subnet, parts, "/");
+                  network_prefix = parts[1];
+                  split(network_prefix, octets, ".");
+                  base = octets[1] "." octets[2] "." octets[3];
+                }
+                
+                # Parse JSON lease file
+                /"ip-address":/ {
+                  gsub(/[",]/, "");
+                  ip = $2;
+                  if (index(ip, base) == 1) {
+                    split(ip, ip_parts, ".");
+                    last_octet = ip_parts[4];
+                    hostname = "dhcp-" last_octet;
+                    
+                    getline; # Read next line
+                    while ($0 !~ /}/) {
+                      if ($0 ~ /"hostname":/) {
+                        gsub(/[",]/, "");
+                        if ($2 != "") hostname = $2;
+                        break;
+                      }
+                      getline;
+                    }
+                    
+                    print "local-data: \"" hostname "." domain ". IN A " ip "\"  # Dynamic DHCP";
+                  }
+                }
+              ' /var/lib/kea/dhcp4.leases >> /var/lib/unbound/homelab/dynamic-dns.conf
+              
+              DYNAMIC_COUNT=$(wc -l < /var/lib/unbound/homelab/dynamic-dns.conf)
+              echo "HOMELAB: $DYNAMIC_COUNT dynamic DNS entries"
+            else
+              echo "No DHCP leases found for HOMELAB"
+            fi
+          '' else ''
+            echo "Dynamic DNS disabled for HOMELAB"
+          ''}
+          
           # Generate unbound config
           cat > /var/lib/unbound/homelab/unbound.conf << 'EOF'
           server:
@@ -191,12 +283,13 @@ in
             qname-minimisation: yes
             
             # Local zones - declare these domains as locally served
-            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" static") homelabBaseDomains}
+            # Use 'transparent' instead of 'static' to allow wildcard matching
+            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" transparent") homelabBaseDomains}
             
-            # DNS A Records
+            # DNS A Records (manual + DHCP reservations)
             ${concatStringsSep "\n    " (lib.mapAttrsToList 
               (name: record: "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}") 
-              (homelabDns.a_records or {})
+              homelabAllARecords
             )}
             
             # DNS CNAME Records
@@ -210,6 +303,9 @@ in
             
             # Blocklist
             include: /var/lib/unbound/homelab/blocklist.conf
+            
+            # Dynamic DNS (from DHCP leases)
+            include: /var/lib/unbound/homelab/dynamic-dns.conf
             
             # Trust anchor
             auto-trust-anchor-file: /var/lib/unbound/homelab/root.key
@@ -291,6 +387,53 @@ in
             touch /var/lib/unbound/lan/blocklist.conf
           fi
           
+          # Generate dynamic DNS entries from DHCP leases
+          echo "Generating dynamic DNS entries from DHCP leases..."
+          > /var/lib/unbound/lan/dynamic-dns.conf
+          
+          ${if (lanCfg.dhcp.dynamicDomain or "") != "" then ''
+            if [ -f /var/lib/kea/dhcp4.leases ]; then
+              ${pkgs.gawk}/bin/awk -v domain="${lanCfg.dhcp.dynamicDomain}" -v subnet="${lanCfg.subnet}" '
+                BEGIN {
+                  split(subnet, parts, "/");
+                  network_prefix = parts[1];
+                  split(network_prefix, octets, ".");
+                  base = octets[1] "." octets[2] "." octets[3];
+                }
+                
+                # Parse JSON lease file
+                /"ip-address":/ {
+                  gsub(/[",]/, "");
+                  ip = $2;
+                  if (index(ip, base) == 1) {
+                    split(ip, ip_parts, ".");
+                    last_octet = ip_parts[4];
+                    hostname = "dhcp-" last_octet;
+                    
+                    getline; # Read next line
+                    while ($0 !~ /}/) {
+                      if ($0 ~ /"hostname":/) {
+                        gsub(/[",]/, "");
+                        if ($2 != "") hostname = $2;
+                        break;
+                      }
+                      getline;
+                    }
+                    
+                    print "local-data: \"" hostname "." domain ". IN A " ip "\"  # Dynamic DHCP";
+                  }
+                }
+              ' /var/lib/kea/dhcp4.leases >> /var/lib/unbound/lan/dynamic-dns.conf
+              
+              DYNAMIC_COUNT=$(wc -l < /var/lib/unbound/lan/dynamic-dns.conf)
+              echo "LAN: $DYNAMIC_COUNT dynamic DNS entries"
+            else
+              echo "No DHCP leases found for LAN"
+            fi
+          '' else ''
+            echo "Dynamic DNS disabled for LAN"
+          ''}
+          
           # Generate unbound config
           cat > /var/lib/unbound/lan/unbound.conf << 'EOF'
           server:
@@ -321,12 +464,13 @@ in
             qname-minimisation: yes
             
             # Local zones - declare these domains as locally served
-            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" static") lanBaseDomains}
+            # Use 'transparent' instead of 'static' to allow wildcard matching
+            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" transparent") lanBaseDomains}
             
-            # DNS A Records
+            # DNS A Records (manual + DHCP reservations)
             ${concatStringsSep "\n    " (lib.mapAttrsToList 
               (name: record: "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}") 
-              (lanDns.a_records or {})
+              lanAllARecords
             )}
             
             # DNS CNAME Records
@@ -340,6 +484,9 @@ in
             
             # Blocklist
             include: /var/lib/unbound/lan/blocklist.conf
+            
+            # Dynamic DNS (from DHCP leases)
+            include: /var/lib/unbound/lan/dynamic-dns.conf
             
             # Trust anchor
             auto-trust-anchor-file: /var/lib/unbound/lan/root.key
@@ -484,6 +631,155 @@ in
         OnBootSec = "5min";
         OnUnitActiveSec = "24h";  # TODO: Use minimum of all blocklist intervals
         Persistent = true;
+      };
+    };
+    
+    # Dynamic DNS updater services
+    systemd.services.unbound-dynamic-dns-homelab = {
+      description = "Update Unbound Dynamic DNS for HOMELAB";
+      serviceConfig = {
+        Type = "oneshot";
+        User = "unbound";
+        Group = "unbound";
+      };
+      script = ''
+        echo "Updating dynamic DNS for HOMELAB..."
+        
+        # Regenerate dynamic DNS entries
+        > /var/lib/unbound/homelab/dynamic-dns.conf
+        
+        ${if (homelabCfg.dhcp.dynamicDomain or "") != "" then ''
+          if [ -f /var/lib/kea/dhcp4.leases ]; then
+            ${pkgs.gawk}/bin/awk -v domain="${homelabCfg.dhcp.dynamicDomain}" -v subnet="${homelabCfg.subnet}" '
+              BEGIN {
+                split(subnet, parts, "/");
+                network_prefix = parts[1];
+                split(network_prefix, octets, ".");
+                base = octets[1] "." octets[2] "." octets[3];
+              }
+              
+              /"ip-address":/ {
+                gsub(/[",]/, "");
+                ip = $2;
+                if (index(ip, base) == 1) {
+                  split(ip, ip_parts, ".");
+                  last_octet = ip_parts[4];
+                  hostname = "dhcp-" last_octet;
+                  
+                  getline;
+                  while ($0 !~ /}/) {
+                    if ($0 ~ /"hostname":/) {
+                      gsub(/[",]/, "");
+                      if ($2 != "") hostname = $2;
+                      break;
+                    }
+                    getline;
+                  }
+                  
+                  print "local-data: \"" hostname "." domain ". IN A " ip "\"  # Dynamic DHCP";
+                }
+              }
+            ' /var/lib/kea/dhcp4.leases > /var/lib/unbound/homelab/dynamic-dns.conf
+            
+            # Reload Unbound
+            ${pkgs.unbound}/bin/unbound-control -c /var/lib/unbound/homelab/unbound.conf reload || true
+            
+            DYNAMIC_COUNT=$(wc -l < /var/lib/unbound/homelab/dynamic-dns.conf)
+            echo "HOMELAB: $DYNAMIC_COUNT dynamic DNS entries"
+          fi
+        '' else ""}
+      '';
+    };
+    
+    systemd.services.unbound-dynamic-dns-lan = {
+      description = "Update Unbound Dynamic DNS for LAN";
+      serviceConfig = {
+        Type = "oneshot";
+        User = "unbound";
+        Group = "unbound";
+      };
+      script = ''
+        echo "Updating dynamic DNS for LAN..."
+        
+        # Regenerate dynamic DNS entries
+        > /var/lib/unbound/lan/dynamic-dns.conf
+        
+        ${if (lanCfg.dhcp.dynamicDomain or "") != "" then ''
+          if [ -f /var/lib/kea/dhcp4.leases ]; then
+            ${pkgs.gawk}/bin/awk -v domain="${lanCfg.dhcp.dynamicDomain}" -v subnet="${lanCfg.subnet}" '
+              BEGIN {
+                split(subnet, parts, "/");
+                network_prefix = parts[1];
+                split(network_prefix, octets, ".");
+                base = octets[1] "." octets[2] "." octets[3];
+              }
+              
+              /"ip-address":/ {
+                gsub(/[",]/, "");
+                ip = $2;
+                if (index(ip, base) == 1) {
+                  split(ip, ip_parts, ".");
+                  last_octet = ip_parts[4];
+                  hostname = "dhcp-" last_octet;
+                  
+                  getline;
+                  while ($0 !~ /}/) {
+                    if ($0 ~ /"hostname":/) {
+                      gsub(/[",]/, "");
+                      if ($2 != "") hostname = $2;
+                      break;
+                    }
+                    getline;
+                  }
+                  
+                  print "local-data: \"" hostname "." domain ". IN A " ip "\"  # Dynamic DHCP";
+                }
+              }
+            ' /var/lib/kea/dhcp4.leases > /var/lib/unbound/lan/dynamic-dns.conf
+            
+            # Reload Unbound
+            ${pkgs.unbound}/bin/unbound-control -c /var/lib/unbound/lan/unbound.conf reload || true
+            
+            DYNAMIC_COUNT=$(wc -l < /var/lib/unbound/lan/dynamic-dns.conf)
+            echo "LAN: $DYNAMIC_COUNT dynamic DNS entries"
+          fi
+        '' else ""}
+      '';
+    };
+    
+    # Timers to periodically update dynamic DNS
+    systemd.timers.unbound-dynamic-dns-homelab = mkIf ((homelabCfg.dhcp.dynamicDomain or "") != "") {
+      description = "Periodically update Unbound Dynamic DNS for HOMELAB";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "1m";
+        OnUnitActiveSec = "5m";  # Update every 5 minutes
+      };
+    };
+    
+    systemd.timers.unbound-dynamic-dns-lan = mkIf ((lanCfg.dhcp.dynamicDomain or "") != "") {
+      description = "Periodically update Unbound Dynamic DNS for LAN";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "1m";
+        OnUnitActiveSec = "5m";  # Update every 5 minutes
+      };
+    };
+    
+    # Watch DHCP lease file for changes
+    systemd.paths.unbound-dynamic-dns-homelab = mkIf ((homelabCfg.dhcp.dynamicDomain or "") != "") {
+      description = "Watch DHCP leases for HOMELAB Dynamic DNS updates";
+      wantedBy = [ "multi-user.target" ];
+      pathConfig = {
+        PathModified = "/var/lib/kea/dhcp4.leases";
+      };
+    };
+    
+    systemd.paths.unbound-dynamic-dns-lan = mkIf ((lanCfg.dhcp.dynamicDomain or "") != "") {
+      description = "Watch DHCP leases for LAN Dynamic DNS updates";
+      wantedBy = [ "multi-user.target" ];
+      pathConfig = {
+        PathModified = "/var/lib/kea/dhcp4.leases";
       };
     };
     
