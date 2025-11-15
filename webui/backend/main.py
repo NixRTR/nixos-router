@@ -98,13 +98,17 @@ async def websocket_route(
 # Serve frontend static files in production
 # This assumes frontend is built to /var/lib/router-webui/frontend
 frontend_path = "/var/lib/router-webui/frontend"
-if os.path.exists(frontend_path):
-    app.mount("/assets", StaticFiles(directory=f"{frontend_path}/assets"), name="assets")
+assets_path = os.path.join(frontend_path, "assets")
+
+# Only mount static files if frontend is built and assets directory exists
+if os.path.exists(assets_path) and os.path.isdir(assets_path):
+    app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+    print(f"Serving frontend assets from {assets_path}")
     
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
         """Serve frontend application"""
-        # Serve index.html for all routes (SPA routing)
+        # Don't intercept API or WebSocket routes
         if not full_path or full_path.startswith("api/") or full_path.startswith("ws"):
             return
         
@@ -112,8 +116,13 @@ if os.path.exists(frontend_path):
         if os.path.isfile(file_path):
             return FileResponse(file_path)
         
-        # Default to index.html for SPA routing
-        return FileResponse(os.path.join(frontend_path, "index.html"))
+        # Default to index.html for SPA routing (if it exists)
+        index_path = os.path.join(frontend_path, "index.html")
+        if os.path.isfile(index_path):
+            return FileResponse(index_path)
+else:
+    print(f"Frontend not built yet. Assets directory not found at {assets_path}")
+    print("Backend API is available, but frontend UI is not served.")
 
 
 if __name__ == "__main__":
