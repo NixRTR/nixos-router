@@ -17,7 +17,7 @@ from ..collectors.system import (
     collect_temperatures, collect_fan_speeds
 )
 from ..collectors.clients import collect_client_stats
-from ..database import AsyncSessionLocal, SystemMetricsDB, DiskIOMetricsDB, TemperatureMetricsDB
+from ..database import AsyncSessionLocal, SystemMetricsDB, DiskIOMetricsDB, TemperatureMetricsDB, DeviceBandwidthDB
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -58,6 +58,38 @@ class TemperatureHistory(BaseModel):
     """Historical temperature metrics for a sensor"""
     sensor_name: str
     data: List[TemperatureDataPoint]
+
+
+class DeviceBandwidthDataPoint(BaseModel):
+    """Single data point for device bandwidth metrics"""
+    timestamp: datetime
+    rx_mbps: float
+    tx_mbps: float
+
+
+class DeviceBandwidthHistory(BaseModel):
+    """Historical device bandwidth metrics"""
+    network: str
+    ip_address: str
+    mac_address: Optional[str]
+    hostname: Optional[str]
+    data: List[DeviceBandwidthDataPoint]
+
+
+class DeviceBandwidthSummary(BaseModel):
+    """Device bandwidth summary with current rates and historical totals"""
+    network: str
+    ip_address: str
+    mac_address: Optional[str] = None
+    hostname: Optional[str] = None
+    current_rx_mbps: float
+    current_tx_mbps: float
+    last_hour_rx_mb: float
+    last_hour_tx_mb: float
+    last_day_rx_mb: float
+    last_day_tx_mb: float
+    last_month_rx_mb: float
+    last_month_tx_mb: float
 
 
 def parse_time_range(range_str: str) -> timedelta:
@@ -300,4 +332,151 @@ async def get_temperature_history(
             TemperatureHistory(sensor_name=sensor, data=data)
             for sensor, data in sensors.items()
         ]
+
+
+@router.get("/device-bandwidth/history")
+async def get_device_bandwidth_history(
+    ip_address: Optional[str] = Query(None, description="IP address filter"),
+    network: Optional[str] = Query(None, description="Network filter (homelab/lan)"),
+    time_range: str = Query("30m", description="Time range (e.g., 10m, 1h, 1d)", alias="range"),
+    _: str = Depends(get_current_user)
+) -> List[DeviceBandwidthHistory]:
+    """Get historical device bandwidth metrics
+
+    Args:
+        ip_address: Optional IP address filter
+        network: Optional network filter
+        time_range: Time range string (e.g., "30m", "1h", "3h")
+
+    Returns:
+        List[DeviceBandwidthHistory]: Historical data per device
+    """
+    async with AsyncSessionLocal() as session:
+        # Parse time range
+        time_delta = parse_time_range(time_range)
+        start_time = datetime.now() - time_delta
+
+        # Query database for device bandwidth metrics
+        query = select(DeviceBandwidthDB).where(DeviceBandwidthDB.timestamp >= start_time)
+        if ip_address:
+            query = query.where(DeviceBandwidthDB.ip_address == ip_address)
+        if network:
+            query = query.where(DeviceBandwidthDB.network == network)
+        query = query.order_by(DeviceBandwidthDB.ip_address, DeviceBandwidthDB.timestamp.asc())
+
+        result = await session.execute(query)
+        metrics = result.scalars().all()
+
+        # Group by device (IP address)
+        devices = {}
+        for m in metrics:
+            key = m.ip_address
+            if key not in devices:
+                devices[key] = {
+                    'network': m.network,
+                    'ip_address': m.ip_address,
+                    'mac_address': m.mac_address,
+                    'hostname': m.hostname,
+                    'data': []
+                }
+            devices[key]['data'].append(
+                DeviceBandwidthDataPoint(
+                    timestamp=m.timestamp,
+                    rx_mbps=m.rx_bytes_per_sec / (1024 * 1024) if m.rx_bytes_per_sec else 0,
+                    tx_mbps=m.tx_bytes_per_sec / (1024 * 1024) if m.tx_bytes_per_sec else 0
+                )
+            )
+
+        return [
+            DeviceBandwidthHistory(**device_data)
+            for device_data in devices.values()
+        ]
+
+
+@router.get("/device-bandwidth/summary")
+async def get_device_bandwidth_summary(
+    network: Optional[str] = Query(None, description="Network filter (homelab/lan)"),
+    _: str = Depends(get_current_user)
+) -> List[DeviceBandwidthSummary]:
+    """Get device bandwidth summary with current rates and historical totals
+
+    Args:
+        network: Optional network filter
+
+    Returns:
+        List[DeviceBandwidthSummary]: Device bandwidth summaries
+    """
+    async with AsyncSessionLocal() as session:
+        now = datetime.now()
+
+        # Get all devices that have had bandwidth in the last hour
+        one_hour_ago = now - timedelta(hours=1)
+        query = select(DeviceBandwidthDB).where(DeviceBandwidthDB.timestamp >= one_hour_ago)
+        if network:
+            query = query.where(DeviceBandwidthDB.network == network)
+        query = query.distinct(DeviceBandwidthDB.ip_address)
+
+        result = await session.execute(query)
+        recent_devices = result.scalars().all()
+
+        summaries = []
+
+        for device in recent_devices:
+            # Get current rates (latest measurement in last 5 minutes)
+            five_min_ago = now - timedelta(minutes=5)
+            current_query = select(DeviceBandwidthDB).where(
+                DeviceBandwidthDB.ip_address == device.ip_address,
+                DeviceBandwidthDB.timestamp >= five_min_ago
+            ).order_by(DeviceBandwidthDB.timestamp.desc()).limit(1)
+
+            current_result = await session.execute(current_query)
+            current = current_result.scalar_one_or_none()
+
+            current_rx = (current.rx_bytes_per_sec / (1024 * 1024)) if current and current.rx_bytes_per_sec else 0
+            current_tx = (current.tx_bytes_per_sec / (1024 * 1024)) if current and current.tx_bytes_per_sec else 0
+
+            # Calculate totals for different periods
+            periods = [
+                ('last_hour', one_hour_ago, now),
+                ('last_day', now - timedelta(days=1), now),
+                ('last_month', now - timedelta(days=30), now)
+            ]
+
+            period_totals = {}
+            for period_name, start_time, end_time in periods:
+                period_query = select(DeviceBandwidthDB).where(
+                    DeviceBandwidthDB.ip_address == device.ip_address,
+                    DeviceBandwidthDB.timestamp >= start_time,
+                    DeviceBandwidthDB.timestamp <= end_time
+                )
+
+                period_result = await session.execute(period_query)
+                period_metrics = period_result.scalars().all()
+
+                # Sum all bytes in the period (simple integration)
+                total_rx = sum(m.rx_bytes_per_sec or 0 for m in period_metrics)
+                total_tx = sum(m.tx_bytes_per_sec or 0 for m in period_metrics)
+
+                # Convert to MB (bytes * seconds = total bytes, divide by 1024^2 for MB)
+                # This is approximate - real integration would use time deltas
+                period_seconds = (end_time - start_time).total_seconds()
+                period_totals[f'{period_name}_rx_mb'] = (total_rx * period_seconds) / (1024 * 1024)
+                period_totals[f'{period_name}_tx_mb'] = (total_tx * period_seconds) / (1024 * 1024)
+
+            summaries.append(DeviceBandwidthSummary(
+                network=device.network,
+                ip_address=device.ip_address,
+                mac_address=device.mac_address,
+                hostname=device.hostname,
+                current_rx_mbps=current_rx,
+                current_tx_mbps=current_tx,
+                last_hour_rx_mb=period_totals['last_hour_rx_mb'],
+                last_hour_tx_mb=period_totals['last_hour_tx_mb'],
+                last_day_rx_mb=period_totals['last_day_rx_mb'],
+                last_day_tx_mb=period_totals['last_day_tx_mb'],
+                last_month_rx_mb=period_totals['last_month_rx_mb'],
+                last_month_tx_mb=period_totals['last_month_tx_mb']
+            ))
+
+        return summaries
 

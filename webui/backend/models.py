@@ -48,10 +48,23 @@ class DHCPLease(BaseModel):
     last_seen: datetime
     is_static: bool = False
 
+
+class DeviceBandwidth(BaseModel):
+    """Per-device bandwidth metrics"""
+    timestamp: datetime
+    network: str = Field(..., pattern="^(homelab|lan)$")
+    ip_address: str
+    mac_address: Optional[str] = None
+    hostname: Optional[str] = None
+    rx_bytes_per_sec: float = Field(..., ge=0)  # Download rate
+    tx_bytes_per_sec: float = Field(..., ge=0)  # Upload rate
+
     @field_validator('mac_address')
     @classmethod
-    def validate_mac(cls, v: str) -> str:
+    def validate_mac(cls, v: Optional[str]) -> Optional[str]:
         """Validate MAC address format"""
+        if v is None:
+            return None
         mac_pattern = r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
         if not re.match(mac_pattern, v):
             raise ValueError('Invalid MAC address format')

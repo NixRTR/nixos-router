@@ -428,32 +428,63 @@ in {
         allowPing = firewallCfg.allowPing;
         trustedInterfaces = bridgeNames;  # Trust all LAN bridges for WAN access
         
-        # Block traffic between bridges if isolation is enabled
-        extraCommands = mkIf (lanIsolation && (length bridges) > 1) (
+        # Firewall rules with bandwidth accounting
+        extraCommands = (
           let
-            # Generate all bridge pairs for blocking
-            bridgePairs = flatten (map (i: 
-              map (j: { from = elemAt bridgeNames i; to = elemAt bridgeNames j; })
-                (range (i + 1) ((length bridgeNames) - 1))
-            ) (range 0 ((length bridgeNames) - 2)));
-            
-            # Generate exception rules (must come BEFORE drop rules)
-            exceptionRules = concatMapStrings (ex: ''
-              # Exception: ${ex.description}
-              # Allow ${ex.source} (${ex.sourceBridge}) -> ${ex.destBridge}
-              iptables -I FORWARD -s ${ex.source} -i ${ex.sourceBridge} -o ${ex.destBridge} -j ACCEPT
-              # Allow return traffic from ${ex.destBridge} -> ${ex.source}
-              iptables -I FORWARD -d ${ex.source} -i ${ex.destBridge} -o ${ex.sourceBridge} -j ACCEPT
-            '') isolationExceptions;
+            # Bandwidth accounting rules (always applied)
+            bandwidthRules = ''
+              # Per-device bandwidth accounting
+              iptables -t mangle -N DEVICE_ACCOUNTING 2>/dev/null || true
+              iptables -t mangle -F DEVICE_ACCOUNTING 2>/dev/null || true
+
+              # Track LAN devices (192.168.1.0/24)
+              iptables -t mangle -A DEVICE_ACCOUNTING -s 192.168.1.0/24 -j RETURN
+              iptables -t mangle -A DEVICE_ACCOUNTING -d 192.168.1.0/24 -j RETURN
+
+              # Track HOMELAB devices (192.168.2.0/24)
+              iptables -t mangle -A DEVICE_ACCOUNTING -s 192.168.2.0/24 -j RETURN
+              iptables -t mangle -A DEVICE_ACCOUNTING -d 192.168.2.0/24 -j RETURN
+
+              # Apply accounting chain to bridged traffic
+              iptables -t mangle -A PREROUTING -i br0 -j DEVICE_ACCOUNTING
+              iptables -t mangle -A PREROUTING -i br1 -j DEVICE_ACCOUNTING
+              iptables -t mangle -A POSTROUTING -o br0 -j DEVICE_ACCOUNTING
+              iptables -t mangle -A POSTROUTING -o br1 -j DEVICE_ACCOUNTING
+            '';
+
+            # LAN isolation rules (only when enabled)
+            isolationRules = mkIf (lanIsolation && (length bridges) > 1) (
+              let
+                # Generate all bridge pairs for blocking
+                bridgePairs = flatten (map (i:
+                  map (j: { from = elemAt bridgeNames i; to = elemAt bridgeNames j; })
+                    (range (i + 1) ((length bridgeNames) - 1))
+                ) (range 0 ((length bridgeNames) - 2)));
+
+                # Generate exception rules (must come BEFORE drop rules)
+                exceptionRules = concatMapStrings (ex: ''
+                  # Exception: ${ex.description}
+                  # Allow ${ex.source} (${ex.sourceBridge}) -> ${ex.destBridge}
+                  iptables -I FORWARD -s ${ex.source} -i ${ex.sourceBridge} -o ${ex.destBridge} -j ACCEPT
+                  # Allow return traffic from ${ex.destBridge} -> ${ex.source}
+                  iptables -I FORWARD -d ${ex.source} -i ${ex.destBridge} -o ${ex.sourceBridge} -j ACCEPT
+                '') isolationExceptions;
+              in
+                # Apply exceptions first, then blocking rules
+                exceptionRules + (concatMapStrings (pair: ''
+                  # Block ${pair.from} <-> ${pair.to}
+                  iptables -A FORWARD -i ${pair.from} -o ${pair.to} -j DROP
+                  iptables -A FORWARD -i ${pair.to} -o ${pair.from} -j DROP
+                '') bridgePairs)
+            );
           in
-            # Apply exceptions first, then blocking rules
-            exceptionRules + (concatMapStrings (pair: ''
-              # Block ${pair.from} <-> ${pair.to}
-              iptables -A FORWARD -i ${pair.from} -o ${pair.to} -j DROP
-              iptables -A FORWARD -i ${pair.to} -o ${pair.from} -j DROP
-            '') bridgePairs)
+            # Combine bandwidth rules with isolation rules
+            mkMerge [
+              bandwidthRules
+              isolationRules
+            ]
         );
-        
+
         extraStopCommands = mkIf (lanIsolation && (length bridges) > 1) (
           let
             bridgePairs = flatten (map (i: 

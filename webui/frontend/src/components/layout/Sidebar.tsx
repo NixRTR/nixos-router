@@ -8,6 +8,7 @@ import {
   HiViewBoards,
   HiUsers,
   HiClock,
+  HiChartBar,
   HiLogout,
 } from 'react-icons/hi';
 
@@ -76,7 +77,17 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
                 active={location.pathname === '/clients'}
                 onClick={handleItemClick}
               >
-                Network Devices
+                Devices
+              </FlowbiteSidebar.Item>
+
+              <FlowbiteSidebar.Item
+                as={Link}
+                to="/device-usage"
+                icon={HiChartBar}
+                active={location.pathname === '/device-usage'}
+                onClick={handleItemClick}
+              >
+                Device Usage
               </FlowbiteSidebar.Item>
 
               <FlowbiteSidebar.Item
