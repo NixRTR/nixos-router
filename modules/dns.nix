@@ -283,7 +283,7 @@ in
             qname-minimisation: yes
             
             # Local zones – force static so all names under the domain are answered locally
-            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" static") homelabBaseDomains}
+            ${concatMapStringsSep "\n" (domain: "  local-zone: \"${domain}.\" static") homelabBaseDomains}
             
             # DNS A Records (manual + DHCP reservations)
             # Note: wildcard A is emitted as CNAME to apex to ensure Unbound matches subdomains.
@@ -299,20 +299,20 @@ in
                 in
                   if isWildcard then
                     # Make wildcard an alias to the apex; apex must have an A locally.
-                    "local-data: \"${name}. IN CNAME ${baseDomain}.\"  # wildcard -> apex"
+                    "  local-data: \"${name}. IN CNAME ${baseDomain}.\"  # wildcard -> apex"
                   else
-                    "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}";
+                    "  local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}";
             in
-              concatStringsSep "\n    "
+              concatStringsSep "\n"
                 (lib.mapAttrsToList toLocalData homelabAllARecords)
             }
             # Ensure wildcard exists even if not provided explicitly (alias to apex)
-            ${concatMapStringsSep "\n    " (domain:
+            ${concatMapStringsSep "\n" (domain:
               let
                 wildcard = "*.${domain}";
                 hasWildcard = lib.hasAttr wildcard homelabAllARecords;
               in
-                if hasWildcard then "" else "local-data: \"*.${domain}. IN CNAME ${domain}.\"  # default wildcard"
+                if hasWildcard then "" else "  local-data: \"*.${domain}. IN CNAME ${domain}.\"  # default wildcard"
             ) homelabBaseDomains}
             
             # DNS CNAME Records
@@ -487,7 +487,7 @@ in
             qname-minimisation: yes
             
             # Local zones – force static so all names under the domain are answered locally
-            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" static") lanBaseDomains}
+            ${concatMapStringsSep "\n" (domain: "  local-zone: \"${domain}.\" static") lanBaseDomains}
             
             # DNS A Records (manual + DHCP reservations)
             # Wildcard handled as CNAME to apex (see above rationale)
@@ -502,20 +502,20 @@ in
                   else name;
                 in
                   if isWildcard then
-                    "local-data: \"${name}. IN CNAME ${baseDomain}.\"  # wildcard -> apex"
+                    "  local-data: \"${name}. IN CNAME ${baseDomain}.\"  # wildcard -> apex"
                   else
-                    "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}";
+                    "  local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}";
             in
-              concatStringsSep "\n    "
+              concatStringsSep "\n"
                 (lib.mapAttrsToList toLocalData lanAllARecords)
             }
             # Ensure wildcard exists even if not provided explicitly (alias to apex)
-            ${concatMapStringsSep "\n    " (domain:
+            ${concatMapStringsSep "\n" (domain:
               let
                 wildcard = "*.${domain}";
                 hasWildcard = lib.hasAttr wildcard lanAllARecords;
               in
-                if hasWildcard then "" else "local-data: \"*.${domain}. IN CNAME ${domain}.\"  # default wildcard"
+                if hasWildcard then "" else "  local-data: \"*.${domain}. IN CNAME ${domain}.\"  # default wildcard"
             ) lanBaseDomains}
             
             # DNS CNAME Records
