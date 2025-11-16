@@ -622,6 +622,123 @@ in
         };
       };
       })
+      
+      # Dynamic DNS updater services
+      (mkIf homelabDnsEnabled {
+        unbound-dynamic-dns-homelab = {
+          description = "Update Unbound Dynamic DNS for HOMELAB";
+          serviceConfig = {
+            Type = "oneshot";
+            User = "unbound";
+            Group = "unbound";
+          };
+          script = ''
+            echo "Updating dynamic DNS for HOMELAB..."
+            
+            # Regenerate dynamic DNS entries
+            > /var/lib/unbound/homelab/dynamic-dns.conf
+            
+            ${if (homelabCfg.dhcp.dynamicDomain or "") != "" then ''
+              if [ -f /var/lib/kea/dhcp4.leases ]; then
+                ${pkgs.gawk}/bin/awk -v domain="${homelabCfg.dhcp.dynamicDomain}" -v subnet="${homelabCfg.subnet}" '
+                  BEGIN {
+                    split(subnet, parts, "/");
+                    network_prefix = parts[1];
+                    split(network_prefix, octets, ".");
+                    base = octets[1] "." octets[2] "." octets[3];
+                  }
+                  
+                  /"ip-address":/ {
+                    gsub(/[",]/, "");
+                    ip = $2;
+                    if (index(ip, base) == 1) {
+                      split(ip, ip_parts, ".");
+                      last_octet = ip_parts[4];
+                      hostname = "dhcp-" last_octet;
+                      
+                      getline;
+                      while ($0 !~ /}/) {
+                        if ($0 ~ /"hostname":/) {
+                          gsub(/[",]/, "");
+                          if ($2 != "") hostname = $2;
+                          break;
+                        }
+                        getline;
+                      }
+                      
+                      print "local-data: \"" hostname "." domain ". IN A " ip "\"  # Dynamic DHCP";
+                    }
+                  }
+                ' /var/lib/kea/dhcp4.leases > /var/lib/unbound/homelab/dynamic-dns.conf
+                
+                # Reload Unbound
+                ${pkgs.unbound}/bin/unbound-control -c /var/lib/unbound/homelab/unbound.conf reload || true
+                
+                DYNAMIC_COUNT=$(wc -l < /var/lib/unbound/homelab/dynamic-dns.conf)
+                echo "HOMELAB: $DYNAMIC_COUNT dynamic DNS entries"
+              fi
+            '' else ""}
+          '';
+        };
+      })
+      
+      (mkIf lanDnsEnabled {
+        unbound-dynamic-dns-lan = {
+          description = "Update Unbound Dynamic DNS for LAN";
+          serviceConfig = {
+            Type = "oneshot";
+            User = "unbound";
+            Group = "unbound";
+          };
+          script = ''
+            echo "Updating dynamic DNS for LAN..."
+            
+            # Regenerate dynamic DNS entries
+            > /var/lib/unbound/lan/dynamic-dns.conf
+            
+            ${if (lanCfg.dhcp.dynamicDomain or "") != "" then ''
+              if [ -f /var/lib/kea/dhcp4.leases ]; then
+                ${pkgs.gawk}/bin/awk -v domain="${lanCfg.dhcp.dynamicDomain}" -v subnet="${lanCfg.subnet}" '
+                  BEGIN {
+                    split(subnet, parts, "/");
+                    network_prefix = parts[1];
+                    split(network_prefix, octets, ".");
+                    base = octets[1] "." octets[2] "." octets[3];
+                  }
+                  
+                  /"ip-address":/ {
+                    gsub(/[",]/, "");
+                    ip = $2;
+                    if (index(ip, base) == 1) {
+                      split(ip, ip_parts, ".");
+                      last_octet = ip_parts[4];
+                      hostname = "dhcp-" last_octet;
+                      
+                      getline;
+                      while ($0 !~ /}/) {
+                        if ($0 ~ /"hostname":/) {
+                          gsub(/[",]/, "");
+                          if ($2 != "") hostname = $2;
+                          break;
+                        }
+                        getline;
+                      }
+                      
+                      print "local-data: \"" hostname "." domain ". IN A " ip "\"  # Dynamic DHCP";
+                    }
+                  }
+                ' /var/lib/kea/dhcp4.leases > /var/lib/unbound/lan/dynamic-dns.conf
+                
+                # Reload Unbound
+                ${pkgs.unbound}/bin/unbound-control -c /var/lib/unbound/lan/unbound.conf reload || true
+                
+                DYNAMIC_COUNT=$(wc -l < /var/lib/unbound/lan/dynamic-dns.conf)
+                echo "LAN: $DYNAMIC_COUNT dynamic DNS entries"
+              fi
+            '' else ""}
+          '';
+        };
+      })
     ];
     
     # Timer for HOMELAB blocklist updates
@@ -644,119 +761,6 @@ in
         OnUnitActiveSec = "24h";  # TODO: Use minimum of all blocklist intervals
         Persistent = true;
       };
-    };
-    
-    # Dynamic DNS updater services
-    systemd.services.unbound-dynamic-dns-homelab = mkIf homelabDnsEnabled {
-      description = "Update Unbound Dynamic DNS for HOMELAB";
-      serviceConfig = {
-        Type = "oneshot";
-        User = "unbound";
-        Group = "unbound";
-      };
-      script = ''
-        echo "Updating dynamic DNS for HOMELAB..."
-        
-        # Regenerate dynamic DNS entries
-        > /var/lib/unbound/homelab/dynamic-dns.conf
-        
-        ${if (homelabCfg.dhcp.dynamicDomain or "") != "" then ''
-          if [ -f /var/lib/kea/dhcp4.leases ]; then
-            ${pkgs.gawk}/bin/awk -v domain="${homelabCfg.dhcp.dynamicDomain}" -v subnet="${homelabCfg.subnet}" '
-              BEGIN {
-                split(subnet, parts, "/");
-                network_prefix = parts[1];
-                split(network_prefix, octets, ".");
-                base = octets[1] "." octets[2] "." octets[3];
-              }
-              
-              /"ip-address":/ {
-                gsub(/[",]/, "");
-                ip = $2;
-                if (index(ip, base) == 1) {
-                  split(ip, ip_parts, ".");
-                  last_octet = ip_parts[4];
-                  hostname = "dhcp-" last_octet;
-                  
-                  getline;
-                  while ($0 !~ /}/) {
-                    if ($0 ~ /"hostname":/) {
-                      gsub(/[",]/, "");
-                      if ($2 != "") hostname = $2;
-                      break;
-                    }
-                    getline;
-                  }
-                  
-                  print "local-data: \"" hostname "." domain ". IN A " ip "\"  # Dynamic DHCP";
-                }
-              }
-            ' /var/lib/kea/dhcp4.leases > /var/lib/unbound/homelab/dynamic-dns.conf
-            
-            # Reload Unbound
-            ${pkgs.unbound}/bin/unbound-control -c /var/lib/unbound/homelab/unbound.conf reload || true
-            
-            DYNAMIC_COUNT=$(wc -l < /var/lib/unbound/homelab/dynamic-dns.conf)
-            echo "HOMELAB: $DYNAMIC_COUNT dynamic DNS entries"
-          fi
-        '' else ""}
-      '';
-    };
-    
-    systemd.services.unbound-dynamic-dns-lan = mkIf lanDnsEnabled {
-      description = "Update Unbound Dynamic DNS for LAN";
-      serviceConfig = {
-        Type = "oneshot";
-        User = "unbound";
-        Group = "unbound";
-      };
-      script = ''
-        echo "Updating dynamic DNS for LAN..."
-        
-        # Regenerate dynamic DNS entries
-        > /var/lib/unbound/lan/dynamic-dns.conf
-        
-        ${if (lanCfg.dhcp.dynamicDomain or "") != "" then ''
-          if [ -f /var/lib/kea/dhcp4.leases ]; then
-            ${pkgs.gawk}/bin/awk -v domain="${lanCfg.dhcp.dynamicDomain}" -v subnet="${lanCfg.subnet}" '
-              BEGIN {
-                split(subnet, parts, "/");
-                network_prefix = parts[1];
-                split(network_prefix, octets, ".");
-                base = octets[1] "." octets[2] "." octets[3];
-              }
-              
-              /"ip-address":/ {
-                gsub(/[",]/, "");
-                ip = $2;
-                if (index(ip, base) == 1) {
-                  split(ip, ip_parts, ".");
-                  last_octet = ip_parts[4];
-                  hostname = "dhcp-" last_octet;
-                  
-                  getline;
-                  while ($0 !~ /}/) {
-                    if ($0 ~ /"hostname":/) {
-                      gsub(/[",]/, "");
-                      if ($2 != "") hostname = $2;
-                      break;
-                    }
-                    getline;
-                  }
-                  
-                  print "local-data: \"" hostname "." domain ". IN A " ip "\"  # Dynamic DHCP";
-                }
-              }
-            ' /var/lib/kea/dhcp4.leases > /var/lib/unbound/lan/dynamic-dns.conf
-            
-            # Reload Unbound
-            ${pkgs.unbound}/bin/unbound-control -c /var/lib/unbound/lan/unbound.conf reload || true
-            
-            DYNAMIC_COUNT=$(wc -l < /var/lib/unbound/lan/dynamic-dns.conf)
-            echo "LAN: $DYNAMIC_COUNT dynamic DNS entries"
-          fi
-        '' else ""}
-      '';
     };
     
     # Timers to periodically update dynamic DNS
