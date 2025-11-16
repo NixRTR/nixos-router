@@ -74,18 +74,25 @@ class InterfaceStatsDB(Base):
 
 
 class DHCPLeaseDB(Base):
-    """DHCP leases table"""
+    """DHCP leases table - tracks devices (MAC) with current IP assignments"""
     __tablename__ = "dhcp_leases"
     
     id = Column(Integer, primary_key=True, index=True)
     network = Column(String(32), nullable=False, index=True)
-    ip_address = Column(INET, nullable=False, unique=True)
     mac_address = Column(MACADDR, nullable=False)
+    ip_address = Column(INET, nullable=False)
     hostname = Column(String(255))
     lease_start = Column(DateTime(timezone=True))
     lease_end = Column(DateTime(timezone=True))
     last_seen = Column(DateTime(timezone=True), nullable=False, index=True)
     is_static = Column(Boolean, default=False)
+    
+    __table_args__ = (
+        # Each device (MAC) can only have one active lease per network
+        Index('idx_dhcp_network_mac', 'network', 'mac_address', unique=True),
+        # Each IP can only be assigned once per network
+        Index('idx_dhcp_network_ip', 'network', 'ip_address', unique=True),
+    )
 
 
 class ServiceStatusDB(Base):

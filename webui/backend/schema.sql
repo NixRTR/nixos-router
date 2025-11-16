@@ -34,12 +34,15 @@ CREATE TABLE IF NOT EXISTS interface_stats (
 
 CREATE INDEX IF NOT EXISTS idx_interface_stats_interface_time ON interface_stats(interface, timestamp DESC);
 
--- DHCP leases (current state snapshot)
+-- DHCP leases (current state snapshot - tracks devices by MAC)
+-- Design: Each device (MAC) can only have one active lease per network
+--         Each IP can only be assigned once per network
+--         This allows tracking devices across IP changes
 CREATE TABLE IF NOT EXISTS dhcp_leases (
     id SERIAL PRIMARY KEY,
     network VARCHAR(32) NOT NULL,  -- 'homelab' or 'lan'
-    ip_address INET NOT NULL UNIQUE,
-    mac_address MACADDR NOT NULL,
+    mac_address MACADDR NOT NULL,  -- Device identifier
+    ip_address INET NOT NULL,      -- Current IP assignment
     hostname VARCHAR(255),
     lease_start TIMESTAMPTZ,
     lease_end TIMESTAMPTZ,
@@ -49,6 +52,12 @@ CREATE TABLE IF NOT EXISTS dhcp_leases (
 
 CREATE INDEX IF NOT EXISTS idx_dhcp_leases_network ON dhcp_leases(network);
 CREATE INDEX IF NOT EXISTS idx_dhcp_leases_last_seen ON dhcp_leases(last_seen DESC);
+
+-- Unique constraint: one lease per device per network
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dhcp_network_mac ON dhcp_leases(network, mac_address);
+
+-- Unique constraint: one device per IP per network
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dhcp_network_ip ON dhcp_leases(network, ip_address);
 
 -- Service status time-series
 CREATE TABLE IF NOT EXISTS service_status (

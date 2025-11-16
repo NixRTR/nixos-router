@@ -13,14 +13,15 @@ def parse_kea_leases() -> List[DHCPLease]:
     """Parse Kea DHCP lease file (CSV format)
     
     Returns:
-        List[DHCPLease]: List of active DHCP leases (deduplicated by IP)
+        List[DHCPLease]: List of active DHCP leases (deduplicated by MAC per network)
     """
     lease_file = Path(settings.kea_lease_file)
     
     if not lease_file.exists():
         return []
     
-    # Use dict to automatically deduplicate by IP (keeps last occurrence)
+    # Use dict with (network, MAC) as key to track unique devices per network
+    # This automatically keeps the most recent entry for each device
     leases_dict = {}
     
     try:
@@ -31,6 +32,10 @@ def parse_kea_leases() -> List[DHCPLease]:
                 # Determine network based on IP address
                 ip = row.get('address', '')
                 if not ip:
+                    continue
+                
+                mac = row.get('hwaddr', '00:00:00:00:00:00')
+                if not mac or mac == '00:00:00:00:00:00':
                     continue
                     
                 network = 'homelab' if ip.startswith('192.168.2.') else 'lan'
@@ -53,15 +58,16 @@ def parse_kea_leases() -> List[DHCPLease]:
                 dhcp_lease = DHCPLease(
                     network=network,
                     ip_address=ip,
-                    mac_address=row.get('hwaddr', '00:00:00:00:00:00'),
+                    mac_address=mac,
                     hostname=row.get('hostname', '') or f"client-{ip.split('.')[-1]}",
                     lease_start=lease_start,
                     lease_end=lease_end,
                     last_seen=datetime.now(),
                     is_static=False
                 )
-                # Store in dict by IP - this automatically keeps the last (most recent) entry
-                leases_dict[ip] = dhcp_lease
+                # Store in dict by (network, MAC) - tracks unique devices per network
+                # Automatically keeps the last (most recent) entry for each device
+                leases_dict[(network, mac)] = dhcp_lease
             
     except (csv.Error, IOError) as e:
         # Silently fail - lease file might be empty or being written

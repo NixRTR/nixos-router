@@ -1,5 +1,13 @@
 # DHCP Lease Deduplication Fix
 
+> **NOTE**: This document describes the initial fix. The system has been further improved
+> to use MAC-based tracking instead of IP-based tracking. See `MAC_BASED_TRACKING.md`
+> for the current implementation.
+
+---
+
+# DHCP Lease Deduplication Fix (Initial Implementation)
+
 ## Problem
 
 The WebUI backend was experiencing two related issues:

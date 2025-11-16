@@ -186,28 +186,31 @@ class ConnectionManager:
                     )
                     session.add(service_db)
                 
-                # Update DHCP leases (upsert based on IP)
+                # Update DHCP leases (upsert based on MAC+network)
                 for lease in dhcp_leases:
-                    # Check if lease exists
+                    # Check if device (MAC) exists in this network
                     result = await session.execute(
-                        select(DHCPLeaseDB).where(DHCPLeaseDB.ip_address == lease.ip_address)
+                        select(DHCPLeaseDB).where(
+                            DHCPLeaseDB.network == lease.network,
+                            DHCPLeaseDB.mac_address == lease.mac_address
+                        )
                     )
                     existing = result.scalar_one_or_none()
                     
                     if existing:
-                        # Update existing lease
-                        existing.mac_address = lease.mac_address
+                        # Update existing device lease (IP may have changed)
+                        existing.ip_address = lease.ip_address
                         existing.hostname = lease.hostname
                         existing.lease_start = lease.lease_start
                         existing.lease_end = lease.lease_end
                         existing.last_seen = lease.last_seen
-                        existing.network = lease.network
+                        existing.is_static = lease.is_static
                     else:
-                        # Insert new lease
+                        # Insert new device
                         lease_db = DHCPLeaseDB(
                             network=lease.network,
-                            ip_address=lease.ip_address,
                             mac_address=lease.mac_address,
+                            ip_address=lease.ip_address,
                             hostname=lease.hostname,
                             lease_start=lease.lease_start,
                             lease_end=lease.lease_end,
