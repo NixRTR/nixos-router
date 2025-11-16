@@ -58,8 +58,11 @@ export function Network() {
         
         if (response.ok) {
           const data: BandwidthHistory[] = await response.json();
-          // Filter to main interfaces only
-          const filteredData = data.filter(d => ['ppp0', 'br0', 'br1'].includes(d.interface));
+          // Filter to main interfaces only and sort in desired order: WAN, LAN, HOMELAB
+          const interfaceOrder = ['ppp0', 'br1', 'br0']; // WAN, LAN, HOMELAB
+          const filteredData = data
+            .filter(d => interfaceOrder.includes(d.interface))
+            .sort((a, b) => interfaceOrder.indexOf(a.interface) - interfaceOrder.indexOf(b.interface));
           const newDataString = JSON.stringify(filteredData);
           
           if (newDataString !== lastDataRef.current) {
