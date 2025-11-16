@@ -4,10 +4,11 @@ Client statistics collector
 from datetime import datetime
 from typing import List
 from ..models import ClientStats
-from .network_devices import collect_network_devices
+from .network_devices import discover_network_devices
+from .dhcp import parse_kea_leases
 
 
-async def collect_client_stats() -> List[ClientStats]:
+def collect_client_stats() -> List[ClientStats]:
     """Collect client statistics for each network
     
     Returns:
@@ -15,8 +16,11 @@ async def collect_client_stats() -> List[ClientStats]:
     """
     results = []
     
+    # Get DHCP leases
+    dhcp_leases = parse_kea_leases()
+    
     # Get all network devices
-    devices = await collect_network_devices()
+    devices = discover_network_devices(dhcp_leases)
     
     # Group by network
     for network in ['homelab', 'lan']:

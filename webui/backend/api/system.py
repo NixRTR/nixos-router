@@ -40,7 +40,7 @@ async def get_current_system_metrics(
         "disk_space": collect_disk_space(),
         "temperatures": collect_temperatures(),
         "fans": collect_fan_speeds(),
-        "clients": await collect_client_stats()
+        "clients": collect_client_stats()
     }
 
 
@@ -89,5 +89,5 @@ async def get_client_statistics(
     _: str = Depends(get_current_user)
 ) -> List[ClientStats]:
     """Get network client statistics"""
-    return await collect_client_stats()
+    return collect_client_stats()
 
