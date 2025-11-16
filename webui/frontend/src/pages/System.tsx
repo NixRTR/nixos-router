@@ -1,5 +1,5 @@
 /**
- * System monitoring page with historical charts
+ * System monitoring page with sticky global controls and historical charts
  */
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -22,16 +22,24 @@ interface SystemHistory {
 }
 
 interface DiskIODataPoint {
-  time: string;
-  timestamp: number;
+  timestamp: string;
   read_mbps: number;
   write_mbps: number;
 }
 
-interface TempDataPoint {
-  time: string;
-  timestamp: number;
-  temperature: number;
+interface DiskIOHistory {
+  device: string;
+  data: DiskIODataPoint[];
+}
+
+interface TemperatureDataPoint {
+  timestamp: string;
+  temperature_c: number;
+}
+
+interface TemperatureHistory {
+  sensor_name: string;
+  data: TemperatureDataPoint[];
 }
 
 interface ClientStats {
@@ -49,31 +57,24 @@ export function System() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
-  // Shared time range for all charts
+  // Global controls (sticky header)
   const [timeRange, setTimeRange] = useState('30m');
   const [customRange, setCustomRange] = useState('');
+  const [refreshInterval, setRefreshInterval] = useState(10);
   
-  // System metrics (CPU/Memory/Load) - from database
-  const [cpuRefreshInterval, setCpuRefreshInterval] = useState(10);
+  // Historical data from database
   const [cpuHistoricalData, setCpuHistoricalData] = useState<SystemDataPoint[]>([]);
-  const cpuLastDataRef = useRef<string>('');
-  
-  const [memRefreshInterval, setMemRefreshInterval] = useState(10);
   const [memHistoricalData, setMemHistoricalData] = useState<SystemDataPoint[]>([]);
-  const memLastDataRef = useRef<string>('');
-  
-  const [loadRefreshInterval, setLoadRefreshInterval] = useState(10);
   const [loadHistoricalData, setLoadHistoricalData] = useState<SystemDataPoint[]>([]);
-  const loadLastDataRef = useRef<string>('');
-  
-  // Real-time data (Disk I/O, Temps, Clients)
-  const [diskRefreshInterval, setDiskRefreshInterval] = useState(10);
-  const [diskIOHistory, setDiskIOHistory] = useState<Map<string, DiskIODataPoint[]>>(new Map());
-  
-  const [tempRefreshInterval, setTempRefreshInterval] = useState(10);
-  const [tempHistory, setTempHistory] = useState<Map<string, TempDataPoint[]>>(new Map());
-  
+  const [diskIOHistories, setDiskIOHistories] = useState<DiskIOHistory[]>([]);
+  const [tempHistories, setTempHistories] = useState<TemperatureHistory[]>([]);
   const [clientStats, setClientStats] = useState<ClientStats[]>([]);
+  
+  const cpuLastDataRef = useRef<string>('');
+  const memLastDataRef = useRef<string>('');
+  const loadLastDataRef = useRef<string>('');
+  const diskLastDataRef = useRef<string>('');
+  const tempLastDataRef = useRef<string>('');
   
   const { connectionStatus } = useMetrics(token);
   
@@ -82,24 +83,7 @@ export function System() {
     navigate('/login');
   };
 
-  // Parse time range to milliseconds
-  const getTimeRangeMs = () => {
-    const rangeStr = timeRange === 'custom' ? customRange : timeRange;
-    const match = rangeStr.match(/^(\d+)([mhd])$/);
-    if (!match) return 30 * 60 * 1000;
-    
-    const value = parseInt(match[1]);
-    const unit = match[2];
-    
-    switch (unit) {
-      case 'm': return value * 60 * 1000;
-      case 'h': return value * 60 * 60 * 1000;
-      case 'd': return value * 24 * 60 * 60 * 1000;
-      default: return 30 * 60 * 1000;
-    }
-  };
-
-  // Fetch CPU historical data
+  // Fetch system metrics (CPU/Memory/Load) historical data
   useEffect(() => {
     const fetchHistory = async () => {
       if (!token) return;
@@ -108,78 +92,10 @@ export function System() {
         const range = timeRange === 'custom' ? customRange : timeRange;
         if (!range || (timeRange === 'custom' && !customRange)) {
           setCpuHistoricalData([]);
-          cpuLastDataRef.current = '';
-          return;
-        }
-        
-        const response = await fetch(`/api/system/history?range=${range}`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        
-        if (response.ok) {
-          const data: SystemHistory = await response.json();
-          const newDataString = JSON.stringify(data.data);
-          if (newDataString !== cpuLastDataRef.current) {
-            setCpuHistoricalData(data.data);
-            cpuLastDataRef.current = newDataString;
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch CPU history:', error);
-      }
-    };
-    
-    cpuLastDataRef.current = '';
-    fetchHistory();
-    const interval = setInterval(fetchHistory, cpuRefreshInterval * 1000);
-    return () => clearInterval(interval);
-  }, [timeRange, customRange, cpuRefreshInterval, token]);
-
-  // Fetch Memory historical data
-  useEffect(() => {
-    const fetchHistory = async () => {
-      if (!token) return;
-      
-      try {
-        const range = timeRange === 'custom' ? customRange : timeRange;
-        if (!range || (timeRange === 'custom' && !customRange)) {
           setMemHistoricalData([]);
-          memLastDataRef.current = '';
-          return;
-        }
-        
-        const response = await fetch(`/api/system/history?range=${range}`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        
-        if (response.ok) {
-          const data: SystemHistory = await response.json();
-          const newDataString = JSON.stringify(data.data);
-          if (newDataString !== memLastDataRef.current) {
-            setMemHistoricalData(data.data);
-            memLastDataRef.current = newDataString;
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch memory history:', error);
-      }
-    };
-    
-    memLastDataRef.current = '';
-    fetchHistory();
-    const interval = setInterval(fetchHistory, memRefreshInterval * 1000);
-    return () => clearInterval(interval);
-  }, [timeRange, customRange, memRefreshInterval, token]);
-
-  // Fetch Load historical data
-  useEffect(() => {
-    const fetchHistory = async () => {
-      if (!token) return;
-      
-      try {
-        const range = timeRange === 'custom' ? customRange : timeRange;
-        if (!range || (timeRange === 'custom' && !customRange)) {
           setLoadHistoricalData([]);
+          cpuLastDataRef.current = '';
+          memLastDataRef.current = '';
           loadLastDataRef.current = '';
           return;
         }
@@ -191,115 +107,128 @@ export function System() {
         if (response.ok) {
           const data: SystemHistory = await response.json();
           const newDataString = JSON.stringify(data.data);
-          if (newDataString !== loadLastDataRef.current) {
+          
+          if (newDataString !== cpuLastDataRef.current) {
+            setCpuHistoricalData(data.data);
+            setMemHistoricalData(data.data);
             setLoadHistoricalData(data.data);
+            cpuLastDataRef.current = newDataString;
+            memLastDataRef.current = newDataString;
             loadLastDataRef.current = newDataString;
           }
         }
       } catch (error) {
-        console.error('Failed to fetch load history:', error);
+        console.error('Failed to fetch system history:', error);
       }
     };
     
+    cpuLastDataRef.current = '';
+    memLastDataRef.current = '';
     loadLastDataRef.current = '';
     fetchHistory();
-    const interval = setInterval(fetchHistory, loadRefreshInterval * 1000);
+    const interval = setInterval(fetchHistory, refreshInterval * 1000);
     return () => clearInterval(interval);
-  }, [timeRange, customRange, loadRefreshInterval, token]);
+  }, [timeRange, customRange, refreshInterval, token]);
 
-  // Fetch real-time data for disk I/O, temps, clients
+  // Fetch disk I/O historical data
   useEffect(() => {
-    const fetchRealTimeData = async () => {
+    const fetchDiskIOHistory = async () => {
       if (!token) return;
       
       try {
-        const response = await fetch('/api/system/current', {
+        const range = timeRange === 'custom' ? customRange : timeRange;
+        if (!range || (timeRange === 'custom' && !customRange)) {
+          setDiskIOHistories([]);
+          diskLastDataRef.current = '';
+          return;
+        }
+        
+        const response = await fetch(`/api/system/disk-io/history?range=${range}`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         
         if (response.ok) {
-          const data = await response.json();
-          const now = Date.now();
-          const timeStr = new Date().toLocaleTimeString();
+          const data: DiskIOHistory[] = await response.json();
+          // Filter out partitions (devices ending with numbers)
+          const filteredData = data.filter(d => !d.device.match(/\d$/));
+          const newDataString = JSON.stringify(filteredData);
           
-          // Update disk I/O history
-          if (data.disk_io && data.disk_io.length > 0) {
-            const maxAge = getTimeRangeMs();
-            const cutoff = now - maxAge;
-            
-            setDiskIOHistory(prev => {
-              const newMap = new Map(prev);
-              data.disk_io.forEach((disk: any) => {
-                if (disk.device.match(/\d$/)) return;
-                const history = newMap.get(disk.device) || [];
-                const newPoint = {
-                  time: timeStr,
-                  timestamp: now,
-                  read_mbps: disk.read_bytes_per_sec / (1024 * 1024),
-                  write_mbps: disk.write_bytes_per_sec / (1024 * 1024),
-                };
-                const updated = [...history, newPoint].filter(d => d.timestamp > cutoff);
-                newMap.set(disk.device, updated);
-              });
-              return newMap;
-            });
-          }
-          
-          // Update temperature history
-          if (data.temperatures && data.temperatures.length > 0) {
-            const maxAge = getTimeRangeMs();
-            const cutoff = now - maxAge;
-            
-            setTempHistory(prev => {
-              const newMap = new Map(prev);
-              data.temperatures.forEach((temp: any) => {
-                const key = getSensorName(temp.sensor_name, temp.label);
-                const history = newMap.get(key) || [];
-                const newPoint = {
-                  time: timeStr,
-                  timestamp: now,
-                  temperature: temp.temperature_c,
-                };
-                const updated = [...history, newPoint].filter(d => d.timestamp > cutoff);
-                newMap.set(key, updated);
-              });
-              return newMap;
-            });
-          }
-          
-          // Update client stats
-          if (data.clients) {
-            setClientStats(data.clients);
+          if (newDataString !== diskLastDataRef.current) {
+            setDiskIOHistories(filteredData);
+            diskLastDataRef.current = newDataString;
           }
         }
       } catch (error) {
-        console.error('Failed to fetch real-time data:', error);
+        console.error('Failed to fetch disk I/O history:', error);
       }
     };
     
-    fetchRealTimeData();
-    const diskInterval = setInterval(fetchRealTimeData, diskRefreshInterval * 1000);
-    return () => clearInterval(diskInterval);
-  }, [timeRange, customRange, diskRefreshInterval, tempRefreshInterval, token]);
+    diskLastDataRef.current = '';
+    fetchDiskIOHistory();
+    const interval = setInterval(fetchDiskIOHistory, refreshInterval * 1000);
+    return () => clearInterval(interval);
+  }, [timeRange, customRange, refreshInterval, token]);
 
-  // Get friendly sensor names
-  const getSensorName = (sensorName: string, label: string | null) => {
-    if (label) return label;
-    const nameMap: { [key: string]: string } = {
-      'coretemp': 'CPU',
-      'k10temp': 'CPU',
-      'cpu_thermal': 'CPU',
-      'acpitz': 'Motherboard',
-      'pch_skylake': 'PCH',
-      'iwlwifi_1': 'WiFi',
-      'nvme': 'NVMe SSD',
-      'drivetemp': 'HDD',
+  // Fetch temperature historical data
+  useEffect(() => {
+    const fetchTempHistory = async () => {
+      if (!token) return;
+      
+      try {
+        const range = timeRange === 'custom' ? customRange : timeRange;
+        if (!range || (timeRange === 'custom' && !customRange)) {
+          setTempHistories([]);
+          tempLastDataRef.current = '';
+          return;
+        }
+        
+        const response = await fetch(`/api/system/temperatures/history?range=${range}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        
+        if (response.ok) {
+          const data: TemperatureHistory[] = await response.json();
+          const newDataString = JSON.stringify(data);
+          
+          if (newDataString !== tempLastDataRef.current) {
+            setTempHistories(data);
+            tempLastDataRef.current = newDataString;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch temperature history:', error);
+      }
     };
-    for (const [key, name] of Object.entries(nameMap)) {
-      if (sensorName.toLowerCase().includes(key.toLowerCase())) return name;
-    }
-    return sensorName;
-  };
+    
+    tempLastDataRef.current = '';
+    fetchTempHistory();
+    const interval = setInterval(fetchTempHistory, refreshInterval * 1000);
+    return () => clearInterval(interval);
+  }, [timeRange, customRange, refreshInterval, token]);
+
+  // Fetch client stats
+  useEffect(() => {
+    const fetchClientStats = async () => {
+      if (!token) return;
+      
+      try {
+        const response = await fetch('/api/system/clients', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        
+        if (response.ok) {
+          const data: ClientStats[] = await response.json();
+          setClientStats(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch client stats:', error);
+      }
+    };
+    
+    fetchClientStats();
+    const interval = setInterval(fetchClientStats, refreshInterval * 1000);
+    return () => clearInterval(interval);
+  }, [refreshInterval, token]);
 
   // Get physical disk name
   const getDiskName = (device: string) => {
@@ -350,45 +279,55 @@ export function System() {
           onMenuClick={() => setSidebarOpen(!sidebarOpen)}
         />
         
+        {/* Sticky Global Controls */}
+        <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 py-3 shadow-sm">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-bold">System Monitoring</h1>
+            
+            <div className="flex flex-wrap gap-2 md:gap-4 items-end">
+              {/* Time Range Selector */}
+              <div className="min-w-[120px]">
+                <Label htmlFor="global-range" value="Time Range" className="text-xs mb-1" />
+                <Select id="global-range" sizing="sm" value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
+                  <option value="10m">10 minutes</option>
+                  <option value="30m">30 minutes</option>
+                  <option value="1h">1 hour</option>
+                  <option value="3h">3 hours</option>
+                  <option value="6h">6 hours</option>
+                  <option value="12h">12 hours</option>
+                  <option value="1d">1 day</option>
+                  <option value="custom">Custom</option>
+                </Select>
+              </div>
+              
+              {timeRange === 'custom' && (
+                <div className="min-w-[100px]">
+                  <Label htmlFor="global-custom" value="Custom" className="text-xs mb-1" />
+                  <TextInput id="global-custom" sizing="sm" placeholder="e.g., 45m" value={customRange} onChange={(e) => setCustomRange(e.target.value)} />
+                </div>
+              )}
+              
+              {/* Refresh Interval Selector */}
+              <div className="min-w-[120px]">
+                <Label htmlFor="global-refresh" value="Update Every" className="text-xs mb-1" />
+                <Select id="global-refresh" sizing="sm" value={refreshInterval} onChange={(e) => setRefreshInterval(Number(e.target.value))}>
+                  <option value={1}>1 second</option>
+                  <option value={5}>5 seconds</option>
+                  <option value={10}>10 seconds</option>
+                  <option value={30}>30 seconds</option>
+                  <option value={60}>1 minute</option>
+                </Select>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50 dark:bg-gray-900">
-          <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-6">System Monitoring</h1>
-          
           {/* Grid: 2 columns on desktop, 1 on mobile */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* CPU Usage Chart */}
             <Card>
               <h3 className="text-lg font-semibold mb-4">CPU Usage</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
-                <div>
-                  <Label htmlFor="cpu-range" value="Time Range" className="text-xs" />
-                  <Select id="cpu-range" sizing="sm" value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
-                    <option value="10m">10 min</option>
-                    <option value="30m">30 min</option>
-                    <option value="1h">1 hour</option>
-                    <option value="3h">3 hours</option>
-                    <option value="6h">6 hours</option>
-                    <option value="12h">12 hours</option>
-                    <option value="1d">1 day</option>
-                    <option value="custom">Custom</option>
-                  </Select>
-                </div>
-                {timeRange === 'custom' && (
-                  <div>
-                    <Label htmlFor="cpu-custom" value="Custom" className="text-xs" />
-                    <TextInput id="cpu-custom" sizing="sm" placeholder="e.g., 45m" value={customRange} onChange={(e) => setCustomRange(e.target.value)} />
-                  </div>
-                )}
-                <div>
-                  <Label htmlFor="cpu-refresh" value="Update Every" className="text-xs" />
-                  <Select id="cpu-refresh" sizing="sm" value={cpuRefreshInterval} onChange={(e) => setCpuRefreshInterval(Number(e.target.value))}>
-                    <option value={1}>1 sec</option>
-                    <option value={5}>5 sec</option>
-                    <option value={10}>10 sec</option>
-                    <option value={30}>30 sec</option>
-                    <option value={60}>1 min</option>
-                  </Select>
-                </div>
-              </div>
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={cpuChartData}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -406,37 +345,6 @@ export function System() {
             {/* Memory Usage Chart */}
             <Card>
               <h3 className="text-lg font-semibold mb-4">Memory Usage</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
-                <div>
-                  <Label htmlFor="mem-range" value="Time Range" className="text-xs" />
-                  <Select id="mem-range" sizing="sm" value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
-                    <option value="10m">10 min</option>
-                    <option value="30m">30 min</option>
-                    <option value="1h">1 hour</option>
-                    <option value="3h">3 hours</option>
-                    <option value="6h">6 hours</option>
-                    <option value="12h">12 hours</option>
-                    <option value="1d">1 day</option>
-                    <option value="custom">Custom</option>
-                  </Select>
-                </div>
-                {timeRange === 'custom' && (
-                  <div>
-                    <Label htmlFor="mem-custom" value="Custom" className="text-xs" />
-                    <TextInput id="mem-custom" sizing="sm" placeholder="e.g., 45m" value={customRange} onChange={(e) => setCustomRange(e.target.value)} />
-                  </div>
-                )}
-                <div>
-                  <Label htmlFor="mem-refresh" value="Update Every" className="text-xs" />
-                  <Select id="mem-refresh" sizing="sm" value={memRefreshInterval} onChange={(e) => setMemRefreshInterval(Number(e.target.value))}>
-                    <option value={1}>1 sec</option>
-                    <option value={5}>5 sec</option>
-                    <option value={10}>10 sec</option>
-                    <option value={30}>30 sec</option>
-                    <option value={60}>1 min</option>
-                  </Select>
-                </div>
-              </div>
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={memChartData}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -454,37 +362,6 @@ export function System() {
             {/* Load Average Chart */}
             <Card>
               <h3 className="text-lg font-semibold mb-4">Load Average</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
-                <div>
-                  <Label htmlFor="load-range" value="Time Range" className="text-xs" />
-                  <Select id="load-range" sizing="sm" value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
-                    <option value="10m">10 min</option>
-                    <option value="30m">30 min</option>
-                    <option value="1h">1 hour</option>
-                    <option value="3h">3 hours</option>
-                    <option value="6h">6 hours</option>
-                    <option value="12h">12 hours</option>
-                    <option value="1d">1 day</option>
-                    <option value="custom">Custom</option>
-                  </Select>
-                </div>
-                {timeRange === 'custom' && (
-                  <div>
-                    <Label htmlFor="load-custom" value="Custom" className="text-xs" />
-                    <TextInput id="load-custom" sizing="sm" placeholder="e.g., 45m" value={customRange} onChange={(e) => setCustomRange(e.target.value)} />
-                  </div>
-                )}
-                <div>
-                  <Label htmlFor="load-refresh" value="Update Every" className="text-xs" />
-                  <Select id="load-refresh" sizing="sm" value={loadRefreshInterval} onChange={(e) => setLoadRefreshInterval(Number(e.target.value))}>
-                    <option value={1}>1 sec</option>
-                    <option value={5}>5 sec</option>
-                    <option value={10}>10 sec</option>
-                    <option value={30}>30 sec</option>
-                    <option value={60}>1 min</option>
-                  </Select>
-                </div>
-              </div>
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={loadChartData}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -500,38 +377,18 @@ export function System() {
             </Card>
 
             {/* Disk I/O Charts */}
-            {Array.from(diskIOHistory.keys()).map(device => {
-              const diskData = diskIOHistory.get(device) || [];
+            {diskIOHistories.map(diskHistory => {
+              const diskData = diskHistory.data.map(d => ({
+                time: new Date(d.timestamp).toLocaleTimeString(),
+                read_mbps: d.read_mbps,
+                write_mbps: d.write_mbps,
+              }));
               const currentRead = diskData.length > 0 ? diskData[diskData.length - 1].read_mbps : 0;
               const currentWrite = diskData.length > 0 ? diskData[diskData.length - 1].write_mbps : 0;
               
               return (
-                <Card key={device}>
-                  <h3 className="text-lg font-semibold mb-4">Disk I/O - {getDiskName(device)}</h3>
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    <div>
-                      <Label htmlFor={`disk-${device}-range`} value="Time Range" className="text-xs" />
-                      <Select id={`disk-${device}-range`} sizing="sm" value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
-                        <option value="10m">10 min</option>
-                        <option value="30m">30 min</option>
-                        <option value="1h">1 hour</option>
-                        <option value="3h">3 hours</option>
-                        <option value="6h">6 hours</option>
-                        <option value="12h">12 hours</option>
-                        <option value="1d">1 day</option>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor={`disk-${device}-refresh`} value="Update Every" className="text-xs" />
-                      <Select id={`disk-${device}-refresh`} sizing="sm" value={diskRefreshInterval} onChange={(e) => setDiskRefreshInterval(Number(e.target.value))}>
-                        <option value={1}>1 sec</option>
-                        <option value={5}>5 sec</option>
-                        <option value={10}>10 sec</option>
-                        <option value={30}>30 sec</option>
-                        <option value={60}>1 min</option>
-                      </Select>
-                    </div>
-                  </div>
+                <Card key={diskHistory.device}>
+                  <h3 className="text-lg font-semibold mb-4">Disk I/O - {getDiskName(diskHistory.device)}</h3>
                   <ResponsiveContainer width="100%" height={250}>
                     <LineChart data={diskData}>
                       <CartesianGrid strokeDasharray="3 3" />
@@ -551,37 +408,16 @@ export function System() {
             })}
 
             {/* Temperature Charts */}
-            {Array.from(tempHistory.keys()).map(sensorName => {
-              const tempData = tempHistory.get(sensorName) || [];
+            {tempHistories.map(tempHistory => {
+              const tempData = tempHistory.data.map(d => ({
+                time: new Date(d.timestamp).toLocaleTimeString(),
+                temperature: d.temperature_c,
+              }));
               const currentTemp = tempData.length > 0 ? tempData[tempData.length - 1].temperature : 0;
               
               return (
-                <Card key={sensorName}>
-                  <h3 className="text-lg font-semibold mb-4">Temperature - {sensorName}</h3>
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    <div>
-                      <Label htmlFor={`temp-${sensorName}-range`} value="Time Range" className="text-xs" />
-                      <Select id={`temp-${sensorName}-range`} sizing="sm" value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
-                        <option value="10m">10 min</option>
-                        <option value="30m">30 min</option>
-                        <option value="1h">1 hour</option>
-                        <option value="3h">3 hours</option>
-                        <option value="6h">6 hours</option>
-                        <option value="12h">12 hours</option>
-                        <option value="1d">1 day</option>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor={`temp-${sensorName}-refresh`} value="Update Every" className="text-xs" />
-                      <Select id={`temp-${sensorName}-refresh`} sizing="sm" value={tempRefreshInterval} onChange={(e) => setTempRefreshInterval(Number(e.target.value))}>
-                        <option value={1}>1 sec</option>
-                        <option value={5}>5 sec</option>
-                        <option value={10}>10 sec</option>
-                        <option value={30}>30 sec</option>
-                        <option value={60}>1 min</option>
-                      </Select>
-                    </div>
-                  </div>
+                <Card key={tempHistory.sensor_name}>
+                  <h3 className="text-lg font-semibold mb-4">Temperature - {tempHistory.sensor_name}</h3>
                   <ResponsiveContainer width="100%" height={250}>
                     <LineChart data={tempData}>
                       <CartesianGrid strokeDasharray="3 3" />

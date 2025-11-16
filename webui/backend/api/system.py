@@ -17,7 +17,7 @@ from ..collectors.system import (
     collect_temperatures, collect_fan_speeds
 )
 from ..collectors.clients import collect_client_stats
-from ..database import AsyncSessionLocal, SystemMetricsDB
+from ..database import AsyncSessionLocal, SystemMetricsDB, DiskIOMetricsDB, TemperatureMetricsDB
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -33,6 +33,31 @@ class SystemDataPoint(BaseModel):
 class SystemHistory(BaseModel):
     """Historical system metrics"""
     data: List[SystemDataPoint]
+
+
+class DiskIODataPoint(BaseModel):
+    """Single data point for disk I/O metrics"""
+    timestamp: datetime
+    read_mbps: float
+    write_mbps: float
+
+
+class DiskIOHistory(BaseModel):
+    """Historical disk I/O metrics for a device"""
+    device: str
+    data: List[DiskIODataPoint]
+
+
+class TemperatureDataPoint(BaseModel):
+    """Single data point for temperature metrics"""
+    timestamp: datetime
+    temperature_c: float
+
+
+class TemperatureHistory(BaseModel):
+    """Historical temperature metrics for a sensor"""
+    sensor_name: str
+    data: List[TemperatureDataPoint]
 
 
 def parse_time_range(range_str: str) -> timedelta:
@@ -179,4 +204,100 @@ async def get_system_history(
         ]
         
         return SystemHistory(data=data_points)
+
+
+@router.get("/disk-io/history")
+async def get_disk_io_history(
+    device: Optional[str] = Query(None, description="Device name (e.g., sda, nvme0n1)"),
+    time_range: str = Query("30m", description="Time range (e.g., 10m, 1h, 1d)", alias="range"),
+    _: str = Depends(get_current_user)
+) -> List[DiskIOHistory]:
+    """Get historical disk I/O metrics
+    
+    Args:
+        device: Optional device filter
+        time_range: Time range string (e.g., "30m", "1h", "3h")
+        
+    Returns:
+        List[DiskIOHistory]: Historical data per device
+    """
+    async with AsyncSessionLocal() as session:
+        # Parse time range
+        time_delta = parse_time_range(time_range)
+        start_time = datetime.now() - time_delta
+        
+        # Query database for disk I/O metrics
+        query = select(DiskIOMetricsDB).where(DiskIOMetricsDB.timestamp >= start_time)
+        if device:
+            query = query.where(DiskIOMetricsDB.device == device)
+        query = query.order_by(DiskIOMetricsDB.timestamp.asc())
+        
+        result = await session.execute(query)
+        metrics = result.scalars().all()
+        
+        # Group by device
+        devices = {}
+        for m in metrics:
+            if m.device not in devices:
+                devices[m.device] = []
+            devices[m.device].append(
+                DiskIODataPoint(
+                    timestamp=m.timestamp,
+                    read_mbps=m.read_bytes_per_sec / (1024 * 1024) if m.read_bytes_per_sec else 0,
+                    write_mbps=m.write_bytes_per_sec / (1024 * 1024) if m.write_bytes_per_sec else 0
+                )
+            )
+        
+        return [
+            DiskIOHistory(device=dev, data=data)
+            for dev, data in devices.items()
+        ]
+
+
+@router.get("/temperatures/history")
+async def get_temperature_history(
+    sensor: Optional[str] = Query(None, description="Sensor name"),
+    time_range: str = Query("30m", description="Time range (e.g., 10m, 1h, 1d)", alias="range"),
+    _: str = Depends(get_current_user)
+) -> List[TemperatureHistory]:
+    """Get historical temperature metrics
+    
+    Args:
+        sensor: Optional sensor filter
+        time_range: Time range string (e.g., "30m", "1h", "3h")
+        
+    Returns:
+        List[TemperatureHistory]: Historical data per sensor
+    """
+    async with AsyncSessionLocal() as session:
+        # Parse time range
+        time_delta = parse_time_range(time_range)
+        start_time = datetime.now() - time_delta
+        
+        # Query database for temperature metrics
+        query = select(TemperatureMetricsDB).where(TemperatureMetricsDB.timestamp >= start_time)
+        if sensor:
+            query = query.where(TemperatureMetricsDB.sensor_name == sensor)
+        query = query.order_by(TemperatureMetricsDB.timestamp.asc())
+        
+        result = await session.execute(query)
+        metrics = result.scalars().all()
+        
+        # Group by sensor name (using label if available, otherwise sensor_name)
+        sensors = {}
+        for m in metrics:
+            key = m.label if m.label else m.sensor_name
+            if key not in sensors:
+                sensors[key] = []
+            sensors[key].append(
+                TemperatureDataPoint(
+                    timestamp=m.timestamp,
+                    temperature_c=m.temperature_c
+                )
+            )
+        
+        return [
+            TemperatureHistory(sensor_name=sensor, data=data)
+            for sensor, data in sensors.items()
+        ]
 

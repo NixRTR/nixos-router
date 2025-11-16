@@ -73,6 +73,39 @@ class InterfaceStatsDB(Base):
     )
 
 
+class DiskIOMetricsDB(Base):
+    """Disk I/O metrics table"""
+    __tablename__ = "disk_io_metrics"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    device = Column(String(32), nullable=False)
+    read_bytes_per_sec = Column(Float)
+    write_bytes_per_sec = Column(Float)
+    read_ops_per_sec = Column(Float)
+    write_ops_per_sec = Column(Float)
+    
+    __table_args__ = (
+        Index('idx_disk_io_device_time', 'device', 'timestamp', postgresql_using='btree'),
+    )
+
+
+class TemperatureMetricsDB(Base):
+    """Temperature metrics table"""
+    __tablename__ = "temperature_metrics"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    sensor_name = Column(String(128), nullable=False)
+    temperature_c = Column(Float)
+    label = Column(String(128))
+    critical = Column(Float)
+    
+    __table_args__ = (
+        Index('idx_temperature_sensor_time', 'sensor_name', 'timestamp', postgresql_using='btree'),
+    )
+
+
 class DHCPLeaseDB(Base):
     """DHCP leases table - tracks devices (MAC) with current IP assignments"""
     __tablename__ = "dhcp_leases"

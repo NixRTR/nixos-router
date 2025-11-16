@@ -82,6 +82,31 @@ CREATE INDEX IF NOT EXISTS idx_network_devices_last_seen ON network_devices(last
 -- Unique constraint: one entry per device per network
 CREATE UNIQUE INDEX IF NOT EXISTS idx_network_devices_network_mac ON network_devices(network, mac_address);
 
+-- Disk I/O metrics time-series
+CREATE TABLE IF NOT EXISTS disk_io_metrics (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ NOT NULL,
+    device VARCHAR(32) NOT NULL,
+    read_bytes_per_sec REAL,
+    write_bytes_per_sec REAL,
+    read_ops_per_sec REAL,
+    write_ops_per_sec REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_disk_io_device_time ON disk_io_metrics(device, timestamp DESC);
+
+-- Temperature metrics time-series
+CREATE TABLE IF NOT EXISTS temperature_metrics (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ NOT NULL,
+    sensor_name VARCHAR(128) NOT NULL,
+    temperature_c REAL,
+    label VARCHAR(128),
+    critical REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_temperature_sensor_time ON temperature_metrics(sensor_name, timestamp DESC);
+
 -- Service status time-series
 CREATE TABLE IF NOT EXISTS service_status (
     id SERIAL PRIMARY KEY,

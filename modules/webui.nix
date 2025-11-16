@@ -146,7 +146,7 @@ in
     systemd.services.router-webui-initdb = {
       description = "Router WebUI Database Initialization";
       after = [ "postgresql.service" ];
-      before = [ "router-webui-backend.service" ];
+      before = [ "router-webui-migrate.service" "router-webui-backend.service" ];
       wantedBy = [ "multi-user.target" ];
       
       serviceConfig = {
@@ -164,6 +164,36 @@ in
         
         # Run database schema as the router_webui database user
         ${pkgs.postgresql}/bin/psql -U ${cfg.database.user} -d ${cfg.database.name} -f ${backendSrc}/schema.sql || true
+      '';
+    };
+    
+    # Database migration service
+    systemd.services.router-webui-migrate = {
+      description = "Router WebUI Database Migrations";
+      after = [ "router-webui-initdb.service" ];
+      before = [ "router-webui-backend.service" ];
+      wantedBy = [ "multi-user.target" ];
+      
+      serviceConfig = {
+        Type = "oneshot";
+        User = "postgres";  # Run as postgres user to execute database commands
+        RemainAfterExit = true;
+      };
+      
+      script = ''
+        echo "Running database migrations..."
+        
+        # Run migrations in order
+        for migration in ${backendSrc}/migrations/*.sql; do
+          if [ -f "$migration" ]; then
+            echo "Applying migration: $(basename $migration)"
+            ${pkgs.postgresql}/bin/psql -U ${cfg.database.user} -d ${cfg.database.name} -f "$migration" || {
+              echo "Warning: Migration $(basename $migration) failed or already applied"
+            }
+          fi
+        done
+        
+        echo "Migrations completed"
       '';
     };
     

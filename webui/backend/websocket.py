@@ -10,8 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import MetricsSnapshot, SystemMetrics, InterfaceStats, ServiceStatus, DHCPLease, DNSMetrics
-from .database import AsyncSessionLocal, SystemMetricsDB, InterfaceStatsDB, ServiceStatusDB, DHCPLeaseDB
-from .collectors.system import collect_system_metrics
+from .database import AsyncSessionLocal, SystemMetricsDB, InterfaceStatsDB, ServiceStatusDB, DHCPLeaseDB, DiskIOMetricsDB, TemperatureMetricsDB
+from .collectors.system import collect_system_metrics, collect_disk_io, collect_temperatures
 from .collectors.network import collect_interface_stats
 from .collectors.dhcp import parse_kea_leases
 from .collectors.services import collect_service_statuses
@@ -105,13 +105,17 @@ class ConnectionManager:
         dhcp_leases = parse_kea_leases()
         service_statuses = collect_service_statuses()
         dns_stats = collect_dns_stats()
+        disk_io = collect_disk_io()
+        temperatures = collect_temperatures()
         
         # Store in database asynchronously
         asyncio.create_task(self._store_metrics(
             system_metrics,
             interface_stats,
             service_statuses,
-            dhcp_leases
+            dhcp_leases,
+            disk_io,
+            temperatures
         ))
         
         # Create snapshot for broadcast
@@ -131,7 +135,9 @@ class ConnectionManager:
         system: SystemMetrics,
         interfaces: List[InterfaceStats],
         services: List[ServiceStatus],
-        dhcp_leases: List[DHCPLease]
+        dhcp_leases: List[DHCPLease],
+        disk_io: List,
+        temperatures: List
     ):
         """Store metrics in database
         
@@ -140,6 +146,8 @@ class ConnectionManager:
             interfaces: Interface statistics
             services: Service statuses
             dhcp_leases: DHCP leases
+            disk_io: Disk I/O metrics
+            temperatures: Temperature metrics
         """
         try:
             async with AsyncSessionLocal() as session:
@@ -218,6 +226,29 @@ class ConnectionManager:
                             is_static=lease.is_static
                         )
                         session.add(lease_db)
+                
+                # Store disk I/O metrics
+                for disk in disk_io:
+                    disk_db = DiskIOMetricsDB(
+                        timestamp=disk.timestamp,
+                        device=disk.device,
+                        read_bytes_per_sec=disk.read_bytes_per_sec,
+                        write_bytes_per_sec=disk.write_bytes_per_sec,
+                        read_ops_per_sec=disk.read_ops_per_sec,
+                        write_ops_per_sec=disk.write_ops_per_sec
+                    )
+                    session.add(disk_db)
+                
+                # Store temperature metrics
+                for temp in temperatures:
+                    temp_db = TemperatureMetricsDB(
+                        timestamp=temp.timestamp,
+                        sensor_name=temp.sensor_name,
+                        temperature_c=temp.temperature_c,
+                        label=temp.label,
+                        critical=temp.critical
+                    )
+                    session.add(temp_db)
                 
                 await session.commit()
                 
