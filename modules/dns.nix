@@ -294,10 +294,26 @@ in
             ) homelabBaseDomains}
             
             # DNS A Records (manual + DHCP reservations)
-            ${concatStringsSep "\n    " (lib.mapAttrsToList 
-              (name: record: "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}") 
-              homelabAllARecords
-            )}
+            # Note: wildcard A is emitted as CNAME to apex to ensure Unbound matches subdomains.
+            ${let
+              toLocalData = name: record:
+                let
+                  isWildcard = lib.hasPrefix "*." name;
+                  parts = lib.splitString "." name;
+                  numParts = builtins.length parts;
+                  baseDomain = if numParts >= 2 then
+                    "${builtins.elemAt parts (numParts - 2)}.${builtins.elemAt parts (numParts - 1)}"
+                  else name;
+                in
+                  if isWildcard then
+                    # Make wildcard an alias to the apex; apex must have an A locally.
+                    "local-data: \"${name}. IN CNAME ${baseDomain}.\"  # wildcard -> apex"
+                  else
+                    "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}";
+            in
+              concatStringsSep "\n    "
+                (lib.mapAttrsToList toLocalData homelabAllARecords)
+            }
             
             # DNS CNAME Records
             ${concatStringsSep "\n    " (lib.mapAttrsToList 
@@ -482,10 +498,25 @@ in
             ) lanBaseDomains}
             
             # DNS A Records (manual + DHCP reservations)
-            ${concatStringsSep "\n    " (lib.mapAttrsToList 
-              (name: record: "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}") 
-              lanAllARecords
-            )}
+            # Wildcard handled as CNAME to apex (see above rationale)
+            ${let
+              toLocalData = name: record:
+                let
+                  isWildcard = lib.hasPrefix "*." name;
+                  parts = lib.splitString "." name;
+                  numParts = builtins.length parts;
+                  baseDomain = if numParts >= 2 then
+                    "${builtins.elemAt parts (numParts - 2)}.${builtins.elemAt parts (numParts - 1)}"
+                  else name;
+                in
+                  if isWildcard then
+                    "local-data: \"${name}. IN CNAME ${baseDomain}.\"  # wildcard -> apex"
+                  else
+                    "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}";
+            in
+              concatStringsSep "\n    "
+                (lib.mapAttrsToList toLocalData lanAllARecords)
+            }
             
             # DNS CNAME Records
             ${concatStringsSep "\n    " (lib.mapAttrsToList 
