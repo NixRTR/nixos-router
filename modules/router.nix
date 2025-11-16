@@ -526,6 +526,15 @@ in {
               ip6 saddr @blocked_v6 drop
             }
           }
+          table bridge router_block_mac {
+            set blocked_macs {
+              type ether_addr
+            }
+            chain forward {
+              type filter hook forward priority 0; policy accept;
+              ether saddr @blocked_macs drop
+            }
+          }
           EOF
         '';
       };

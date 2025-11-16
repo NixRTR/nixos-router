@@ -190,8 +190,8 @@ def _run_nft(args: list[str]) -> None:
 
 @router.get("/blocked")
 async def list_blocked(_: str = Depends(get_current_user)) -> dict:
-    """List blocked devices from nft sets"""
-    result = {"ipv4": [], "ipv6": []}
+    """List blocked devices from nft sets (IPs and MACs)"""
+    result = {"ipv4": [], "ipv6": [], "macs": []}
     try:
         out_v4 = subprocess.run(
             ["nft", "list", "set", "inet", "router_block", "blocked_v4"],
@@ -223,33 +223,52 @@ async def list_blocked(_: str = Depends(get_current_user)) -> dict:
                     break
     except Exception:
         pass
+    try:
+        out_macs = subprocess.run(
+            ["nft", "list", "set", "bridge", "router_block_mac", "blocked_macs"],
+            capture_output=True, text=True, timeout=2
+        )
+        if out_macs.returncode == 0:
+            for line in out_macs.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("elements ="):
+                    inside = line.split("{",1)[1].split("}",1)[0]
+                    items = [i.strip() for i in inside.split(",") if i.strip()]
+                    result["macs"] = [i.lower() for i in items]
+                    break
+    except Exception:
+        pass
     return result
 
 
 @router.post("/block")
 async def block_device(req: BlockRequest, _: str = Depends(get_current_user)) -> dict:
-    """Block a device by adding IPs to nft sets"""
-    if not any([req.ip_address, req.ip6_address]):
-        raise HTTPException(status_code=400, detail="Must supply ip_address or ip6_address")
+    """Block a device by adding MAC and/or IPs to nft sets"""
+    if not any([req.ip_address, req.ip6_address, req.mac_address]):
+        raise HTTPException(status_code=400, detail="Must supply mac_address or ip_address/ip6_address")
 
     if req.ip_address:
         _run_nft(["add", "element", "inet", "router_block", "blocked_v4", "{", req.ip_address, "}"])
     if req.ip6_address:
         _run_nft(["add", "element", "inet", "router_block", "blocked_v6", "{", req.ip6_address, "}"])
-    return {"status": "blocked", "ipv4": req.ip_address, "ipv6": req.ip6_address}
+    if req.mac_address:
+        _run_nft(["add", "element", "bridge", "router_block_mac", "blocked_macs", "{", req.mac_address.lower(), "}"])
+    return {"status": "blocked", "ipv4": req.ip_address, "ipv6": req.ip6_address, "mac": req.mac_address}
 
 
 @router.post("/unblock")
 async def unblock_device(req: BlockRequest, _: str = Depends(get_current_user)) -> dict:
-    """Unblock a device by removing IPs from nft sets"""
-    if not any([req.ip_address, req.ip6_address]):
-        raise HTTPException(status_code=400, detail="Must supply ip_address or ip6_address")
+    """Unblock a device by removing MAC/IPs from nft sets"""
+    if not any([req.ip_address, req.ip6_address, req.mac_address]):
+        raise HTTPException(status_code=400, detail="Must supply mac_address or ip_address/ip6_address")
 
     if req.ip_address:
         _run_nft(["delete", "element", "inet", "router_block", "blocked_v4", "{", req.ip_address, "}"])
     if req.ip6_address:
         _run_nft(["delete", "element", "inet", "router_block", "blocked_v6", "{", req.ip6_address, "}"])
-    return {"status": "unblocked", "ipv4": req.ip_address, "ipv6": req.ip6_address}
+    if req.mac_address:
+        _run_nft(["delete", "element", "bridge", "router_block_mac", "blocked_macs", "{", req.mac_address.lower(), "}"])
+    return {"status": "unblocked", "ipv4": req.ip_address, "ipv6": req.ip6_address, "mac": req.mac_address}
 
 
 class OverrideRequest(BaseModel):

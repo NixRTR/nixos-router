@@ -34,6 +34,7 @@ export function Clients() {
   const [filterNetwork, setFilterNetwork] = useState('all'); // all, homelab, lan
   const [devices, setDevices] = useState<NetworkDevice[]>([]);
   const [blockedV4, setBlockedV4] = useState<string[]>([]);
+  const [blockedMacs, setBlockedMacs] = useState<string[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
   const { connectionStatus } = useMetrics(token);
@@ -80,6 +81,7 @@ export function Clients() {
         if (response.ok) {
           const data = await response.json();
           setBlockedV4(data.ipv4 || []);
+          setBlockedMacs((data.macs || []).map((m: string) => m.toLowerCase()));
         }
       } catch (e) {
         // ignore
@@ -91,6 +93,7 @@ export function Clients() {
   }, [token]);
 
   const isDeviceBlocked = (device: NetworkDevice) => {
+    if (device.mac_address && blockedMacs.includes(device.mac_address.toLowerCase())) return true;
     return (device.ip_address && blockedV4.includes(device.ip_address));
   };
 
@@ -138,13 +141,15 @@ export function Clients() {
     if (!token) return;
     const blocked = isDeviceBlocked(device);
     const url = blocked ? '/api/devices/unblock' : '/api/devices/block';
-    const body: any = {};
+    const body: any = { mac_address: device.mac_address };
     if (device.ip_address && device.ip_address.includes('.')) body.ip_address = device.ip_address;
     // Optimistic UI
     if (blocked) {
       setBlockedV4(prev => prev.filter(ip => ip !== device.ip_address));
+      setBlockedMacs(prev => prev.filter(m => m !== device.mac_address.toLowerCase()));
     } else if (body.ip_address) {
       setBlockedV4(prev => Array.from(new Set([...prev, body.ip_address])));
+      setBlockedMacs(prev => Array.from(new Set([...prev, device.mac_address.toLowerCase()])));
     }
     try {
       await fetch(url, {
@@ -283,7 +288,7 @@ export function Clients() {
                     <Table.Row key={device.mac_address} className={!device.is_online ? 'opacity-50' : ''}>
                       <Table.Cell>
                         <Badge color={device.is_online ? 'success' : 'gray'} size="sm">
-                          {device.is_online ? '● Online' : '○ Offline'}
+                          {device.is_online ? 'Online' : 'Offline'}
                         </Badge>
                       </Table.Cell>
                       <Table.Cell className="font-medium">
