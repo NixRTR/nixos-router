@@ -282,39 +282,24 @@ in
             hide-version: yes
             qname-minimisation: yes
             
-            # Local zones – force static so all names under the domain are answered locally
-            ${(let
-              lines = map (domain: "local-zone: \"${domain}.\" static") homelabBaseDomains;
-            in concatStringsSep "\n  " lines)}
+            # Local zones - declare these domains as locally served
+            # Use 'transparent' instead of 'static' to allow wildcard matching
+            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" transparent") homelabBaseDomains}
             
             # DNS A Records (manual + DHCP reservations)
-            # Note: wildcard A is emitted as CNAME to apex to ensure Unbound matches subdomains.
-            ${(let
-              toLocalData = name: record:
-                let
-                  isWildcard = lib.hasPrefix "*." name;
-                  parts = lib.splitString "." name;
-                  numParts = builtins.length parts;
-                  baseDomain = if numParts >= 2 then
-                    "${builtins.elemAt parts (numParts - 2)}.${builtins.elemAt parts (numParts - 1)}"
-                  else name;
-                in
-                  if isWildcard then
-                    # Make wildcard an alias to the apex; apex must have an A locally.
-                    "local-data: \"${name}. IN CNAME ${baseDomain}.\"  # wildcard -> apex"
-                  else
-                    "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}";
-              lines = lib.mapAttrsToList toLocalData homelabAllARecords;
-            in concatStringsSep "\n  " lines)}
+            ${concatStringsSep "\n    " (lib.mapAttrsToList 
+              (name: record: "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}") 
+              homelabAllARecords
+            )}
             
             # DNS CNAME Records
-            ${concatStringsSep "\n  " (lib.mapAttrsToList 
+            ${concatStringsSep "\n    " (lib.mapAttrsToList 
               (name: record: "local-data: \"${name}. IN CNAME ${record.target}.\"  # ${record.comment or ""}") 
               (homelabDns.cname_records or {})
             )}
             
             # Whitelist - domains that should never be blocked
-            ${concatMapStringsSep "\n  " (domain: "local-zone: \"${domain}.\" transparent  # Whitelisted") (homelabDns.whitelist or [])}
+            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" transparent  # Whitelisted") (homelabDns.whitelist or [])}
             
             # Blocklist
             include: /var/lib/unbound/homelab/blocklist.conf
@@ -327,7 +312,7 @@ in
           
           forward-zone:
             name: "."
-            ${concatMapStringsSep "\n  " (s: "forward-addr: ${s}") (routerConfig.dns.upstreamServers or [
+            ${concatMapStringsSep "\n    " (s: "forward-addr: ${s}") (routerConfig.dns.upstreamServers or [
               "1.1.1.1@853#cloudflare-dns.com"
               "9.9.9.9@853#dns.quad9.net"
             ])}
@@ -478,38 +463,24 @@ in
             hide-version: yes
             qname-minimisation: yes
             
-            # Local zones – force static so all names under the domain are answered locally
-            ${(let
-              lines = map (domain: "local-zone: \"${domain}.\" static") lanBaseDomains;
-            in concatStringsSep "\n  " lines)}
+            # Local zones - declare these domains as locally served
+            # Use 'transparent' instead of 'static' to allow wildcard matching
+            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" transparent") lanBaseDomains}
             
             # DNS A Records (manual + DHCP reservations)
-            # Wildcard handled as CNAME to apex (see above rationale)
-            ${(let
-              toLocalData = name: record:
-                let
-                  isWildcard = lib.hasPrefix "*." name;
-                  parts = lib.splitString "." name;
-                  numParts = builtins.length parts;
-                  baseDomain = if numParts >= 2 then
-                    "${builtins.elemAt parts (numParts - 2)}.${builtins.elemAt parts (numParts - 1)}"
-                  else name;
-                in
-                  if isWildcard then
-                    "local-data: \"${name}. IN CNAME ${baseDomain}.\"  # wildcard -> apex"
-                  else
-                    "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}";
-              lines = lib.mapAttrsToList toLocalData lanAllARecords;
-            in concatStringsSep "\n  " lines)}
+            ${concatStringsSep "\n    " (lib.mapAttrsToList 
+              (name: record: "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}") 
+              lanAllARecords
+            )}
             
             # DNS CNAME Records
-            ${concatStringsSep "\n  " (lib.mapAttrsToList 
+            ${concatStringsSep "\n    " (lib.mapAttrsToList 
               (name: record: "local-data: \"${name}. IN CNAME ${record.target}.\"  # ${record.comment or ""}") 
               (lanDns.cname_records or {})
             )}
             
             # Whitelist - domains that should never be blocked
-            ${concatMapStringsSep "\n  " (domain: "local-zone: \"${domain}.\" transparent  # Whitelisted") (lanDns.whitelist or [])}
+            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" transparent  # Whitelisted") (lanDns.whitelist or [])}
             
             # Blocklist
             include: /var/lib/unbound/lan/blocklist.conf
@@ -522,7 +493,7 @@ in
           
           forward-zone:
             name: "."
-            ${concatMapStringsSep "\n  " (s: "forward-addr: ${s}") (routerConfig.dns.upstreamServers or [
+            ${concatMapStringsSep "\n    " (s: "forward-addr: ${s}") (routerConfig.dns.upstreamServers or [
               "1.1.1.1@853#cloudflare-dns.com"
               "9.9.9.9@853#dns.quad9.net"
             ])}
