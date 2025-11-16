@@ -7,7 +7,15 @@ let
   
   # Extract bridge information from config
   bridges = routerConfig.lan.bridges;
-  bridgeNames = map (b: b.name) bridges;
+  
+  # Get enabled DHCP networks to determine which interfaces to listen on
+  homelabDhcpEnabled = routerConfig.homelab.dhcp.enable or true;
+  lanDhcpEnabled = routerConfig.lan.dhcp.enable or true;
+  
+  # Build list of bridge names where DHCP is enabled
+  bridgeNames = 
+    (lib.optional homelabDhcpEnabled "br0") ++
+    (lib.optional lanDhcpEnabled "br1");
 
   # Helper function to extract domain from first A record
   # Takes the domain from the first A record key (e.g., "jeandr.net" from "server.jeandr.net")
@@ -45,10 +53,9 @@ let
          in num * multiplier unit
        else 86400;
 
-  # Build DHCP subnets from config
-  dhcpSubnets = [
-    # HOMELAB network
-    {
+  # Build DHCP subnets from config (only enabled networks)
+  dhcpSubnets = 
+    (lib.optional (routerConfig.homelab.dhcp.enable or true) {
       id = 1;
       subnet = routerConfig.homelab.subnet;
       pools = [{
@@ -66,9 +73,8 @@ let
         hw-address = res.hwAddress;
         ip-address = res.ipAddress;
       }) (routerConfig.homelab.dhcp.reservations or []);
-    }
-    # LAN network
-    {
+    }) ++
+    (lib.optional (routerConfig.lan.dhcp.enable or true) {
       id = 2;
       subnet = routerConfig.lan.subnet;
       pools = [{
@@ -86,18 +92,17 @@ let
         hw-address = res.hwAddress;
         ip-address = res.ipAddress;
       }) (routerConfig.lan.dhcp.reservations or []);
-    }
-  ];
+    });
 
 in
 
 {
-  # Kea DHCP4 Server
-  services.kea.dhcp4 = {
+  # Kea DHCP4 Server - only enable if at least one network has DHCP enabled
+  services.kea.dhcp4 = mkIf (homelabDhcpEnabled || lanDhcpEnabled) {
     enable = true;
     settings = {
       interfaces-config = {
-        # Listen on all bridge interfaces
+        # Listen on bridge interfaces where DHCP is enabled
         interfaces = bridgeNames;
       };
       lease-database = {
@@ -111,7 +116,7 @@ in
     };
   };
 
-  # Firewall rules for DHCP
-  networking.firewall.allowedUDPPorts = mkAfter [ 67 ];
+  # Firewall rules for DHCP - only if service is enabled
+  networking.firewall.allowedUDPPorts = mkIf (homelabDhcpEnabled || lanDhcpEnabled) (mkAfter [ 67 ]);
 }
 

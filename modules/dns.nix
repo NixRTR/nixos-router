@@ -13,6 +13,10 @@ let
   homelabDns = homelabCfg.dns or {};
   lanDns = lanCfg.dns or {};
   
+  # Check if DNS is enabled for each network (defaults to true for backward compatibility)
+  homelabDnsEnabled = (routerConfig.dns.enable or true) && (homelabDns.enable or true);
+  lanDnsEnabled = (routerConfig.dns.enable or true) && (lanDns.enable or true);
+  
   # Helper to extract unique base domains from A records
   extractBaseDomains = aRecords:
     let
@@ -160,11 +164,12 @@ in
 {
   config = mkIf (routerConfig.dns.enable or true) {
     
-    # Create unbound instances for each bridge
-    systemd.services = {
+    # Create unbound instances for each bridge (only if DNS enabled for that network)
+    systemd.services = mkMerge [
       
       # Unbound for HOMELAB (br0)
-      unbound-homelab = {
+      (mkIf homelabDnsEnabled {
+        unbound-homelab = {
         description = "Unbound DNS Resolver for HOMELAB";
         after = [ "network.target" ];
         wantedBy = [ "multi-user.target" ];
@@ -343,9 +348,11 @@ in
           ProtectHome = true;
         };
       };
+      }
       
       # Unbound for LAN (br1)
-      unbound-lan = {
+      (mkIf lanDnsEnabled {
+        unbound-lan = {
         description = "Unbound DNS Resolver for LAN";
         after = [ "network.target" ];
         wantedBy = [ "multi-user.target" ];
@@ -524,9 +531,11 @@ in
           ProtectHome = true;
         };
       };
+      }
       
       # Blocklist update service for HOMELAB
-      unbound-blocklist-update-homelab = {
+      (mkIf homelabDnsEnabled {
+        unbound-blocklist-update-homelab = {
         description = "Update Unbound Blocklists for HOMELAB";
         serviceConfig = {
           Type = "oneshot";
@@ -567,9 +576,11 @@ in
           ''}";
         };
       };
+      }
       
       # Blocklist update service for LAN
-      unbound-blocklist-update-lan = {
+      (mkIf lanDnsEnabled {
+        unbound-blocklist-update-lan = {
         description = "Update Unbound Blocklists for LAN";
         serviceConfig = {
           Type = "oneshot";
@@ -610,10 +621,11 @@ in
           ''}";
         };
       };
-    };
+      }
+    ];
     
     # Timer for HOMELAB blocklist updates
-    systemd.timers.unbound-blocklist-update-homelab = mkIf homelabBlocklistsEnabled {
+    systemd.timers.unbound-blocklist-update-homelab = mkIf (homelabDnsEnabled && homelabBlocklistsEnabled) {
       description = "Update Unbound Blocklists for HOMELAB";
       wantedBy = [ "timers.target" ];
       timerConfig = {
@@ -624,7 +636,7 @@ in
     };
     
     # Timer for LAN blocklist updates
-    systemd.timers.unbound-blocklist-update-lan = mkIf lanBlocklistsEnabled {
+    systemd.timers.unbound-blocklist-update-lan = mkIf (lanDnsEnabled && lanBlocklistsEnabled) {
       description = "Update Unbound Blocklists for LAN";
       wantedBy = [ "timers.target" ];
       timerConfig = {
@@ -635,7 +647,7 @@ in
     };
     
     # Dynamic DNS updater services
-    systemd.services.unbound-dynamic-dns-homelab = {
+    systemd.services.unbound-dynamic-dns-homelab = mkIf homelabDnsEnabled {
       description = "Update Unbound Dynamic DNS for HOMELAB";
       serviceConfig = {
         Type = "oneshot";
@@ -691,7 +703,7 @@ in
       '';
     };
     
-    systemd.services.unbound-dynamic-dns-lan = {
+    systemd.services.unbound-dynamic-dns-lan = mkIf lanDnsEnabled {
       description = "Update Unbound Dynamic DNS for LAN";
       serviceConfig = {
         Type = "oneshot";
@@ -748,7 +760,7 @@ in
     };
     
     # Timers to periodically update dynamic DNS
-    systemd.timers.unbound-dynamic-dns-homelab = mkIf ((homelabCfg.dhcp.dynamicDomain or "") != "") {
+    systemd.timers.unbound-dynamic-dns-homelab = mkIf (homelabDnsEnabled && ((homelabCfg.dhcp.dynamicDomain or "") != "")) {
       description = "Periodically update Unbound Dynamic DNS for HOMELAB";
       wantedBy = [ "timers.target" ];
       timerConfig = {
@@ -757,7 +769,7 @@ in
       };
     };
     
-    systemd.timers.unbound-dynamic-dns-lan = mkIf ((lanCfg.dhcp.dynamicDomain or "") != "") {
+    systemd.timers.unbound-dynamic-dns-lan = mkIf (lanDnsEnabled && ((lanCfg.dhcp.dynamicDomain or "") != "")) {
       description = "Periodically update Unbound Dynamic DNS for LAN";
       wantedBy = [ "timers.target" ];
       timerConfig = {
@@ -767,7 +779,7 @@ in
     };
     
     # Watch DHCP lease file for changes
-    systemd.paths.unbound-dynamic-dns-homelab = mkIf ((homelabCfg.dhcp.dynamicDomain or "") != "") {
+    systemd.paths.unbound-dynamic-dns-homelab = mkIf (homelabDnsEnabled && ((homelabCfg.dhcp.dynamicDomain or "") != "")) {
       description = "Watch DHCP leases for HOMELAB Dynamic DNS updates";
       wantedBy = [ "multi-user.target" ];
       pathConfig = {
@@ -775,7 +787,7 @@ in
       };
     };
     
-    systemd.paths.unbound-dynamic-dns-lan = mkIf ((lanCfg.dhcp.dynamicDomain or "") != "") {
+    systemd.paths.unbound-dynamic-dns-lan = mkIf (lanDnsEnabled && ((lanCfg.dhcp.dynamicDomain or "") != "")) {
       description = "Watch DHCP leases for LAN Dynamic DNS updates";
       wantedBy = [ "multi-user.target" ];
       pathConfig = {

@@ -72,6 +72,7 @@
 
     # DHCP settings
     dhcp = {
+      enable = true;  # Set to false to disable DHCP for this network
       start = "192.168.2.100";
       end = "192.168.2.200";
       leaseTime = "1h";
@@ -93,6 +94,7 @@
 
     # DNS settings for this network
     dns = {
+      enable = true;  # Set to false to disable DNS server for this network
       # DNS A Records (hostname → IP address)
       a_records = {
         "jeandr.net" = {
@@ -157,6 +159,7 @@
 
     # DHCP settings
     dhcp = {
+      enable = true;  # Set to false to disable DHCP for this network
       start = "192.168.3.100";
       end = "192.168.3.200";
       leaseTime = "1h";
@@ -178,6 +181,7 @@
 
     # DNS settings for this network
     dns = {
+      enable = true;  # Set to false to disable DNS server for this network
       # DNS A Records (hostname → IP address)
       a_records = {
         "jeandr.net" = {
