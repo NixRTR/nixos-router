@@ -1,7 +1,7 @@
 /**
  * Network bandwidth page with charts
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Select, TextInput, Label } from 'flowbite-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -28,8 +28,10 @@ export function Network() {
   const [selectedInterface, setSelectedInterface] = useState('ppp0');
   const [timeRange, setTimeRange] = useState('1h');
   const [customRange, setCustomRange] = useState('');
+  const [refreshInterval, setRefreshInterval] = useState(10); // seconds
   const [historicalData, setHistoricalData] = useState<BandwidthDataPoint[]>([]);
   const [loading, setLoading] = useState(false);
+  const lastDataRef = useRef<string>(''); // Track last data to prevent unnecessary updates
   
   const { connectionStatus } = useMetrics(token);
   
@@ -43,11 +45,16 @@ export function Network() {
     const fetchHistory = async () => {
       if (!token) return;
       
-      setLoading(true);
+      // Only show loading on first load or when changing settings
+      if (historicalData.length === 0) {
+        setLoading(true);
+      }
+      
       try {
         const range = timeRange === 'custom' ? customRange : timeRange;
         if (!range || (timeRange === 'custom' && !customRange)) {
           setHistoricalData([]);
+          lastDataRef.current = '';
           return;
         }
         
@@ -63,7 +70,14 @@ export function Network() {
         if (response.ok) {
           const data: BandwidthHistory[] = await response.json();
           const interfaceData = data.find(d => d.interface === selectedInterface);
-          setHistoricalData(interfaceData?.data || []);
+          const newData = interfaceData?.data || [];
+          
+          // Only update if data actually changed (prevents unnecessary re-renders)
+          const newDataString = JSON.stringify(newData);
+          if (newDataString !== lastDataRef.current) {
+            setHistoricalData(newData);
+            lastDataRef.current = newDataString;
+          }
         }
       } catch (error) {
         console.error('Failed to fetch bandwidth history:', error);
@@ -72,18 +86,23 @@ export function Network() {
       }
     };
     
+    // Reset on interface/range change
+    lastDataRef.current = '';
     fetchHistory();
     
-    // Refresh every 10 seconds
-    const interval = setInterval(fetchHistory, 10000);
+    // Refresh based on user-selected interval
+    const interval = setInterval(fetchHistory, refreshInterval * 1000);
     return () => clearInterval(interval);
-  }, [selectedInterface, timeRange, customRange, token]);
+  }, [selectedInterface, timeRange, customRange, refreshInterval, token]);
 
-  const chartData = historicalData.map((point) => ({
-    time: new Date(point.timestamp).toLocaleTimeString(),
-    download: point.rx_mbps || 0,
-    upload: point.tx_mbps || 0,
-  }));
+  // Memoize chart data to prevent unnecessary recalculations
+  const chartData = useMemo(() => {
+    return historicalData.map((point) => ({
+      time: new Date(point.timestamp).toLocaleTimeString(),
+      download: point.rx_mbps || 0,
+      upload: point.tx_mbps || 0,
+    }));
+  }, [historicalData]);
 
   return (
     <div className="flex h-screen">
@@ -100,7 +119,7 @@ export function Network() {
           <h1 className="text-3xl font-bold mb-6">Network Bandwidth</h1>
           
           <Card>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
               {/* Interface Selector */}
               <div>
                 <Label htmlFor="interface" value="Select Interface" />
@@ -134,6 +153,22 @@ export function Network() {
                   <option value="1M">1 month</option>
                   <option value="1y">1 year</option>
                   <option value="custom">Custom</option>
+                </Select>
+              </div>
+              
+              {/* Refresh Interval Selector */}
+              <div>
+                <Label htmlFor="refreshInterval" value="Update Every" />
+                <Select
+                  id="refreshInterval"
+                  value={refreshInterval}
+                  onChange={(e) => setRefreshInterval(Number(e.target.value))}
+                >
+                  <option value={1}>1 second</option>
+                  <option value={5}>5 seconds</option>
+                  <option value={10}>10 seconds</option>
+                  <option value={30}>30 seconds</option>
+                  <option value={60}>1 minute</option>
                 </Select>
               </div>
               
@@ -184,6 +219,7 @@ export function Network() {
                     name="⬇ Download"
                     strokeWidth={2}
                     dot={false}
+                    isAnimationActive={false}
                   />
                   <Line 
                     type="monotone" 
@@ -192,6 +228,7 @@ export function Network() {
                     name="⬆ Upload"
                     strokeWidth={2}
                     dot={false}
+                    isAnimationActive={false}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -200,7 +237,7 @@ export function Network() {
             <div className="mt-4 text-sm text-gray-500">
               <p>
                 Showing {chartData.length} data points over the last {timeRange === 'custom' ? customRange : timeRange}
-                {' • '}Auto-refreshing every 10 seconds
+                {' • '}Auto-refreshing every {refreshInterval === 1 ? '1 second' : `${refreshInterval} seconds`}
               </p>
             </div>
           </Card>
