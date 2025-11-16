@@ -3,7 +3,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Table, Badge, TextInput, Select } from 'flowbite-react';
+import { Card, Table, Badge, TextInput, Select, Button } from 'flowbite-react';
 import { HiSearch } from 'react-icons/hi';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
@@ -31,6 +31,7 @@ export function Clients() {
   const [filterType, setFilterType] = useState('all'); // all, dhcp, static
   const [filterNetwork, setFilterNetwork] = useState('all'); // all, homelab, lan
   const [devices, setDevices] = useState<NetworkDevice[]>([]);
+  const [blockedV4, setBlockedV4] = useState<string[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
   const { connectionStatus } = useMetrics(token);
@@ -65,6 +66,62 @@ export function Clients() {
     const interval = setInterval(fetchDevices, 10000);
     return () => clearInterval(interval);
   }, [token]);
+
+  // Fetch blocked list every 10 seconds
+  useEffect(() => {
+    const fetchBlocked = async () => {
+      if (!token) return;
+      try {
+        const response = await fetch('/api/devices/blocked', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setBlockedV4(data.ipv4 || []);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    fetchBlocked();
+    const interval = setInterval(fetchBlocked, 10000);
+    return () => clearInterval(interval);
+  }, [token]);
+
+  const isDeviceBlocked = (device: NetworkDevice) => {
+    return (device.ip_address && blockedV4.includes(device.ip_address));
+  };
+
+  const handleBlockToggle = async (device: NetworkDevice) => {
+    if (!token) return;
+    const blocked = isDeviceBlocked(device);
+    const url = blocked ? '/api/devices/unblock' : '/api/devices/block';
+    const body: any = {};
+    if (device.ip_address && device.ip_address.includes('.')) body.ip_address = device.ip_address;
+    // Optimistic UI
+    if (blocked) {
+      setBlockedV4(prev => prev.filter(ip => ip !== device.ip_address));
+    } else if (body.ip_address) {
+      setBlockedV4(prev => Array.from(new Set([...prev, body.ip_address])));
+    }
+    try {
+      await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      // revert on error
+      if (blocked) {
+        setBlockedV4(prev => Array.from(new Set([...prev, device.ip_address])));
+      } else {
+        setBlockedV4(prev => prev.filter(ip => ip !== device.ip_address));
+      }
+    }
+  };
 
   const filteredDevices = devices.filter((device) => {
     // Search filter
@@ -177,6 +234,7 @@ export function Clients() {
                   <Table.HeadCell>Network</Table.HeadCell>
                   <Table.HeadCell>Type</Table.HeadCell>
                   <Table.HeadCell>Last Seen</Table.HeadCell>
+                  <Table.HeadCell>Actions</Table.HeadCell>
                 </Table.Head>
                 <Table.Body className="divide-y">
                   {filteredDevices.map((device) => (
@@ -208,6 +266,15 @@ export function Clients() {
                       </Table.Cell>
                       <Table.Cell className="text-sm">
                         {new Date(device.last_seen).toLocaleString()}
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Button
+                          size="xs"
+                          color={isDeviceBlocked(device) ? 'success' : 'failure'}
+                          onClick={() => handleBlockToggle(device)}
+                        >
+                          {isDeviceBlocked(device) ? 'Enable' : 'Disable'}
+                        </Button>
                       </Table.Cell>
                     </Table.Row>
                   ))}
@@ -272,6 +339,16 @@ export function Clients() {
                     <div className="flex justify-between text-xs text-gray-500 pt-1 border-t border-gray-200 dark:border-gray-700">
                       <span>Last seen:</span>
                       <span>{new Date(device.last_seen).toLocaleString()}</span>
+                    </div>
+                    <div className="pt-3">
+                      <Button
+                        size="xs"
+                        color={isDeviceBlocked(device) ? 'success' : 'failure'}
+                        onClick={() => handleBlockToggle(device)}
+                        className="w-full"
+                      >
+                        {isDeviceBlocked(device) ? 'Enable' : 'Disable'}
+                      </Button>
                     </div>
                   </div>
                 </div>

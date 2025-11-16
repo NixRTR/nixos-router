@@ -492,6 +492,48 @@ in {
         '';
       };
 
+      # Initialize nftables sets and rules for per-device blocking (IP-based)
+      systemd.services."nft-device-block-init" = {
+        description = "Initialize nftables sets for per-device blocking";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "network-pre.target" ];
+        before = [ "network.target" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = ''
+          ${pkgs.nftables}/bin/nft -f - <<'EOF'
+          table inet router_block {
+            sets {
+              blocked_v4 {
+                type ipv4_addr
+                flags interval
+              }
+              blocked_v6 {
+                type ipv6_addr
+                flags interval
+              }
+            }
+            chains {
+              forward {
+                type filter hook forward priority 0; policy accept;
+                ip saddr @blocked_v4 drop
+                ip daddr @blocked_v4 drop
+                ip6 saddr @blocked_v6 drop
+                ip6 daddr @blocked_v6 drop
+              }
+              input {
+                type filter hook input priority 0; policy accept;
+                ip saddr @blocked_v4 drop
+                ip6 saddr @blocked_v6 drop
+              }
+            }
+          }
+          EOF
+        '';
+      };
+
       boot.kernel.sysctl = {
         "net.ipv4.ip_forward" = 1;
         "net.ipv6.conf.all.forwarding" = 1;
