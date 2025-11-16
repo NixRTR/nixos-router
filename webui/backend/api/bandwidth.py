@@ -83,20 +83,20 @@ def parse_time_range(range_str: str) -> timedelta:
 @router.get("/history")
 async def get_bandwidth_history(
     interface: Optional[str] = Query(None, description="Interface name (e.g., ppp0, br0)"),
-    range: str = Query("1h", description="Time range (e.g., 10m, 1h, 1d, 1w)"),
+    time_range: str = Query("1h", description="Time range (e.g., 10m, 1h, 1d, 1w)", alias="range"),
     _: str = Depends(get_current_user)
 ) -> List[BandwidthHistory]:
     """Get historical bandwidth data
     
     Args:
         interface: Optional interface filter (returns all if not specified)
-        range: Time range string (default: 1h)
+        time_range: Time range string (default: 1h)
         
     Returns:
         List[BandwidthHistory]: Bandwidth history per interface
     """
     # Parse time range
-    time_delta = parse_time_range(range)
+    time_delta = parse_time_range(time_range)
     start_time = datetime.now() - time_delta
     
     async with AsyncSessionLocal() as session:
