@@ -282,8 +282,16 @@ in
             hide-version: yes
             qname-minimisation: yes
             
-            # Local zones - use 'transparent' to allow specific and wildcard local-data
-            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" transparent") homelabBaseDomains}
+            # Local zones – static if wildcard exists, else transparent
+            ${concatMapStringsSep "\n    " (domain:
+              let
+                wildcard = "*.${domain}";
+                hasWildcard = lib.hasAttr wildcard homelabAllARecords;
+              in
+                if hasWildcard
+                then "local-zone: \"${domain}.\" static"
+                else "local-zone: \"${domain}.\" transparent"
+            ) homelabBaseDomains}
             
             # DNS A Records (manual + DHCP reservations)
             ${concatStringsSep "\n    " (lib.mapAttrsToList 
@@ -462,8 +470,16 @@ in
             hide-version: yes
             qname-minimisation: yes
             
-            # Local zones - use 'transparent' to allow specific and wildcard local-data
-            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" transparent") lanBaseDomains}
+            # Local zones – static if wildcard exists, else transparent
+            ${concatMapStringsSep "\n    " (domain:
+              let
+                wildcard = "*.${domain}";
+                hasWildcard = lib.hasAttr wildcard lanAllARecords;
+              in
+                if hasWildcard
+                then "local-zone: \"${domain}.\" static"
+                else "local-zone: \"${domain}.\" transparent"
+            ) lanBaseDomains}
             
             # DNS A Records (manual + DHCP reservations)
             ${concatStringsSep "\n    " (lib.mapAttrsToList 
