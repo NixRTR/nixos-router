@@ -283,13 +283,13 @@ in
             qname-minimisation: yes
             
             # Local zones – force static so all names under the domain are answered locally
-            ${"  " + (let
+            ${(let
               lines = map (domain: "local-zone: \"${domain}.\" static") homelabBaseDomains;
             in concatStringsSep "\n  " lines)}
             
             # DNS A Records (manual + DHCP reservations)
             # Note: wildcard A is emitted as CNAME to apex to ensure Unbound matches subdomains.
-            ${"  " + (let
+            ${(let
               toLocalData = name: record:
                 let
                   isWildcard = lib.hasPrefix "*." name;
@@ -479,13 +479,13 @@ in
             qname-minimisation: yes
             
             # Local zones – force static so all names under the domain are answered locally
-            ${"  " + (let
+            ${(let
               lines = map (domain: "local-zone: \"${domain}.\" static") lanBaseDomains;
             in concatStringsSep "\n  " lines)}
             
             # DNS A Records (manual + DHCP reservations)
             # Wildcard handled as CNAME to apex (see above rationale)
-            ${"  " + (let
+            ${(let
               toLocalData = name: record:
                 let
                   isWildcard = lib.hasPrefix "*." name;
