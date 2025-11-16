@@ -81,12 +81,12 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
 
               <FlowbiteSidebar.Item
                 as={Link}
-                to="/history"
+                to="/system"
                 icon={HiClock}
-                active={location.pathname === '/history'}
+                active={location.pathname === '/system'}
                 onClick={handleItemClick}
               >
-                History
+                System
               </FlowbiteSidebar.Item>
             </FlowbiteSidebar.ItemGroup>
 

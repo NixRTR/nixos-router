@@ -134,3 +134,69 @@ class ConfigChangeResponse(BaseModel):
     applied: bool
     error_message: Optional[str] = None
 
+
+class DiskIOMetrics(BaseModel):
+    """Disk I/O statistics"""
+    timestamp: datetime
+    device: str
+    read_bytes_per_sec: float = Field(..., ge=0)
+    write_bytes_per_sec: float = Field(..., ge=0)
+    read_ops_per_sec: float = Field(..., ge=0)
+    write_ops_per_sec: float = Field(..., ge=0)
+
+
+class DiskSpaceMetrics(BaseModel):
+    """Disk space usage"""
+    timestamp: datetime
+    mountpoint: str
+    device: str
+    total_gb: float = Field(..., ge=0)
+    used_gb: float = Field(..., ge=0)
+    free_gb: float = Field(..., ge=0)
+    percent_used: float = Field(..., ge=0, le=100)
+
+
+class TemperatureMetrics(BaseModel):
+    """Temperature sensor readings"""
+    timestamp: datetime
+    sensor_name: str
+    temperature_c: float
+    label: Optional[str] = None
+    critical: Optional[float] = None
+
+
+class FanMetrics(BaseModel):
+    """Fan speed readings"""
+    timestamp: datetime
+    fan_name: str
+    rpm: int = Field(..., ge=0)
+    label: Optional[str] = None
+
+
+class ClientStats(BaseModel):
+    """Network client statistics"""
+    timestamp: datetime
+    network: str = Field(..., pattern="^(homelab|lan)$")
+    dhcp_clients: int = Field(..., ge=0)
+    static_clients: int = Field(..., ge=0)
+    total_clients: int = Field(..., ge=0)
+    online_clients: int = Field(..., ge=0)
+    offline_clients: int = Field(..., ge=0)
+
+
+class NetworkDevice(BaseModel):
+    """Network device information"""
+    network: str
+    mac_address: str
+    ip_address: str
+    hostname: Optional[str] = None
+    vendor: Optional[str] = None
+    is_dhcp: bool = False
+    is_static: bool = False
+    is_online: bool = True
+    first_seen: datetime
+    last_seen: datetime
+    
+    class Config:
+        from_attributes = True
+

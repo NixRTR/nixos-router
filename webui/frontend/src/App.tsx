@@ -6,7 +6,7 @@ import { Login } from './components/auth/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Network } from './pages/Network';
 import { Clients } from './pages/Clients';
-import { History } from './pages/History';
+import { System } from './pages/System';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('access_token');
@@ -43,10 +43,10 @@ export default function App() {
           }
         />
         <Route
-          path="/history"
+          path="/system"
           element={
             <ProtectedRoute>
-              <History />
+              <System />
             </ProtectedRoute>
           }
         />

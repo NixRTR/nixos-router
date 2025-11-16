@@ -15,6 +15,7 @@ from .api.auth import router as auth_router
 from .api.history import router as history_router
 from .api.bandwidth import router as bandwidth_router
 from .api.devices import router as devices_router
+from .api.system import router as system_router
 
 
 @asynccontextmanager
@@ -64,6 +65,7 @@ app.include_router(auth_router)
 app.include_router(history_router)
 app.include_router(bandwidth_router)
 app.include_router(devices_router)
+app.include_router(system_router)
 
 
 @app.get("/api")
