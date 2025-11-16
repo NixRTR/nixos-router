@@ -104,13 +104,13 @@ export function Clients() {
           connectionStatus={connectionStatus}
         />
         
-        <main className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-900">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">Network Devices</h1>
-            <div className="flex gap-4">
-              <Badge color="success" size="lg">{onlineCount} Online</Badge>
-              <Badge color="gray" size="lg">{offlineCount} Offline</Badge>
-              <Badge color="info" size="lg">{devices.length} Total</Badge>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50 dark:bg-gray-900">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 md:mb-6 gap-3">
+            <h1 className="text-2xl md:text-3xl font-bold">Network Devices</h1>
+            <div className="flex gap-2 md:gap-4">
+              <Badge color="success" size="sm" className="md:text-base">{onlineCount} Online</Badge>
+              <Badge color="gray" size="sm" className="md:text-base">{offlineCount} Offline</Badge>
+              <Badge color="info" size="sm" className="md:text-base">{devices.length} Total</Badge>
             </div>
           </div>
           
@@ -159,52 +159,118 @@ export function Clients() {
               </div>
             </div>
 
-            <Table>
-              <Table.Head>
-                <Table.HeadCell>Status</Table.HeadCell>
-                <Table.HeadCell>Hostname</Table.HeadCell>
-                <Table.HeadCell>IP Address</Table.HeadCell>
-                <Table.HeadCell>MAC Address</Table.HeadCell>
-                <Table.HeadCell>Vendor</Table.HeadCell>
-                <Table.HeadCell>Network</Table.HeadCell>
-                <Table.HeadCell>Type</Table.HeadCell>
-                <Table.HeadCell>Last Seen</Table.HeadCell>
-              </Table.Head>
-              <Table.Body className="divide-y">
-                {filteredDevices.map((device) => (
-                  <Table.Row key={device.mac_address} className={!device.is_online ? 'opacity-50' : ''}>
-                    <Table.Cell>
-                      <Badge color={device.is_online ? 'success' : 'gray'} size="sm">
-                        {device.is_online ? '● Online' : '○ Offline'}
-                      </Badge>
-                    </Table.Cell>
-                    <Table.Cell className="font-medium">
-                      {device.hostname || 'Unknown'}
-                    </Table.Cell>
-                    <Table.Cell>{device.ip_address}</Table.Cell>
-                    <Table.Cell className="font-mono text-sm">
-                      {device.mac_address}
-                    </Table.Cell>
-                    <Table.Cell className="text-sm text-gray-600">
-                      {device.vendor || '—'}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Badge color={device.network === 'homelab' ? 'info' : 'purple'}>
+            {/* Desktop Table View */}
+            <div className="hidden md:block">
+              <Table>
+                <Table.Head>
+                  <Table.HeadCell>Status</Table.HeadCell>
+                  <Table.HeadCell>Hostname</Table.HeadCell>
+                  <Table.HeadCell>IP Address</Table.HeadCell>
+                  <Table.HeadCell>MAC Address</Table.HeadCell>
+                  <Table.HeadCell>Vendor</Table.HeadCell>
+                  <Table.HeadCell>Network</Table.HeadCell>
+                  <Table.HeadCell>Type</Table.HeadCell>
+                  <Table.HeadCell>Last Seen</Table.HeadCell>
+                </Table.Head>
+                <Table.Body className="divide-y">
+                  {filteredDevices.map((device) => (
+                    <Table.Row key={device.mac_address} className={!device.is_online ? 'opacity-50' : ''}>
+                      <Table.Cell>
+                        <Badge color={device.is_online ? 'success' : 'gray'} size="sm">
+                          {device.is_online ? '● Online' : '○ Offline'}
+                        </Badge>
+                      </Table.Cell>
+                      <Table.Cell className="font-medium">
+                        {device.hostname || 'Unknown'}
+                      </Table.Cell>
+                      <Table.Cell>{device.ip_address}</Table.Cell>
+                      <Table.Cell className="font-mono text-sm">
+                        {device.mac_address}
+                      </Table.Cell>
+                      <Table.Cell className="text-sm text-gray-600">
+                        {device.vendor || '—'}
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Badge color={device.network === 'homelab' ? 'info' : 'purple'}>
+                          {device.network.toUpperCase()}
+                        </Badge>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Badge color={device.is_dhcp ? (device.is_static ? 'success' : 'warning') : 'gray'}>
+                          {device.is_static ? 'Static DHCP' : (device.is_dhcp ? 'Dynamic DHCP' : 'Static IP')}
+                        </Badge>
+                      </Table.Cell>
+                      <Table.Cell className="text-sm">
+                        {new Date(device.last_seen).toLocaleString()}
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3">
+              {filteredDevices.map((device) => (
+                <div
+                  key={device.mac_address}
+                  className={`p-4 rounded-lg border ${
+                    device.is_online 
+                      ? 'bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700' 
+                      : 'bg-gray-50 border-gray-200 dark:bg-gray-900 dark:border-gray-700 opacity-60'
+                  }`}
+                >
+                  {/* Header Row */}
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1">
+                      <div className="font-semibold text-lg mb-1">
+                        {device.hostname || 'Unknown'}
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {device.ip_address}
+                      </div>
+                    </div>
+                    <Badge color={device.is_online ? 'success' : 'gray'} size="sm">
+                      {device.is_online ? '● Online' : '○ Offline'}
+                    </Badge>
+                  </div>
+
+                  {/* Details Grid */}
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">MAC:</span>
+                      <span className="font-mono">{device.mac_address}</span>
+                    </div>
+                    
+                    {device.vendor && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Vendor:</span>
+                        <span className="text-gray-900 dark:text-gray-100">{device.vendor}</span>
+                      </div>
+                    )}
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-500">Network:</span>
+                      <Badge color={device.network === 'homelab' ? 'info' : 'purple'} size="sm">
                         {device.network.toUpperCase()}
                       </Badge>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Badge color={device.is_dhcp ? (device.is_static ? 'success' : 'warning') : 'gray'}>
-                        {device.is_static ? 'Static DHCP' : (device.is_dhcp ? 'Dynamic DHCP' : 'Static IP')}
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-500">Type:</span>
+                      <Badge color={device.is_dhcp ? (device.is_static ? 'success' : 'warning') : 'gray'} size="sm">
+                        {device.is_static ? 'Static DHCP' : (device.is_dhcp ? 'Dynamic' : 'Static IP')}
                       </Badge>
-                    </Table.Cell>
-                    <Table.Cell className="text-sm">
-                      {new Date(device.last_seen).toLocaleString()}
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table>
+                    </div>
+                    
+                    <div className="flex justify-between text-xs text-gray-500 pt-1 border-t border-gray-200 dark:border-gray-700">
+                      <span>Last seen:</span>
+                      <span>{new Date(device.last_seen).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
 
             {filteredDevices.length === 0 && (
               <div className="text-center py-8 text-gray-500">
@@ -212,10 +278,10 @@ export function Clients() {
               </div>
             )}
             
-            <div className="mt-4 text-sm text-gray-500">
+            <div className="mt-4 text-xs md:text-sm text-gray-500 text-center md:text-left">
               <p>
                 Showing {filteredDevices.length} of {devices.length} devices
-                {' • '}Auto-refreshing every 10 seconds
+                <span className="hidden sm:inline">{' • '}Auto-refreshing every 10 seconds</span>
               </p>
             </div>
           </Card>
