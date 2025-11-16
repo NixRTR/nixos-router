@@ -29,7 +29,7 @@ def get_active_device_ips() -> Set[str]:
     # Also try to get IPs from ARP table (for static IPs)
     try:
         result = subprocess.run(
-            ['ip', 'neigh', 'show'],
+            ['/run/current-system/sw/bin/ip', 'neigh', 'show'],
             capture_output=True,
             text=True,
             timeout=5

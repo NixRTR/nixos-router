@@ -47,7 +47,7 @@ def parse_arp_table() -> Dict[str, Dict[str, str]]:
     try:
         # Try using 'ip neigh' (modern Linux)
         result = subprocess.run(
-            ['ip', 'neigh', 'show'],
+            ['/run/current-system/sw/bin/ip', 'neigh', 'show'],
             capture_output=True,
             text=True,
             timeout=5
