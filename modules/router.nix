@@ -428,28 +428,41 @@ in {
         allowPing = firewallCfg.allowPing;
         trustedInterfaces = bridgeNames;  # Trust all LAN bridges for WAN access
         
-        # Firewall rules with bandwidth accounting
+        # Firewall rules with bandwidth accounting using nftables
         extraCommands = (
           let
             # Bandwidth accounting rules (always applied)
             bandwidthRules = ''
-              # Per-device bandwidth accounting
-              iptables -t mangle -N DEVICE_ACCOUNTING 2>/dev/null || true
-              iptables -t mangle -F DEVICE_ACCOUNTING 2>/dev/null || true
+              # Create nftables table for bandwidth accounting
+              nft add table inet bandwidth_accounting 2>/dev/null || true
 
-              # Track LAN devices (192.168.1.0/24)
-              iptables -t mangle -A DEVICE_ACCOUNTING -s 192.168.1.0/24 -j RETURN
-              iptables -t mangle -A DEVICE_ACCOUNTING -d 192.168.1.0/24 -j RETURN
+              # Create counters for each IP range
+              nft add counter inet bandwidth_accounting lan_rx 2>/dev/null || true
+              nft add counter inet bandwidth_accounting lan_tx 2>/dev/null || true
+              nft add counter inet bandwidth_accounting homelab_rx 2>/dev/null || true
+              nft add counter inet bandwidth_accounting homelab_tx 2>/dev/null || true
 
-              # Track HOMELAB devices (192.168.2.0/24)
-              iptables -t mangle -A DEVICE_ACCOUNTING -s 192.168.2.0/24 -j RETURN
-              iptables -t mangle -A DEVICE_ACCOUNTING -d 192.168.2.0/24 -j RETURN
+              # Create chain for bandwidth accounting
+              nft add chain inet bandwidth_accounting accounting { type filter hook prerouting priority mangle\; } 2>/dev/null || true
+              nft add chain inet bandwidth_accounting accounting_post { type filter hook postrouting priority mangle\; } 2>/dev/null || true
 
-              # Apply accounting chain to bridged traffic
-              iptables -t mangle -A PREROUTING -i br0 -j DEVICE_ACCOUNTING
-              iptables -t mangle -A PREROUTING -i br1 -j DEVICE_ACCOUNTING
-              iptables -t mangle -A POSTROUTING -o br0 -j DEVICE_ACCOUNTING
-              iptables -t mangle -A POSTROUTING -o br1 -j DEVICE_ACCOUNTING
+              # Clear existing rules
+              nft flush chain inet bandwidth_accounting accounting 2>/dev/null || true
+              nft flush chain inet bandwidth_accounting accounting_post 2>/dev/null || true
+
+              # Add rules to count LAN traffic (192.168.1.0/24)
+              nft add rule inet bandwidth_accounting accounting ip saddr 192.168.1.0/24 counter name lan_tx
+              nft add rule inet bandwidth_accounting accounting ip daddr 192.168.1.0/24 counter name lan_rx
+
+              # Add rules to count HOMELAB traffic (192.168.2.0/24)
+              nft add rule inet bandwidth_accounting accounting ip saddr 192.168.2.0/24 counter name homelab_tx
+              nft add rule inet bandwidth_accounting accounting ip daddr 192.168.2.0/24 counter name homelab_rx
+
+              # Add postrouting rules (for upload tracking)
+              nft add rule inet bandwidth_accounting accounting_post ip saddr 192.168.1.0/24 counter name lan_tx
+              nft add rule inet bandwidth_accounting accounting_post ip daddr 192.168.1.0/24 counter name lan_rx
+              nft add rule inet bandwidth_accounting accounting_post ip saddr 192.168.2.0/24 counter name homelab_tx
+              nft add rule inet bandwidth_accounting accounting_post ip daddr 192.168.2.0/24 counter name homelab_rx
             '';
 
             # LAN isolation rules (only when enabled)
