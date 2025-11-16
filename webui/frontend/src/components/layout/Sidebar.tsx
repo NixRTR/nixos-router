@@ -1,7 +1,6 @@
 /**
  * Sidebar navigation with Flowbite - Mobile responsive with hamburger menu
  */
-import { useState } from 'react';
 import { Sidebar as FlowbiteSidebar } from 'flowbite-react';
 import { Link, useLocation } from 'react-router-dom';
 import {
