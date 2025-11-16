@@ -1,7 +1,7 @@
 /**
  * Network bandwidth page with all interface charts
  */
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Badge, Select, TextInput, Label } from 'flowbite-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -163,13 +163,11 @@ export function Network() {
           {/* Grid: 2 columns on desktop, 1 on mobile */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {bandwidthHistories.map((history) => {
-              const chartData = useMemo(() => {
-                return history.data.map((point) => ({
-                  time: new Date(point.timestamp).toLocaleTimeString(),
-                  download: point.rx_mbps || 0,
-                  upload: point.tx_mbps || 0,
-                }));
-              }, [history.data]);
+              const chartData = history.data.map((point) => ({
+                time: new Date(point.timestamp).toLocaleTimeString(),
+                download: point.rx_mbps || 0,
+                upload: point.tx_mbps || 0,
+              }));
 
               const currentDownload = chartData.length > 0 ? chartData[chartData.length - 1].download : 0;
               const currentUpload = chartData.length > 0 ? chartData[chartData.length - 1].upload : 0;
