@@ -160,8 +160,8 @@ export function Network() {
         </div>
         
         <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50 dark:bg-gray-900">
-          {/* Grid: 2 columns on desktop, 1 on mobile */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Grid: 1 column on all devices */}
+          <div className="grid grid-cols-1 gap-6">
             {bandwidthHistories.map((history) => {
               const chartData = history.data.map((point) => ({
                 time: new Date(point.timestamp).toLocaleTimeString(),
