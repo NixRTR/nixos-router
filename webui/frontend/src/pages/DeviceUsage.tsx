@@ -79,13 +79,20 @@ export function DeviceUsage() {
       if (!token) return;
 
       try {
+        console.log('DEBUG: Fetching device bandwidth summary...');
         const response = await fetch('/api/system/device-bandwidth/summary', {
           headers: { 'Authorization': `Bearer ${token}` },
         });
 
+        console.log('DEBUG: Response status:', response.status);
         if (response.ok) {
           const data: DeviceBandwidthSummary[] = await response.json();
+          console.log('DEBUG: Received device data:', data);
           setDevices(data);
+          setLoading(false);
+        } else {
+          const errorText = await response.text();
+          console.error('DEBUG: API error response:', errorText);
           setLoading(false);
         }
       } catch (error) {

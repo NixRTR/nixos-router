@@ -108,7 +108,9 @@ class ConnectionManager:
         dns_stats = collect_dns_stats()
         disk_io = collect_disk_io()
         temperatures = collect_temperatures()
+        print("DEBUG: About to collect device bandwidth")
         device_bandwidth = collect_device_bandwidth_rates()
+        print(f"DEBUG: Collected {len(device_bandwidth)} device bandwidth records")
 
         # Store in database asynchronously
         asyncio.create_task(self._store_metrics(
