@@ -505,29 +505,25 @@ in {
         script = ''
           ${pkgs.nftables}/bin/nft -f - <<'EOF'
           table inet router_block {
-            sets {
-              blocked_v4 {
-                type ipv4_addr
-                flags interval
-              }
-              blocked_v6 {
-                type ipv6_addr
-                flags interval
-              }
+            set blocked_v4 {
+              type ipv4_addr
+              flags interval
             }
-            chains {
-              forward {
-                type filter hook forward priority 0; policy accept;
-                ip saddr @blocked_v4 drop
-                ip daddr @blocked_v4 drop
-                ip6 saddr @blocked_v6 drop
-                ip6 daddr @blocked_v6 drop
-              }
-              input {
-                type filter hook input priority 0; policy accept;
-                ip saddr @blocked_v4 drop
-                ip6 saddr @blocked_v6 drop
-              }
+            set blocked_v6 {
+              type ipv6_addr
+              flags interval
+            }
+            chain forward {
+              type filter hook forward priority 0; policy accept;
+              ip saddr @blocked_v4 drop
+              ip daddr @blocked_v4 drop
+              ip6 saddr @blocked_v6 drop
+              ip6 daddr @blocked_v6 drop
+            }
+            chain input {
+              type filter hook input priority 0; policy accept;
+              ip saddr @blocked_v4 drop
+              ip6 saddr @blocked_v6 drop
             }
           }
           EOF

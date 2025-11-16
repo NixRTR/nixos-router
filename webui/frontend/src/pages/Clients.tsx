@@ -15,6 +15,8 @@ interface NetworkDevice {
   ip_address: string;
   mac_address: string;
   hostname: string;
+  nickname?: string | null;
+  favorite?: boolean;
   vendor: string | null;
   is_dhcp: boolean;
   is_static: boolean;
@@ -90,6 +92,46 @@ export function Clients() {
 
   const isDeviceBlocked = (device: NetworkDevice) => {
     return (device.ip_address && blockedV4.includes(device.ip_address));
+  };
+
+  const toggleFavorite = async (device: NetworkDevice) => {
+    if (!token) return;
+    const newFav = !device.favorite;
+    // optimistic update
+    setDevices(prev => prev.map(d => d.mac_address === device.mac_address ? { ...d, favorite: newFav } : d));
+    try {
+      await fetch('/api/devices/override', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mac_address: device.mac_address, favorite: newFav }),
+      });
+      // Re-fetch to apply backend sorting (favorites first)
+      const resp = await fetch('/api/devices/all', { headers: { 'Authorization': `Bearer ${token}` } });
+      if (resp.ok) setDevices(await resp.json());
+    } catch {
+      // revert
+      setDevices(prev => prev.map(d => d.mac_address === device.mac_address ? { ...d, favorite: !newFav } : d));
+    }
+  };
+
+  const editNickname = async (device: NetworkDevice) => {
+    if (!token) return;
+    const currentName = device.nickname || '';
+    const value = window.prompt('Set nickname for this device:', currentName);
+    if (value === null) return;
+    // optimistic
+    setDevices(prev => prev.map(d => d.mac_address === device.mac_address ? { ...d, nickname: value } : d));
+    try {
+      await fetch('/api/devices/override', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mac_address: device.mac_address, nickname: value }),
+      });
+      const resp = await fetch('/api/devices/all', { headers: { 'Authorization': `Bearer ${token}` } });
+      if (resp.ok) setDevices(await resp.json());
+    } catch {
+      // ignore
+    }
   };
 
   const handleBlockToggle = async (device: NetworkDevice) => {
@@ -227,7 +269,7 @@ export function Clients() {
               <Table>
                 <Table.Head>
                   <Table.HeadCell>Status</Table.HeadCell>
-                  <Table.HeadCell>Hostname</Table.HeadCell>
+                  <Table.HeadCell>Device</Table.HeadCell>
                   <Table.HeadCell>IP Address</Table.HeadCell>
                   <Table.HeadCell>MAC Address</Table.HeadCell>
                   <Table.HeadCell>Vendor</Table.HeadCell>
@@ -245,7 +287,17 @@ export function Clients() {
                         </Badge>
                       </Table.Cell>
                       <Table.Cell className="font-medium">
-                        {device.hostname || 'Unknown'}
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="text-yellow-500 hover:text-yellow-400"
+                            title={device.favorite ? 'Unfavorite' : 'Favorite'}
+                            onClick={() => toggleFavorite(device)}
+                          >
+                            {device.favorite ? '★' : '☆'}
+                          </button>
+                          <span>{device.nickname || device.hostname || 'Unknown'}</span>
+                          <Button size="xs" color="light" onClick={() => editNickname(device)}>Edit</Button>
+                        </div>
                       </Table.Cell>
                       <Table.Cell>{device.ip_address}</Table.Cell>
                       <Table.Cell className="font-mono text-sm">
@@ -330,6 +382,11 @@ export function Clients() {
                     </div>
                     
                     <div className="flex justify-between items-center">
+                      <span className="text-gray-500">Nickname:</span>
+                      <span className="text-gray-900 dark:text-gray-100">{device.nickname || '—'}</span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
                       <span className="text-gray-500">Type:</span>
                       <Badge color={device.is_dhcp ? (device.is_static ? 'success' : 'warning') : 'gray'} size="sm">
                         {device.is_static ? 'Static DHCP' : (device.is_dhcp ? 'Dynamic' : 'Static IP')}
@@ -349,6 +406,12 @@ export function Clients() {
                       >
                         {isDeviceBlocked(device) ? 'Enable' : 'Disable'}
                       </Button>
+                      <div className="mt-2 flex gap-2">
+                        <Button size="xs" color="light" className="flex-1" onClick={() => editNickname(device)}>Edit Nickname</Button>
+                        <Button size="xs" color={device.favorite ? 'warning' : 'light'} onClick={() => toggleFavorite(device)}>
+                          {device.favorite ? '★ Favorite' : '☆ Favorite'}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>

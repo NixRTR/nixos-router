@@ -182,6 +182,17 @@ class NetworkDeviceDB(Base):
     )
 
 
+class DeviceOverrideDB(Base):
+    """Per-device overrides (nickname, favorite)"""
+    __tablename__ = "device_overrides"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    mac_address = Column(MACADDR, nullable=False, unique=True, index=True)
+    nickname = Column(String(255))
+    favorite = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting async database session"""
     async with AsyncSessionLocal() as session:
