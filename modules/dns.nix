@@ -282,9 +282,16 @@ in
             hide-version: yes
             qname-minimisation: yes
             
-            # Local zones - declare these domains as locally served
-            # Use 'transparent' instead of 'static' to allow wildcard matching
-            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" transparent") homelabBaseDomains}
+            # Local zones - choose mode based on wildcard presence
+            # If we have a wildcard A record for *.domain, use 'redirect' so subdomains resolve locally.
+            # Otherwise use 'transparent' to allow recursion for non-listed names.
+            ${concatMapStringsSep "\n    " (domain:
+              let
+                wildcard = "*.${domain}";
+                hasWildcard = lib.hasAttr wildcard homelabAllARecords;
+              in
+                if hasWildcard then "local-zone: \"${domain}.\" redirect" else "local-zone: \"${domain}.\" transparent"
+            ) homelabBaseDomains}
             
             # DNS A Records (manual + DHCP reservations)
             ${concatStringsSep "\n    " (lib.mapAttrsToList 
@@ -463,9 +470,14 @@ in
             hide-version: yes
             qname-minimisation: yes
             
-            # Local zones - declare these domains as locally served
-            # Use 'transparent' instead of 'static' to allow wildcard matching
-            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" transparent") lanBaseDomains}
+            # Local zones - choose mode based on wildcard presence
+            ${concatMapStringsSep "\n    " (domain:
+              let
+                wildcard = "*.${domain}";
+                hasWildcard = lib.hasAttr wildcard lanAllARecords;
+              in
+                if hasWildcard then "local-zone: \"${domain}.\" redirect" else "local-zone: \"${domain}.\" transparent"
+            ) lanBaseDomains}
             
             # DNS A Records (manual + DHCP reservations)
             ${concatStringsSep "\n    " (lib.mapAttrsToList 
