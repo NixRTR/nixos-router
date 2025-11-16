@@ -283,11 +283,13 @@ in
             qname-minimisation: yes
             
             # Local zones – force static so all names under the domain are answered locally
-            ${concatMapStringsSep "\n" (domain: "  local-zone: \"${domain}.\" static") homelabBaseDomains}
+            ${"  " + (let
+              lines = map (domain: "local-zone: \"${domain}.\" static") homelabBaseDomains;
+            in concatStringsSep "\n  " lines)}
             
             # DNS A Records (manual + DHCP reservations)
             # Note: wildcard A is emitted as CNAME to apex to ensure Unbound matches subdomains.
-            ${let
+            ${"  " + (let
               toLocalData = name: record:
                 let
                   isWildcard = lib.hasPrefix "*." name;
@@ -299,21 +301,11 @@ in
                 in
                   if isWildcard then
                     # Make wildcard an alias to the apex; apex must have an A locally.
-                    "  local-data: \"${name}. IN CNAME ${baseDomain}.\"  # wildcard -> apex"
+                    "local-data: \"${name}. IN CNAME ${baseDomain}.\"  # wildcard -> apex"
                   else
-                    "  local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}";
-            in
-              concatStringsSep "\n"
-                (lib.mapAttrsToList toLocalData homelabAllARecords)
-            }
-            # Ensure wildcard exists even if not provided explicitly (alias to apex)
-            ${concatMapStringsSep "\n" (domain:
-              let
-                wildcard = "*.${domain}";
-                hasWildcard = lib.hasAttr wildcard homelabAllARecords;
-              in
-                if hasWildcard then "" else "  local-data: \"*.${domain}. IN CNAME ${domain}.\"  # default wildcard"
-            ) homelabBaseDomains}
+                    "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}";
+              lines = lib.mapAttrsToList toLocalData homelabAllARecords;
+            in concatStringsSep "\n  " lines)}
             
             # DNS CNAME Records
             ${concatStringsSep "\n    " (lib.mapAttrsToList 
@@ -487,11 +479,13 @@ in
             qname-minimisation: yes
             
             # Local zones – force static so all names under the domain are answered locally
-            ${concatMapStringsSep "\n" (domain: "  local-zone: \"${domain}.\" static") lanBaseDomains}
+            ${"  " + (let
+              lines = map (domain: "local-zone: \"${domain}.\" static") lanBaseDomains;
+            in concatStringsSep "\n  " lines)}
             
             # DNS A Records (manual + DHCP reservations)
             # Wildcard handled as CNAME to apex (see above rationale)
-            ${let
+            ${"  " + (let
               toLocalData = name: record:
                 let
                   isWildcard = lib.hasPrefix "*." name;
@@ -502,21 +496,11 @@ in
                   else name;
                 in
                   if isWildcard then
-                    "  local-data: \"${name}. IN CNAME ${baseDomain}.\"  # wildcard -> apex"
+                    "local-data: \"${name}. IN CNAME ${baseDomain}.\"  # wildcard -> apex"
                   else
-                    "  local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}";
-            in
-              concatStringsSep "\n"
-                (lib.mapAttrsToList toLocalData lanAllARecords)
-            }
-            # Ensure wildcard exists even if not provided explicitly (alias to apex)
-            ${concatMapStringsSep "\n" (domain:
-              let
-                wildcard = "*.${domain}";
-                hasWildcard = lib.hasAttr wildcard lanAllARecords;
-              in
-                if hasWildcard then "" else "  local-data: \"*.${domain}. IN CNAME ${domain}.\"  # default wildcard"
-            ) lanBaseDomains}
+                    "local-data: \"${name}. IN A ${record.ip}\"  # ${record.comment or ""}";
+              lines = lib.mapAttrsToList toLocalData lanAllARecords;
+            in concatStringsSep "\n  " lines)}
             
             # DNS CNAME Records
             ${concatStringsSep "\n    " (lib.mapAttrsToList 
