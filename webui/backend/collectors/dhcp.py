@@ -13,14 +13,15 @@ def parse_kea_leases() -> List[DHCPLease]:
     """Parse Kea DHCP lease file (CSV format)
     
     Returns:
-        List[DHCPLease]: List of active DHCP leases
+        List[DHCPLease]: List of active DHCP leases (deduplicated by IP)
     """
     lease_file = Path(settings.kea_lease_file)
     
     if not lease_file.exists():
         return []
     
-    leases = []
+    # Use dict to automatically deduplicate by IP (keeps last occurrence)
+    leases_dict = {}
     
     try:
         with open(lease_file, 'r') as f:
@@ -59,7 +60,8 @@ def parse_kea_leases() -> List[DHCPLease]:
                     last_seen=datetime.now(),
                     is_static=False
                 )
-                leases.append(dhcp_lease)
+                # Store in dict by IP - this automatically keeps the last (most recent) entry
+                leases_dict[ip] = dhcp_lease
             
     except (csv.Error, IOError) as e:
         # Silently fail - lease file might be empty or being written
@@ -67,7 +69,7 @@ def parse_kea_leases() -> List[DHCPLease]:
     except Exception as e:
         print(f"Error parsing Kea leases: {e}")
     
-    return leases
+    return list(leases_dict.values())
 
 
 def get_client_count_by_network() -> dict[str, int]:
