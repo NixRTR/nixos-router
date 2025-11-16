@@ -156,9 +156,27 @@ class BlockRequest(BaseModel):
     mac_address: Optional[str] = None
 
 
+def _find_nft() -> str:
+    candidates = [
+        "/run/current-system/sw/bin/nft",
+        "/usr/sbin/nft",
+        "/sbin/nft",
+        "nft",
+    ]
+    for path in candidates:
+        try:
+            p = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=2)
+            if p.returncode == 0:
+                return path
+        except Exception:
+            continue
+    raise HTTPException(status_code=500, detail="nft binary not found")
+
+
 def _run_nft(args: list[str]) -> None:
+    nft = _find_nft()
     try:
-        subprocess.run(["nft"] + args, check=True, capture_output=True, text=True, timeout=3)
+        subprocess.run([nft] + args, check=True, capture_output=True, text=True, timeout=3)
     except subprocess.CalledProcessError as e:
         raise HTTPException(status_code=500, detail=f"nft failed: {e.stderr or e.stdout}")
     except FileNotFoundError:

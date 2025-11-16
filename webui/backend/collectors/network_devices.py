@@ -45,15 +45,33 @@ def parse_arp_table() -> Dict[str, Dict[str, str]]:
     devices = {}
     
     try:
-        # Try using 'ip neigh' (modern Linux)
-        result = subprocess.run(
-            ['ip', 'neigh', 'show'],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
+        # Try using 'ip neigh' (modern Linux). Resolve ip binary path.
+        ip_candidates = [
+            '/run/current-system/sw/bin/ip',
+            '/usr/sbin/ip',
+            '/sbin/ip',
+            'ip'
+        ]
+        ip_bin = None
+        for c in ip_candidates:
+            try:
+                p = subprocess.run([c, '-V'], capture_output=True, text=True, timeout=2)
+                if p.returncode == 0:
+                    ip_bin = c
+                    break
+            except Exception:
+                continue
+
+        result = None
+        if ip_bin:
+            result = subprocess.run(
+                [ip_bin, 'neigh', 'show'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
         
-        if result.returncode == 0:
+        if result and result.returncode == 0:
             # Parse 'ip neigh' output
             # Format: 192.168.2.100 dev br0 lladdr aa:bb:cc:dd:ee:ff REACHABLE
             for line in result.stdout.splitlines():
