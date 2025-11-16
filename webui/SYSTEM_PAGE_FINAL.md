@@ -38,9 +38,9 @@ The System page now works exactly like the Network page:
 - **Memoized chart data** using `useMemo` for performance
 - **2-column grid** on desktop (lg:grid-cols-2)
 - **1-column grid** on mobile
-- **Per-chart controls**:
-  - Time Range: 10m, 30m, 1h, 3h, 6h, 12h, 1d, custom
-  - Update Interval: 1, 5, 10, 30, 60 seconds
+- **Chart controls**:
+  - **Shared Time Range**: 10m, 30m, 1h, 3h, 6h, 12h, 1d, custom (changing on any chart updates all charts)
+  - **Independent Update Interval**: 1, 5, 10, 30, 60 seconds per chart
 
 ---
 
@@ -48,20 +48,22 @@ The System page now works exactly like the Network page:
 
 ### 📊 CPU Usage Chart
 - Fetches historical data from database
-- Time range control (default: 30m)
-- Refresh interval control (default: 10s)
+- **Shared time range control** (default: 30m) - changes all charts
+- Independent refresh interval control (default: 10s)
 - Shows current value and data point count
 - Smart updates - only refreshes when data changes
 
 ### 💾 Memory Usage Chart
 - Fetches historical data from database
-- Independent time range and refresh controls
+- **Shared time range control** - synced with all charts
+- Independent refresh interval control
 - Shows current percentage
 - Displays data point count
 
 ### ⚖️ Load Average Chart
 - Fetches historical data from database
-- Independent time range and refresh controls
+- **Shared time range control** - synced with all charts
+- Independent refresh interval control
 - Shows 1-minute load average
 - Displays data point count
 
@@ -71,14 +73,16 @@ The System page now works exactly like the Network page:
 - Combined read/write on same chart
 - Filters out partitions (sda1, sda2, etc.)
 - Shows current read/write in MB/s
-- Independent controls per disk
+- **Shared time range control** - synced with all charts
+- Independent refresh interval control
 
 ### 🌡️ Temperature Charts
 - **One chart per sensor**
 - Real-time data accumulation
 - Friendly sensor names (CPU, Motherboard, etc.)
 - Color-coded current values (green/yellow/red)
-- Independent controls per sensor
+- **Shared time range control** - synced with all charts
+- Independent refresh interval control
 
 ### 👥 Network Clients
 - Full-width card at bottom
@@ -139,19 +143,26 @@ if (newDataString !== cpuLastDataRef.current) {
 - `< 1024px`: 1 column (mobile/tablet)
 - `≥ 1024px`: 2 columns (desktop)
 
-### Per-Chart State
+### Shared Time Range + Independent Refresh
 
-Each chart has its own state:
+All charts share the same time range but have independent refresh intervals:
 ```typescript
-const [cpuTimeRange, setCpuTimeRange] = useState('30m');
+// Shared across all charts
+const [timeRange, setTimeRange] = useState('30m');
+const [customRange, setCustomRange] = useState('');
+
+// Independent per chart
 const [cpuRefreshInterval, setCpuRefreshInterval] = useState(10);
-const [cpuHistoricalData, setCpuHistoricalData] = useState<SystemDataPoint[]>([]);
+const [memRefreshInterval, setMemRefreshInterval] = useState(10);
+const [loadRefreshInterval, setLoadRefreshInterval] = useState(10);
 ```
 
-This allows:
-- Independent time ranges for each chart
-- Independent refresh rates
-- CPU at 10s, Memory at 30s, Load at 1m, etc.
+**Benefits**:
+- **Unified view**: All charts show the same time period
+- **Easy comparison**: See correlations across metrics
+- **One control**: Change time range once, affects all charts
+- **Independent updates**: CPU at 1s, Disk at 10s, etc.
+- **Flexible**: Each chart can refresh at its own rate
 
 ---
 
@@ -276,17 +287,18 @@ git add webui/frontend/dist/
 git add webui/SYSTEM_PAGE_FINAL.md
 
 # Commit
-git commit -m "feat(webui): Redesign System page with Network-style controls
+git commit -m "feat(webui): Redesign System page with shared time range
 
 - Add historical data API endpoint for CPU/Memory/Load
 - Fetch historical data from database (not real-time accumulation)
-- Add per-chart controls for time range and refresh interval
+- Use SHARED time range across all charts
+- Use INDEPENDENT refresh intervals per chart
 - Use 2-column grid on desktop, 1-column on mobile
 - Implement smart updates (only redraw when data changes)
 - Use useMemo for chart data transformation
 - Default to 30 minutes time range
 - Show current values and data point counts
-- Independent controls for each chart (CPU/Mem/Load/Disk/Temp)
+- Changing time range on any chart updates all charts
 - Disable animations for smooth updates"
 
 git push
@@ -301,14 +313,14 @@ Navigate to `http://192.168.2.1:8080`, click "System":
 
 ✅ 2 charts per row on desktop  
 ✅ 1 chart per row on mobile  
-✅ Per-chart time range controls  
-✅ Per-chart refresh interval controls  
+✅ **Shared time range controls** (changing any chart updates all)  
+✅ **Independent refresh interval controls** per chart  
 ✅ Default 30 minutes time range  
 ✅ Historical data loads from database (CPU/Mem/Load)  
 ✅ Current values shown in footers  
 ✅ Data point counts displayed  
 ✅ Smart updates (no unnecessary redraws)  
-✅ Disk I/O and temps update independently  
+✅ All charts sync when time range changes  
 
 ---
 
@@ -345,13 +357,14 @@ Navigate to `http://192.168.2.1:8080`, click "System":
 
 ✅ **2 charts per row on desktop** (≥1024px width)  
 ✅ **1 chart per row on mobile** (<1024px width)  
-✅ **Per-chart time range controls** (all charts)  
-✅ **Per-chart refresh interval controls** (all charts)  
+✅ **Shared time range controls** (changing any chart updates all)  
+✅ **Independent refresh interval controls** per chart  
 ✅ **Default 30 minutes** time range  
 ✅ **Historical data loaded** from database (CPU/Mem/Load)  
 ✅ **Smart updates** (no redraw if data unchanged)  
 ✅ **Current values displayed** in chart footers  
 ✅ **Data point counts shown**  
+✅ **All charts sync** when time range changes  
 ✅ **No TypeScript errors**  
 ✅ **No console errors**  
 ✅ **Smooth performance** (no lag or stuttering)  

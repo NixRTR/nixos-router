@@ -49,31 +49,27 @@ export function System() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
+  // Shared time range for all charts
+  const [timeRange, setTimeRange] = useState('30m');
+  const [customRange, setCustomRange] = useState('');
+  
   // System metrics (CPU/Memory/Load) - from database
-  const [cpuTimeRange, setCpuTimeRange] = useState('30m');
-  const [cpuCustomRange, setCpuCustomRange] = useState('');
   const [cpuRefreshInterval, setCpuRefreshInterval] = useState(10);
   const [cpuHistoricalData, setCpuHistoricalData] = useState<SystemDataPoint[]>([]);
   const cpuLastDataRef = useRef<string>('');
   
-  const [memTimeRange, setMemTimeRange] = useState('30m');
-  const [memCustomRange, setMemCustomRange] = useState('');
   const [memRefreshInterval, setMemRefreshInterval] = useState(10);
   const [memHistoricalData, setMemHistoricalData] = useState<SystemDataPoint[]>([]);
   const memLastDataRef = useRef<string>('');
   
-  const [loadTimeRange, setLoadTimeRange] = useState('30m');
-  const [loadCustomRange, setLoadCustomRange] = useState('');
   const [loadRefreshInterval, setLoadRefreshInterval] = useState(10);
   const [loadHistoricalData, setLoadHistoricalData] = useState<SystemDataPoint[]>([]);
   const loadLastDataRef = useRef<string>('');
   
   // Real-time data (Disk I/O, Temps, Clients)
-  const [diskTimeRange, setDiskTimeRange] = useState('30m');
   const [diskRefreshInterval, setDiskRefreshInterval] = useState(10);
   const [diskIOHistory, setDiskIOHistory] = useState<Map<string, DiskIODataPoint[]>>(new Map());
   
-  const [tempTimeRange, setTempTimeRange] = useState('30m');
   const [tempRefreshInterval, setTempRefreshInterval] = useState(10);
   const [tempHistory, setTempHistory] = useState<Map<string, TempDataPoint[]>>(new Map());
   
@@ -87,8 +83,8 @@ export function System() {
   };
 
   // Parse time range to milliseconds
-  const getTimeRangeMs = (range: string, customRange: string) => {
-    const rangeStr = range === 'custom' ? customRange : range;
+  const getTimeRangeMs = () => {
+    const rangeStr = timeRange === 'custom' ? customRange : timeRange;
     const match = rangeStr.match(/^(\d+)([mhd])$/);
     if (!match) return 30 * 60 * 1000;
     
@@ -109,8 +105,8 @@ export function System() {
       if (!token) return;
       
       try {
-        const range = cpuTimeRange === 'custom' ? cpuCustomRange : cpuTimeRange;
-        if (!range || (cpuTimeRange === 'custom' && !cpuCustomRange)) {
+        const range = timeRange === 'custom' ? customRange : timeRange;
+        if (!range || (timeRange === 'custom' && !customRange)) {
           setCpuHistoricalData([]);
           cpuLastDataRef.current = '';
           return;
@@ -137,7 +133,7 @@ export function System() {
     fetchHistory();
     const interval = setInterval(fetchHistory, cpuRefreshInterval * 1000);
     return () => clearInterval(interval);
-  }, [cpuTimeRange, cpuCustomRange, cpuRefreshInterval, token]);
+  }, [timeRange, customRange, cpuRefreshInterval, token]);
 
   // Fetch Memory historical data
   useEffect(() => {
@@ -145,8 +141,8 @@ export function System() {
       if (!token) return;
       
       try {
-        const range = memTimeRange === 'custom' ? memCustomRange : memTimeRange;
-        if (!range || (memTimeRange === 'custom' && !memCustomRange)) {
+        const range = timeRange === 'custom' ? customRange : timeRange;
+        if (!range || (timeRange === 'custom' && !customRange)) {
           setMemHistoricalData([]);
           memLastDataRef.current = '';
           return;
@@ -173,7 +169,7 @@ export function System() {
     fetchHistory();
     const interval = setInterval(fetchHistory, memRefreshInterval * 1000);
     return () => clearInterval(interval);
-  }, [memTimeRange, memCustomRange, memRefreshInterval, token]);
+  }, [timeRange, customRange, memRefreshInterval, token]);
 
   // Fetch Load historical data
   useEffect(() => {
@@ -181,8 +177,8 @@ export function System() {
       if (!token) return;
       
       try {
-        const range = loadTimeRange === 'custom' ? loadCustomRange : loadTimeRange;
-        if (!range || (loadTimeRange === 'custom' && !loadCustomRange)) {
+        const range = timeRange === 'custom' ? customRange : timeRange;
+        if (!range || (timeRange === 'custom' && !customRange)) {
           setLoadHistoricalData([]);
           loadLastDataRef.current = '';
           return;
@@ -209,7 +205,7 @@ export function System() {
     fetchHistory();
     const interval = setInterval(fetchHistory, loadRefreshInterval * 1000);
     return () => clearInterval(interval);
-  }, [loadTimeRange, loadCustomRange, loadRefreshInterval, token]);
+  }, [timeRange, customRange, loadRefreshInterval, token]);
 
   // Fetch real-time data for disk I/O, temps, clients
   useEffect(() => {
@@ -228,7 +224,7 @@ export function System() {
           
           // Update disk I/O history
           if (data.disk_io && data.disk_io.length > 0) {
-            const maxAge = getTimeRangeMs(diskTimeRange, '');
+            const maxAge = getTimeRangeMs();
             const cutoff = now - maxAge;
             
             setDiskIOHistory(prev => {
@@ -251,7 +247,7 @@ export function System() {
           
           // Update temperature history
           if (data.temperatures && data.temperatures.length > 0) {
-            const maxAge = getTimeRangeMs(tempTimeRange, '');
+            const maxAge = getTimeRangeMs();
             const cutoff = now - maxAge;
             
             setTempHistory(prev => {
@@ -284,7 +280,7 @@ export function System() {
     fetchRealTimeData();
     const diskInterval = setInterval(fetchRealTimeData, diskRefreshInterval * 1000);
     return () => clearInterval(diskInterval);
-  }, [diskTimeRange, diskRefreshInterval, tempTimeRange, tempRefreshInterval, token]);
+  }, [timeRange, customRange, diskRefreshInterval, tempRefreshInterval, token]);
 
   // Get friendly sensor names
   const getSensorName = (sensorName: string, label: string | null) => {
@@ -365,7 +361,7 @@ export function System() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
                 <div>
                   <Label htmlFor="cpu-range" value="Time Range" className="text-xs" />
-                  <Select id="cpu-range" sizing="sm" value={cpuTimeRange} onChange={(e) => setCpuTimeRange(e.target.value)}>
+                  <Select id="cpu-range" sizing="sm" value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
                     <option value="10m">10 min</option>
                     <option value="30m">30 min</option>
                     <option value="1h">1 hour</option>
@@ -376,10 +372,10 @@ export function System() {
                     <option value="custom">Custom</option>
                   </Select>
                 </div>
-                {cpuTimeRange === 'custom' && (
+                {timeRange === 'custom' && (
                   <div>
                     <Label htmlFor="cpu-custom" value="Custom" className="text-xs" />
-                    <TextInput id="cpu-custom" sizing="sm" placeholder="e.g., 45m" value={cpuCustomRange} onChange={(e) => setCpuCustomRange(e.target.value)} />
+                    <TextInput id="cpu-custom" sizing="sm" placeholder="e.g., 45m" value={customRange} onChange={(e) => setCustomRange(e.target.value)} />
                   </div>
                 )}
                 <div>
@@ -413,7 +409,7 @@ export function System() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
                 <div>
                   <Label htmlFor="mem-range" value="Time Range" className="text-xs" />
-                  <Select id="mem-range" sizing="sm" value={memTimeRange} onChange={(e) => setMemTimeRange(e.target.value)}>
+                  <Select id="mem-range" sizing="sm" value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
                     <option value="10m">10 min</option>
                     <option value="30m">30 min</option>
                     <option value="1h">1 hour</option>
@@ -424,10 +420,10 @@ export function System() {
                     <option value="custom">Custom</option>
                   </Select>
                 </div>
-                {memTimeRange === 'custom' && (
+                {timeRange === 'custom' && (
                   <div>
                     <Label htmlFor="mem-custom" value="Custom" className="text-xs" />
-                    <TextInput id="mem-custom" sizing="sm" placeholder="e.g., 45m" value={memCustomRange} onChange={(e) => setMemCustomRange(e.target.value)} />
+                    <TextInput id="mem-custom" sizing="sm" placeholder="e.g., 45m" value={customRange} onChange={(e) => setCustomRange(e.target.value)} />
                   </div>
                 )}
                 <div>
@@ -461,7 +457,7 @@ export function System() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
                 <div>
                   <Label htmlFor="load-range" value="Time Range" className="text-xs" />
-                  <Select id="load-range" sizing="sm" value={loadTimeRange} onChange={(e) => setLoadTimeRange(e.target.value)}>
+                  <Select id="load-range" sizing="sm" value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
                     <option value="10m">10 min</option>
                     <option value="30m">30 min</option>
                     <option value="1h">1 hour</option>
@@ -472,10 +468,10 @@ export function System() {
                     <option value="custom">Custom</option>
                   </Select>
                 </div>
-                {loadTimeRange === 'custom' && (
+                {timeRange === 'custom' && (
                   <div>
                     <Label htmlFor="load-custom" value="Custom" className="text-xs" />
-                    <TextInput id="load-custom" sizing="sm" placeholder="e.g., 45m" value={loadCustomRange} onChange={(e) => setLoadCustomRange(e.target.value)} />
+                    <TextInput id="load-custom" sizing="sm" placeholder="e.g., 45m" value={customRange} onChange={(e) => setCustomRange(e.target.value)} />
                   </div>
                 )}
                 <div>
@@ -515,7 +511,7 @@ export function System() {
                   <div className="grid grid-cols-2 gap-2 mb-4">
                     <div>
                       <Label htmlFor={`disk-${device}-range`} value="Time Range" className="text-xs" />
-                      <Select id={`disk-${device}-range`} sizing="sm" value={diskTimeRange} onChange={(e) => setDiskTimeRange(e.target.value)}>
+                      <Select id={`disk-${device}-range`} sizing="sm" value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
                         <option value="10m">10 min</option>
                         <option value="30m">30 min</option>
                         <option value="1h">1 hour</option>
@@ -565,7 +561,7 @@ export function System() {
                   <div className="grid grid-cols-2 gap-2 mb-4">
                     <div>
                       <Label htmlFor={`temp-${sensorName}-range`} value="Time Range" className="text-xs" />
-                      <Select id={`temp-${sensorName}-range`} sizing="sm" value={tempTimeRange} onChange={(e) => setTempTimeRange(e.target.value)}>
+                      <Select id={`temp-${sensorName}-range`} sizing="sm" value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
                         <option value="10m">10 min</option>
                         <option value="30m">30 min</option>
                         <option value="1h">1 hour</option>
