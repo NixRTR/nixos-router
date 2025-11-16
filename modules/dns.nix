@@ -348,7 +348,7 @@ in
           ProtectHome = true;
         };
       };
-      }
+      })
       
       # Unbound for LAN (br1)
       (mkIf lanDnsEnabled {
@@ -531,7 +531,7 @@ in
           ProtectHome = true;
         };
       };
-      }
+      })
       
       # Blocklist update service for HOMELAB
       (mkIf homelabDnsEnabled {
@@ -576,7 +576,7 @@ in
           ''}";
         };
       };
-      }
+      })
       
       # Blocklist update service for LAN
       (mkIf lanDnsEnabled {
@@ -621,7 +621,7 @@ in
           ''}";
         };
       };
-      }
+      })
     ];
     
     # Timer for HOMELAB blocklist updates
