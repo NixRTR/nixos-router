@@ -34,6 +34,30 @@ export function Dashboard() {
     return gb.toFixed(2) + ' GB';
   };
 
+  // Filter to only show main interfaces
+  const mainInterfaces = interfaces.filter(iface => 
+    ['ppp0', 'br0', 'br1'].includes(iface.interface)
+  );
+
+  // Get friendly names for interfaces
+  const getInterfaceName = (iface: string) => {
+    switch (iface) {
+      case 'ppp0': return 'WAN';
+      case 'br0': return 'HOMELAB';
+      case 'br1': return 'LAN';
+      default: return iface;
+    }
+  };
+
+  const getInterfaceColor = (iface: string) => {
+    switch (iface) {
+      case 'ppp0': return 'info';
+      case 'br0': return 'success';
+      case 'br1': return 'purple';
+      default: return 'gray';
+    }
+  };
+
   return (
     <div className="flex h-screen">
       <Sidebar 
@@ -114,11 +138,16 @@ export function Dashboard() {
           <Card className="mb-6">
             <h3 className="text-xl font-semibold mb-4">Network Interfaces</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {interfaces.map((iface) => (
+              {mainInterfaces.map((iface) => (
                 <div key={iface.interface} className="border rounded-lg p-4">
                   <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-semibold">{iface.interface}</h4>
-                    <Badge color="success">UP</Badge>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold">{getInterfaceName(iface.interface)}</h4>
+                      <Badge color={getInterfaceColor(iface.interface)} size="sm">
+                        {iface.interface}
+                      </Badge>
+                    </div>
+                    <Badge color="success" size="sm">UP</Badge>
                   </div>
                   <div className="text-sm space-y-1">
                     <div className="flex justify-between">
@@ -135,7 +164,7 @@ export function Dashboard() {
                     </div>
                     <div className="flex justify-between text-gray-500">
                       <span>Total:</span>
-                      <span className="font-mono">
+                      <span className="font-mono text-xs">
                         ↓{formatBytes(iface.rx_bytes)} ↑{formatBytes(iface.tx_bytes)}
                       </span>
                     </div>
