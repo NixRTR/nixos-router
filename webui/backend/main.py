@@ -62,9 +62,9 @@ app.include_router(auth_router)
 app.include_router(history_router)
 
 
-@app.get("/")
+@app.get("/api")
 async def root():
-    """Root endpoint"""
+    """API root endpoint"""
     return {
         "name": settings.app_name,
         "version": "1.0.0",
@@ -109,9 +109,16 @@ if os.path.exists(assets_path) and os.path.isdir(assets_path):
     async def serve_frontend(full_path: str):
         """Serve frontend application"""
         # Don't intercept API or WebSocket routes
-        if not full_path or full_path.startswith("api/") or full_path.startswith("ws"):
+        if full_path.startswith("api") or full_path.startswith("ws"):
             return
         
+        # For root path, serve index.html
+        if not full_path or full_path == "/":
+            index_path = os.path.join(frontend_path, "index.html")
+            if os.path.isfile(index_path):
+                return FileResponse(index_path)
+        
+        # Try to serve the requested file
         file_path = os.path.join(frontend_path, full_path)
         if os.path.isfile(file_path):
             return FileResponse(file_path)
