@@ -31,6 +31,7 @@ export function Clients() {
   const [filterType, setFilterType] = useState('all'); // all, dhcp, static
   const [filterNetwork, setFilterNetwork] = useState('all'); // all, homelab, lan
   const [devices, setDevices] = useState<NetworkDevice[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   
   const { connectionStatus } = useMetrics(token);
   
@@ -95,13 +96,18 @@ export function Clients() {
 
   return (
     <div className="flex h-screen">
-      <Sidebar onLogout={handleLogout} />
+      <Sidebar 
+        onLogout={handleLogout}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar
           hostname="nixos-router"
           username={username}
           connectionStatus={connectionStatus}
+          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
         />
         
         <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50 dark:bg-gray-900">

@@ -1,16 +1,18 @@
 /**
- * Top navbar with Flowbite
+ * Top navbar with Flowbite - Includes hamburger menu for mobile
  */
 import { Navbar as FlowbiteNavbar, Badge } from 'flowbite-react';
+import { HiMenu } from 'react-icons/hi';
 import type { ConnectionStatus } from '../../types/metrics';
 
 interface NavbarProps {
   hostname: string;
   username: string;
   connectionStatus: ConnectionStatus;
+  onMenuClick?: () => void;
 }
 
-export function Navbar({ hostname, username, connectionStatus }: NavbarProps) {
+export function Navbar({ hostname, username, connectionStatus, onMenuClick }: NavbarProps) {
   const getStatusColor = () => {
     switch (connectionStatus) {
       case 'connected':
@@ -26,18 +28,31 @@ export function Navbar({ hostname, username, connectionStatus }: NavbarProps) {
 
   return (
     <FlowbiteNavbar fluid className="border-b">
-      <FlowbiteNavbar.Brand>
-        <span className="self-center whitespace-nowrap text-xl font-semibold">
-          {hostname}
-        </span>
-      </FlowbiteNavbar.Brand>
+      <div className="flex items-center gap-3">
+        {/* Hamburger Menu Button - Only visible on mobile */}
+        <button
+          onClick={onMenuClick}
+          className="p-2 text-gray-500 rounded-lg md:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600"
+          aria-label="Toggle menu"
+        >
+          <HiMenu className="w-6 h-6" />
+        </button>
 
-      <div className="flex items-center gap-4">
-        <Badge color={getStatusColor()}>
-          {connectionStatus.charAt(0).toUpperCase() + connectionStatus.slice(1)}
+        <FlowbiteNavbar.Brand>
+          <span className="self-center whitespace-nowrap text-xl font-semibold">
+            {hostname}
+          </span>
+        </FlowbiteNavbar.Brand>
+      </div>
+
+      <div className="flex items-center gap-2 md:gap-4">
+        <Badge color={getStatusColor()} size="sm" className="md:text-base">
+          <span className="hidden sm:inline">{connectionStatus.charAt(0).toUpperCase() + connectionStatus.slice(1)}</span>
+          <span className="sm:hidden">●</span>
         </Badge>
-        <span className="text-sm">
-          Logged in as: <strong>{username}</strong>
+        <span className="text-xs md:text-sm">
+          <span className="hidden sm:inline">Logged in as: </span>
+          <strong>{username}</strong>
         </span>
       </div>
     </FlowbiteNavbar>

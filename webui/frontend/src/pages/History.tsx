@@ -1,6 +1,7 @@
 /**
  * Historical data page (placeholder for Stage 1)
  */
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from 'flowbite-react';
 import { Sidebar } from '../components/layout/Sidebar';
@@ -12,6 +13,7 @@ export function History() {
   const token = localStorage.getItem('access_token');
   const username = localStorage.getItem('username') || 'Unknown';
   const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   
   const { connectionStatus } = useMetrics(token);
   
@@ -22,13 +24,18 @@ export function History() {
 
   return (
     <div className="flex h-screen">
-      <Sidebar onLogout={handleLogout} />
+      <Sidebar 
+        onLogout={handleLogout}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar
           hostname="nixos-router"
           username={username}
           connectionStatus={connectionStatus}
+          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
         />
         
         <main className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-900">

@@ -31,6 +31,7 @@ export function Network() {
   const [refreshInterval, setRefreshInterval] = useState(10); // seconds
   const [historicalData, setHistoricalData] = useState<BandwidthDataPoint[]>([]);
   const [loading, setLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const lastDataRef = useRef<string>(''); // Track last data to prevent unnecessary updates
   
   const { connectionStatus } = useMetrics(token);
@@ -106,13 +107,18 @@ export function Network() {
 
   return (
     <div className="flex h-screen">
-      <Sidebar onLogout={handleLogout} />
+      <Sidebar 
+        onLogout={handleLogout}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar
           hostname="nixos-router"
           username={username}
           connectionStatus={connectionStatus}
+          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
         />
         
         <main className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-900">

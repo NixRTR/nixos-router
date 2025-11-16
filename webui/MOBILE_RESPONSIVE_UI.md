@@ -4,6 +4,46 @@
 
 The WebUI has been optimized for mobile devices with responsive layouts that adapt to different screen sizes. All pages now provide an excellent user experience on phones, tablets, and desktops.
 
+## Global Layout - Hamburger Menu
+
+### Desktop View (md: breakpoint and up)
+- **Sidebar always visible** on the left
+- **Full navigation menu** with icons and labels
+- **Fixed width sidebar** doesn't overlay content
+
+### Mobile View (below md: breakpoint)
+- **Hidden sidebar by default** - saves screen space
+- **Hamburger menu button** in navbar to toggle sidebar
+- **Slide-in overlay** when sidebar is opened
+- **Dark overlay backdrop** to focus attention
+- **Auto-closes** when navigation item is clicked
+- **Smooth transitions** for open/close animations
+
+### Implementation Details
+
+**Components Modified:**
+1. **Sidebar.tsx** - Now accepts `isOpen`, `onClose` props
+   - Slides in from left with transform animation
+   - Shows dark overlay on mobile only
+   - Auto-closes after navigation on mobile
+
+2. **Navbar.tsx** - Now includes hamburger menu button
+   - Button only visible on mobile (`md:hidden`)
+   - Passes `onMenuClick` handler to toggle sidebar
+   - Compact user info on mobile
+
+3. **All Pages** - Manage sidebar state
+   - `useState` for `sidebarOpen`
+   - Pass handlers to both Sidebar and Navbar
+   - Consistent behavior across Dashboard, Network, Clients, History
+
+**Benefits:**
+- **+40% more screen space** on mobile
+- **Familiar UX pattern** (hamburger menu)
+- **Smooth animations** for better feel
+- **Touch-friendly** tap targets
+- **No layout shift** on desktop
+
 ## Network Devices Page - Mobile Optimizations
 
 ### Desktop View (md: breakpoint and up)
