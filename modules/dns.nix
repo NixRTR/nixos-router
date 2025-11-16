@@ -308,13 +308,13 @@ in
             in concatStringsSep "\n  " lines)}
             
             # DNS CNAME Records
-            ${concatStringsSep "\n    " (lib.mapAttrsToList 
+            ${concatStringsSep "\n  " (lib.mapAttrsToList 
               (name: record: "local-data: \"${name}. IN CNAME ${record.target}.\"  # ${record.comment or ""}") 
               (homelabDns.cname_records or {})
             )}
             
             # Whitelist - domains that should never be blocked
-            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" transparent  # Whitelisted") (homelabDns.whitelist or [])}
+            ${concatMapStringsSep "\n  " (domain: "local-zone: \"${domain}.\" transparent  # Whitelisted") (homelabDns.whitelist or [])}
             
             # Blocklist
             include: /var/lib/unbound/homelab/blocklist.conf
@@ -327,7 +327,7 @@ in
           
           forward-zone:
             name: "."
-            ${concatMapStringsSep "\n    " (s: "forward-addr: ${s}") (routerConfig.dns.upstreamServers or [
+            ${concatMapStringsSep "\n  " (s: "forward-addr: ${s}") (routerConfig.dns.upstreamServers or [
               "1.1.1.1@853#cloudflare-dns.com"
               "9.9.9.9@853#dns.quad9.net"
             ])}
@@ -503,13 +503,13 @@ in
             in concatStringsSep "\n  " lines)}
             
             # DNS CNAME Records
-            ${concatStringsSep "\n    " (lib.mapAttrsToList 
+            ${concatStringsSep "\n  " (lib.mapAttrsToList 
               (name: record: "local-data: \"${name}. IN CNAME ${record.target}.\"  # ${record.comment or ""}") 
               (lanDns.cname_records or {})
             )}
             
             # Whitelist - domains that should never be blocked
-            ${concatMapStringsSep "\n    " (domain: "local-zone: \"${domain}.\" transparent  # Whitelisted") (lanDns.whitelist or [])}
+            ${concatMapStringsSep "\n  " (domain: "local-zone: \"${domain}.\" transparent  # Whitelisted") (lanDns.whitelist or [])}
             
             # Blocklist
             include: /var/lib/unbound/lan/blocklist.conf
@@ -522,7 +522,7 @@ in
           
           forward-zone:
             name: "."
-            ${concatMapStringsSep "\n    " (s: "forward-addr: ${s}") (routerConfig.dns.upstreamServers or [
+            ${concatMapStringsSep "\n  " (s: "forward-addr: ${s}") (routerConfig.dns.upstreamServers or [
               "1.1.1.1@853#cloudflare-dns.com"
               "9.9.9.9@853#dns.quad9.net"
             ])}
