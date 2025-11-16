@@ -93,60 +93,16 @@ class DiskIOMetricsDB(Base):
 class TemperatureMetricsDB(Base):
     """Temperature metrics table"""
     __tablename__ = "temperature_metrics"
-
+    
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
     sensor_name = Column(String(128), nullable=False)
     temperature_c = Column(Float)
     label = Column(String(128))
     critical = Column(Float)
-
+    
     __table_args__ = (
         Index('idx_temperature_sensor_time', 'sensor_name', 'timestamp', postgresql_using='btree'),
-    )
-
-
-class DeviceBandwidthDB(Base):
-    """Device bandwidth metrics table"""
-    __tablename__ = "device_bandwidth"
-
-    id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
-    network = Column(String(32), nullable=False)
-    ip_address = Column(INET, nullable=False)
-    mac_address = Column(MACADDR)
-    hostname = Column(String(255))
-    rx_bytes_per_sec = Column(Float)
-    tx_bytes_per_sec = Column(Float)
-
-    __table_args__ = (
-        Index('idx_device_bandwidth_ip_time', 'ip_address', 'timestamp', postgresql_using='btree'),
-        Index('idx_device_bandwidth_network_time', 'network', 'timestamp', postgresql_using='btree'),
-    )
-
-
-class DeviceBandwidthSummaryDB(Base):
-    """Device bandwidth summary table"""
-    __tablename__ = "device_bandwidth_summary"
-
-    id = Column(Integer, primary_key=True, index=True)
-    network = Column(String(32), nullable=False)
-    ip_address = Column(INET, nullable=False)
-    mac_address = Column(MACADDR)
-    hostname = Column(String(255))
-    period_start = Column(DateTime(timezone=True), nullable=False)
-    period_end = Column(DateTime(timezone=True), nullable=False)
-    period_type = Column(String(16), nullable=False)
-    total_rx_bytes = Column(BigInteger)
-    total_tx_bytes = Column(BigInteger)
-    avg_rx_bytes_per_sec = Column(Float)
-    avg_tx_bytes_per_sec = Column(Float)
-    max_rx_bytes_per_sec = Column(Float)
-    max_tx_bytes_per_sec = Column(Float)
-
-    __table_args__ = (
-        Index('idx_device_summary_ip_period', 'ip_address', 'period_type', 'period_start', postgresql_using='btree'),
-        Index('idx_device_summary_network_period', 'network', 'period_type', 'period_start', postgresql_using='btree'),
     )
 
 

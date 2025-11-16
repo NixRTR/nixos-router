@@ -1,5 +1,5 @@
 /**
- * Devices page - Shows all devices (DHCP and static)
+ * Network Devices page - Shows all devices (DHCP and static)
  */
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -111,8 +111,8 @@ export function Clients() {
         />
         
         <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50 dark:bg-gray-900">
-                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 md:mb-6 gap-3">
-                   <h1 className="text-2xl md:text-3xl font-bold">Devices</h1>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 md:mb-6 gap-3">
+            <h1 className="text-2xl md:text-3xl font-bold">Network Devices</h1>
             <div className="flex gap-2 md:gap-4">
               <Badge color="success" size="sm" className="md:text-base">{onlineCount} Online</Badge>
               <Badge color="gray" size="sm" className="md:text-base">{offlineCount} Offline</Badge>

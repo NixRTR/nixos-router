@@ -428,63 +428,32 @@ in {
         allowPing = firewallCfg.allowPing;
         trustedInterfaces = bridgeNames;  # Trust all LAN bridges for WAN access
         
-        # Firewall rules with bandwidth accounting
-        extraCommands = (
+        # Block traffic between bridges if isolation is enabled
+        extraCommands = mkIf (lanIsolation && (length bridges) > 1) (
           let
-            # Bandwidth accounting rules using nftables (always applied)
-            bandwidthRules = ''
-              # Create bandwidth accounting table if it doesn't exist
-              nft add table inet bandwidth_accounting 2>/dev/null || true
-
-              # Create accounting chains if they don't exist
-              nft add chain inet bandwidth_accounting accounting '{ type filter hook prerouting priority mangle; }' 2>/dev/null || true
-              nft add chain inet bandwidth_accounting accounting_post '{ type filter hook postrouting priority mangle; }' 2>/dev/null || true
-
-              # Flush existing rules to start fresh
-              nft flush chain inet bandwidth_accounting accounting 2>/dev/null || true
-              nft flush chain inet bandwidth_accounting accounting_post 2>/dev/null || true
-
-              # Add basic accounting rules for local networks
-              # These counters will be dynamically managed by the backend service
-              nft add rule inet bandwidth_accounting accounting ip daddr 192.168.1.0/24 counter name lan_download 2>/dev/null || true
-              nft add rule inet bandwidth_accounting accounting ip saddr 192.168.1.0/24 counter name lan_upload 2>/dev/null || true
-              nft add rule inet bandwidth_accounting accounting ip daddr 192.168.2.0/24 counter name homelab_download 2>/dev/null || true
-              nft add rule inet bandwidth_accounting accounting ip saddr 192.168.2.0/24 counter name homelab_upload 2>/dev/null || true
-            '';
-
-            # LAN isolation rules (only when enabled)
-            isolationRules = mkIf (lanIsolation && (length bridges) > 1) (
-              let
-                # Generate all bridge pairs for blocking
-                bridgePairs = flatten (map (i:
-                  map (j: { from = elemAt bridgeNames i; to = elemAt bridgeNames j; })
-                    (range (i + 1) ((length bridgeNames) - 1))
-                ) (range 0 ((length bridgeNames) - 2)));
-
-                # Generate exception rules (must come BEFORE drop rules)
-                exceptionRules = concatMapStrings (ex: ''
-                  # Exception: ${ex.description}
-                  # Allow ${ex.source} (${ex.sourceBridge}) -> ${ex.destBridge}
-                  iptables -I FORWARD -s ${ex.source} -i ${ex.sourceBridge} -o ${ex.destBridge} -j ACCEPT
-                  # Allow return traffic from ${ex.destBridge} -> ${ex.source}
-                  iptables -I FORWARD -d ${ex.source} -i ${ex.destBridge} -o ${ex.sourceBridge} -j ACCEPT
-                '') isolationExceptions;
-              in
-                # Apply exceptions first, then blocking rules
-                exceptionRules + (concatMapStrings (pair: ''
-                  # Block ${pair.from} <-> ${pair.to}
-                  iptables -A FORWARD -i ${pair.from} -o ${pair.to} -j DROP
-                  iptables -A FORWARD -i ${pair.to} -o ${pair.from} -j DROP
-                '') bridgePairs)
-            );
+            # Generate all bridge pairs for blocking
+            bridgePairs = flatten (map (i: 
+              map (j: { from = elemAt bridgeNames i; to = elemAt bridgeNames j; })
+                (range (i + 1) ((length bridgeNames) - 1))
+            ) (range 0 ((length bridgeNames) - 2)));
+            
+            # Generate exception rules (must come BEFORE drop rules)
+            exceptionRules = concatMapStrings (ex: ''
+              # Exception: ${ex.description}
+              # Allow ${ex.source} (${ex.sourceBridge}) -> ${ex.destBridge}
+              iptables -I FORWARD -s ${ex.source} -i ${ex.sourceBridge} -o ${ex.destBridge} -j ACCEPT
+              # Allow return traffic from ${ex.destBridge} -> ${ex.source}
+              iptables -I FORWARD -d ${ex.source} -i ${ex.destBridge} -o ${ex.sourceBridge} -j ACCEPT
+            '') isolationExceptions;
           in
-            # Combine bandwidth rules with isolation rules
-            mkMerge [
-              bandwidthRules
-              isolationRules
-            ]
+            # Apply exceptions first, then blocking rules
+            exceptionRules + (concatMapStrings (pair: ''
+              # Block ${pair.from} <-> ${pair.to}
+              iptables -A FORWARD -i ${pair.from} -o ${pair.to} -j DROP
+              iptables -A FORWARD -i ${pair.to} -o ${pair.from} -j DROP
+            '') bridgePairs)
         );
-
+        
         extraStopCommands = mkIf (lanIsolation && (length bridges) > 1) (
           let
             bridgePairs = flatten (map (i: 

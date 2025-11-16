@@ -10,13 +10,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import MetricsSnapshot, SystemMetrics, InterfaceStats, ServiceStatus, DHCPLease, DNSMetrics
-from .database import AsyncSessionLocal, SystemMetricsDB, InterfaceStatsDB, ServiceStatusDB, DHCPLeaseDB, DiskIOMetricsDB, TemperatureMetricsDB, DeviceBandwidthDB
+from .database import AsyncSessionLocal, SystemMetricsDB, InterfaceStatsDB, ServiceStatusDB, DHCPLeaseDB, DiskIOMetricsDB, TemperatureMetricsDB
 from .collectors.system import collect_system_metrics, collect_disk_io, collect_temperatures
 from .collectors.network import collect_interface_stats
 from .collectors.dhcp import parse_kea_leases
 from .collectors.services import collect_service_statuses
 from .collectors.dns import collect_dns_stats
-from .collectors.device_bandwidth import collect_device_bandwidth_rates
 from .config import settings
 
 
@@ -108,11 +107,7 @@ class ConnectionManager:
         dns_stats = collect_dns_stats()
         disk_io = collect_disk_io()
         temperatures = collect_temperatures()
-        device_bandwidth = collect_device_bandwidth_rates()
-
-        # Enrich device bandwidth data with DHCP lease information
-        device_bandwidth = enrich_device_bandwidth_data(device_bandwidth, dhcp_leases)
-
+        
         # Store in database asynchronously
         asyncio.create_task(self._store_metrics(
             system_metrics,
@@ -120,8 +115,7 @@ class ConnectionManager:
             service_statuses,
             dhcp_leases,
             disk_io,
-            temperatures,
-            device_bandwidth
+            temperatures
         ))
         
         # Create snapshot for broadcast
@@ -143,11 +137,10 @@ class ConnectionManager:
         services: List[ServiceStatus],
         dhcp_leases: List[DHCPLease],
         disk_io: List,
-        temperatures: List,
-        device_bandwidth: List
+        temperatures: List
     ):
         """Store metrics in database
-
+        
         Args:
             system: System metrics
             interfaces: Interface statistics
@@ -155,7 +148,6 @@ class ConnectionManager:
             dhcp_leases: DHCP leases
             disk_io: Disk I/O metrics
             temperatures: Temperature metrics
-            device_bandwidth: Per-device bandwidth metrics
         """
         try:
             async with AsyncSessionLocal() as session:
@@ -257,59 +249,11 @@ class ConnectionManager:
                         critical=temp.critical
                     )
                     session.add(temp_db)
-
-                # Store device bandwidth metrics
-                for device_bw in device_bandwidth:
-                    device_db = DeviceBandwidthDB(
-                        timestamp=device_bw.timestamp,
-                        network=device_bw.network,
-                        ip_address=device_bw.ip_address,
-                        mac_address=device_bw.mac_address,
-                        hostname=device_bw.hostname,
-                        rx_bytes_per_sec=device_bw.rx_bytes_per_sec,
-                        tx_bytes_per_sec=device_bw.tx_bytes_per_sec
-                    )
-                    session.add(device_db)
-
+                
                 await session.commit()
                 
         except Exception as e:
             print(f"Error storing metrics: {e}")
-
-
-def enrich_device_bandwidth_data(device_bandwidth: List, dhcp_leases: List[DHCPLease]):
-    """
-    Enrich device bandwidth data with DHCP lease information (MAC addresses, hostnames)
-
-    Args:
-        device_bandwidth: List of DeviceBandwidth objects
-        dhcp_leases: List of DHCPLease objects
-
-    Returns:
-        List of enriched DeviceBandwidth objects
-    """
-    # Create lookup map from IP to DHCP lease data
-    dhcp_lookup = {}
-    for lease in dhcp_leases:
-        dhcp_lookup[lease.ip_address] = {
-            'mac_address': lease.mac_address,
-            'hostname': lease.hostname
-        }
-
-    # Enrich bandwidth data
-    enriched = []
-    for bw in device_bandwidth:
-        enriched_bw = bw.model_copy()  # Create a copy
-
-        # Look up DHCP data for this IP
-        if bw.ip_address in dhcp_lookup:
-            dhcp_data = dhcp_lookup[bw.ip_address]
-            enriched_bw.mac_address = dhcp_data['mac_address']
-            enriched_bw.hostname = dhcp_data['hostname']
-
-        enriched.append(enriched_bw)
-
-    return enriched
 
 
 # Global connection manager instance
