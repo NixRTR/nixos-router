@@ -14,6 +14,7 @@ from .websocket import manager, websocket_endpoint
 from .api.auth import router as auth_router
 from .api.history import router as history_router
 from .api.bandwidth import router as bandwidth_router
+from .api.devices import router as devices_router
 
 
 @asynccontextmanager
@@ -62,6 +63,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(history_router)
 app.include_router(bandwidth_router)
+app.include_router(devices_router)
 
 
 @app.get("/api")

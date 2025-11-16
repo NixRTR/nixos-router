@@ -127,6 +127,28 @@ class ConfigChangeDB(Base):
     error_message = Column(Text)
 
 
+class NetworkDeviceDB(Base):
+    """Network devices table - all discovered devices (DHCP and static)"""
+    __tablename__ = "network_devices"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    network = Column(String(32), nullable=False, index=True)
+    mac_address = Column(MACADDR, nullable=False)
+    ip_address = Column(INET, nullable=False)
+    hostname = Column(String(255))
+    vendor = Column(String(255))  # Device manufacturer from MAC OUI
+    is_dhcp = Column(Boolean, default=False)
+    is_static = Column(Boolean, default=False)
+    is_online = Column(Boolean, default=True, index=True)
+    first_seen = Column(DateTime(timezone=True), nullable=False)
+    last_seen = Column(DateTime(timezone=True), nullable=False, index=True)
+    
+    __table_args__ = (
+        # Each device (MAC) tracked per network
+        Index('idx_network_devices_network_mac', 'network', 'mac_address', unique=True),
+    )
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting async database session"""
     async with AsyncSessionLocal() as session:

@@ -59,6 +59,29 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_dhcp_network_mac ON dhcp_leases(network, m
 -- Unique constraint: one device per IP per network
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dhcp_network_ip ON dhcp_leases(network, ip_address);
 
+-- Network devices (all discovered devices - DHCP and static)
+-- Discovered via ARP table scanning + DHCP leases
+CREATE TABLE IF NOT EXISTS network_devices (
+    id SERIAL PRIMARY KEY,
+    network VARCHAR(32) NOT NULL,      -- 'homelab' or 'lan'
+    mac_address MACADDR NOT NULL,      -- Device identifier
+    ip_address INET NOT NULL,          -- Current IP address
+    hostname VARCHAR(255),             -- Device hostname
+    vendor VARCHAR(255),               -- Manufacturer from MAC OUI
+    is_dhcp BOOLEAN DEFAULT FALSE,     -- Using DHCP
+    is_static BOOLEAN DEFAULT FALSE,   -- Static DHCP reservation
+    is_online BOOLEAN DEFAULT TRUE,    -- Currently active (in ARP)
+    first_seen TIMESTAMPTZ NOT NULL,   -- First discovery
+    last_seen TIMESTAMPTZ NOT NULL     -- Last activity
+);
+
+CREATE INDEX IF NOT EXISTS idx_network_devices_network ON network_devices(network);
+CREATE INDEX IF NOT EXISTS idx_network_devices_online ON network_devices(is_online);
+CREATE INDEX IF NOT EXISTS idx_network_devices_last_seen ON network_devices(last_seen DESC);
+
+-- Unique constraint: one entry per device per network
+CREATE UNIQUE INDEX IF NOT EXISTS idx_network_devices_network_mac ON network_devices(network, mac_address);
+
 -- Service status time-series
 CREATE TABLE IF NOT EXISTS service_status (
     id SERIAL PRIMARY KEY,
