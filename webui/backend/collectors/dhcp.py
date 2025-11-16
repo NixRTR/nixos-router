@@ -1,7 +1,7 @@
 """
 DHCP lease collector - parses Kea DHCP lease file
 """
-import json
+import csv
 from datetime import datetime
 from pathlib import Path
 from typing import List
@@ -10,7 +10,7 @@ from ..config import settings
 
 
 def parse_kea_leases() -> List[DHCPLease]:
-    """Parse Kea DHCP lease file
+    """Parse Kea DHCP lease file (CSV format)
     
     Returns:
         List[DHCPLease]: List of active DHCP leases
@@ -24,39 +24,48 @@ def parse_kea_leases() -> List[DHCPLease]:
     
     try:
         with open(lease_file, 'r') as f:
-            data = json.load(f)
+            reader = csv.DictReader(f)
             
-        # Kea stores leases in the 'leases' array
-        for lease in data.get('leases', []):
-            # Determine network based on IP address
-            ip = lease.get('ip-address', '')
-            network = 'homelab' if ip.startswith('192.168.2.') else 'lan'
+            for row in reader:
+                # Determine network based on IP address
+                ip = row.get('address', '')
+                if not ip:
+                    continue
+                    
+                network = 'homelab' if ip.startswith('192.168.2.') else 'lan'
+                
+                # Parse timestamps
+                expire_ts = row.get('expire')
+                valid_lifetime = int(row.get('valid_lifetime', 3600))
+                
+                lease_start = None
+                lease_end = None
+                
+                if expire_ts:
+                    try:
+                        expire_timestamp = int(expire_ts)
+                        lease_end = datetime.fromtimestamp(expire_timestamp)
+                        lease_start = datetime.fromtimestamp(expire_timestamp - valid_lifetime)
+                    except (ValueError, OSError):
+                        pass
+                
+                dhcp_lease = DHCPLease(
+                    network=network,
+                    ip_address=ip,
+                    mac_address=row.get('hwaddr', '00:00:00:00:00:00'),
+                    hostname=row.get('hostname', '') or f"client-{ip.split('.')[-1]}",
+                    lease_start=lease_start,
+                    lease_end=lease_end,
+                    last_seen=datetime.now(),
+                    is_static=False
+                )
+                leases.append(dhcp_lease)
             
-            # Parse timestamps
-            cltt = lease.get('cltt')  # Client last transaction time
-            valid_lifetime = lease.get('valid-lifetime', 3600)
-            
-            lease_start = None
-            lease_end = None
-            if cltt:
-                lease_start = datetime.fromtimestamp(cltt)
-                lease_end = datetime.fromtimestamp(cltt + valid_lifetime)
-            
-            dhcp_lease = DHCPLease(
-                network=network,
-                ip_address=ip,
-                mac_address=lease.get('hw-address', '00:00:00:00:00:00'),
-                hostname=lease.get('hostname'),
-                lease_start=lease_start,
-                lease_end=lease_end,
-                last_seen=datetime.now(),
-                is_static=False  # Could be enhanced to check against router-config.nix
-            )
-            leases.append(dhcp_lease)
-            
-    except (json.JSONDecodeError, IOError) as e:
+    except (csv.Error, IOError) as e:
+        # Silently fail - lease file might be empty or being written
+        pass
+    except Exception as e:
         print(f"Error parsing Kea leases: {e}")
-        return []
     
     return leases
 

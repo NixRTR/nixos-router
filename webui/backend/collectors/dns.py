@@ -21,8 +21,33 @@ def get_unbound_stats(instance: str) -> Optional[DNSMetrics]:
         # Note: Socket path needs to be adjusted per instance
         control_socket = f"/run/unbound-{instance}/control"
         
+        # Try to find unbound-control in common paths
+        unbound_control_paths = [
+            '/run/current-system/sw/bin/unbound-control',
+            '/usr/bin/unbound-control',
+            '/usr/local/bin/unbound-control',
+            'unbound-control'  # Fallback to PATH
+        ]
+        
+        unbound_control = None
+        for path in unbound_control_paths:
+            try:
+                # Check if command exists
+                test = subprocess.run(
+                    [path, '-h'],
+                    capture_output=True,
+                    timeout=1
+                )
+                unbound_control = path
+                break
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
+        
+        if not unbound_control:
+            return None  # unbound-control not available
+        
         result = subprocess.run(
-            ['unbound-control', '-s', control_socket, 'stats_noreset'],
+            [unbound_control, '-s', control_socket, 'stats_noreset'],
             capture_output=True,
             text=True,
             timeout=5
