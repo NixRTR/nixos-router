@@ -6,6 +6,7 @@ import re
 import time
 from typing import List, Dict, Set
 from datetime import datetime
+from pathlib import Path
 
 from ..models import DeviceBandwidth
 from .dhcp import parse_kea_leases
@@ -27,6 +28,9 @@ def get_active_device_ips() -> Set[str]:
             active_ips.add(lease.ip_address)
 
     # Also try to get IPs from ARP table (for static IPs)
+    arp_ips_found = False
+
+    # Try using 'ip neigh' command first
     try:
         result = subprocess.run(
             ['/run/current-system/sw/bin/ip', 'neigh', 'show'],
@@ -43,9 +47,30 @@ def get_active_device_ips() -> Set[str]:
                         ip = parts[0]
                         if is_local_ip(ip):
                             active_ips.add(ip)
+            arp_ips_found = True
 
-    except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:
-        print(f"Warning: Could not read ARP table: {e}")
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError) as e:
+        print(f"Warning: Could not use 'ip neigh' command: {e}")
+
+    # Fallback: Try reading /proc/net/arp directly
+    if not arp_ips_found:
+        try:
+            arp_file = Path('/proc/net/arp')
+            if arp_file.exists():
+                with open(arp_file, 'r') as f:
+                    lines = f.readlines()[1:]  # Skip header
+                    for line in lines:
+                        parts = line.split()
+                        if len(parts) >= 6:
+                            ip = parts[0]
+                            if is_local_ip(ip):
+                                active_ips.add(ip)
+                arp_ips_found = True
+        except Exception as e:
+            print(f"Warning: Could not read /proc/net/arp: {e}")
+
+    if not arp_ips_found:
+        print("Warning: Could not read ARP table by any method")
 
     return active_ips
 

@@ -52,7 +52,7 @@ def parse_arp_table() -> Dict[str, Dict[str, str]]:
             text=True,
             timeout=5
         )
-        
+
         if result.returncode == 0:
             # Parse 'ip neigh' output
             # Format: 192.168.2.100 dev br0 lladdr aa:bb:cc:dd:ee:ff REACHABLE
@@ -62,20 +62,20 @@ def parse_arp_table() -> Dict[str, Dict[str, str]]:
                     ip = parts[0]
                     dev_idx = parts.index('dev') + 1 if 'dev' in parts else -1
                     mac_idx = parts.index('lladdr') + 1 if 'lladdr' in parts else -1
-                    
+
                     if dev_idx > 0 and mac_idx > 0:
                         interface = parts[dev_idx]
                         mac = parts[mac_idx]
-                        
+
                         # Only include bridge interfaces (br0, br1) and PPP
                         if interface.startswith('br') or interface.startswith('ppp'):
                             devices[ip] = {
                                 'mac_address': mac.lower(),
                                 'interface': interface
                             }
-    except Exception as e:
-        print(f"Error parsing ARP table: {e}")
-        
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError) as e:
+        print(f"Warning: Could not use 'ip neigh' command: {e}")
+
     # Fallback: Try /proc/net/arp
     if not devices:
         try:
