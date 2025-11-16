@@ -1,7 +1,6 @@
 /**
  * Main Dashboard page
  */
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Progress, Badge, Table } from 'flowbite-react';
 import { Sidebar } from '../components/layout/Sidebar';

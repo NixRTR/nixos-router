@@ -26,32 +26,9 @@ let
   # Backend source
   backendSrc = ../webui/backend;
   
-  # Frontend build
+  # Frontend build (pre-built, committed to repository)
   frontendSrc = ../webui/frontend;
-  
-  # Build frontend with npm
-  frontendBuild = pkgs.stdenv.mkDerivation {
-    name = "router-webui-frontend";
-    src = frontendSrc;
-    
-    buildInputs = [ pkgs.nodejs_20 ];
-    
-    buildPhase = ''
-      export HOME=$TMPDIR
-      export npm_config_cache=$TMPDIR/.npm
-      
-      # Install dependencies
-      npm install --legacy-peer-deps
-      
-      # Build the frontend
-      npm run build
-    '';
-    
-    installPhase = ''
-      mkdir -p $out
-      cp -r dist/* $out/
-    '';
-  };
+  frontendBuild = frontendSrc + "/dist";
   
 in
 
