@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional
 from ..models import DHCPLease
+import os
 from ..config import settings
 
 
@@ -46,7 +47,9 @@ def parse_arp_table() -> Dict[str, Dict[str, str]]:
     
     try:
         # Try using 'ip neigh' (modern Linux). Resolve ip binary path.
-        ip_candidates = [
+        # Prefer explicit env var (NixOS module sets to /nix/store/... path)
+        env_ip = os.environ.get("IP_BIN")
+        ip_candidates = ([env_ip] if env_ip else []) + [
             '/run/current-system/sw/bin/ip',
             '/usr/sbin/ip',
             '/sbin/ip',

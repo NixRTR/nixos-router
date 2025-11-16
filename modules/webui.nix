@@ -233,6 +233,9 @@ in
         KEA_LEASE_FILE = "/var/lib/kea/dhcp4.leases";
         ROUTER_CONFIG_FILE = "/etc/nixos/router-config.nix";
         JWT_SECRET_FILE = "/var/lib/router-webui/jwt-secret";
+        # Provide absolute binary paths for commands used by backend
+        NFT_BIN = "${pkgs.nftables}/bin/nft";
+        IP_BIN = "${pkgs.iproute2}/bin/ip";
       };
       
       serviceConfig = {

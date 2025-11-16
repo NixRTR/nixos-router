@@ -8,6 +8,7 @@ from pydantic import BaseModel
 import subprocess
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+import os
 
 from ..auth import get_current_user
 from ..collectors.network_devices import discover_network_devices, get_device_count_by_network
@@ -157,6 +158,10 @@ class BlockRequest(BaseModel):
 
 
 def _find_nft() -> str:
+    # Prefer explicit env var (set by NixOS module to /nix/store/... path)
+    env_path = os.environ.get("NFT_BIN")
+    if env_path:
+        return env_path
     candidates = [
         "/run/current-system/sw/bin/nft",
         "/usr/sbin/nft",
