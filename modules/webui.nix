@@ -103,7 +103,7 @@ in
     users.users.router-webui = {
       isSystemUser = true;
       group = "router-webui";
-      extraGroups = [ "shadow" ];  # Required for PAM authentication
+      extraGroups = [ "shadow" "kea" ];  # shadow for PAM auth, kea for DHCP leases
       description = "Router WebUI service user";
     };
     
@@ -220,11 +220,17 @@ in
         ProtectSystem = "strict";
         ProtectHome = true;
         ReadWritePaths = [ "/var/lib/router-webui" ];
-        ReadOnlyPaths = [ "/var/lib/kea" "/run/unbound-homelab" "/run/unbound-lan" ];
+        ReadOnlyPaths = [ 
+          "/var/lib/kea" 
+          "/run/unbound-homelab" 
+          "/run/unbound-lan"
+          "/proc"
+          "/sys"
+        ];
         
         # Allow access to system monitoring
-        CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_SYS_PTRACE" ];
-        AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_SYS_PTRACE" ];
+        CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_SYS_PTRACE" "CAP_DAC_READ_SEARCH" ];
+        AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_SYS_PTRACE" "CAP_DAC_READ_SEARCH" ];
       };
     };
     
