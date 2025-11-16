@@ -428,41 +428,28 @@ in {
         allowPing = firewallCfg.allowPing;
         trustedInterfaces = bridgeNames;  # Trust all LAN bridges for WAN access
         
-        # Firewall rules with bandwidth accounting using nftables
+        # Firewall rules with bandwidth accounting
         extraCommands = (
           let
-            # Bandwidth accounting rules (always applied)
+            # Bandwidth accounting rules using nftables (always applied)
             bandwidthRules = ''
-              # Create nftables table for bandwidth accounting
+              # Create bandwidth accounting table if it doesn't exist
               nft add table inet bandwidth_accounting 2>/dev/null || true
 
-              # Create counters for each IP range
-              nft add counter inet bandwidth_accounting lan_rx 2>/dev/null || true
-              nft add counter inet bandwidth_accounting lan_tx 2>/dev/null || true
-              nft add counter inet bandwidth_accounting homelab_rx 2>/dev/null || true
-              nft add counter inet bandwidth_accounting homelab_tx 2>/dev/null || true
+              # Create accounting chains if they don't exist
+              nft add chain inet bandwidth_accounting accounting '{ type filter hook prerouting priority mangle; }' 2>/dev/null || true
+              nft add chain inet bandwidth_accounting accounting_post '{ type filter hook postrouting priority mangle; }' 2>/dev/null || true
 
-              # Create chain for bandwidth accounting
-              nft add chain inet bandwidth_accounting accounting { type filter hook prerouting priority mangle\; } 2>/dev/null || true
-              nft add chain inet bandwidth_accounting accounting_post { type filter hook postrouting priority mangle\; } 2>/dev/null || true
-
-              # Clear existing rules
+              # Flush existing rules to start fresh
               nft flush chain inet bandwidth_accounting accounting 2>/dev/null || true
               nft flush chain inet bandwidth_accounting accounting_post 2>/dev/null || true
 
-              # Add rules to count LAN traffic (192.168.1.0/24)
-              nft add rule inet bandwidth_accounting accounting ip saddr 192.168.1.0/24 counter name lan_tx
-              nft add rule inet bandwidth_accounting accounting ip daddr 192.168.1.0/24 counter name lan_rx
-
-              # Add rules to count HOMELAB traffic (192.168.2.0/24)
-              nft add rule inet bandwidth_accounting accounting ip saddr 192.168.2.0/24 counter name homelab_tx
-              nft add rule inet bandwidth_accounting accounting ip daddr 192.168.2.0/24 counter name homelab_rx
-
-              # Add postrouting rules (for upload tracking)
-              nft add rule inet bandwidth_accounting accounting_post ip saddr 192.168.1.0/24 counter name lan_tx
-              nft add rule inet bandwidth_accounting accounting_post ip daddr 192.168.1.0/24 counter name lan_rx
-              nft add rule inet bandwidth_accounting accounting_post ip saddr 192.168.2.0/24 counter name homelab_tx
-              nft add rule inet bandwidth_accounting accounting_post ip daddr 192.168.2.0/24 counter name homelab_rx
+              # Add basic accounting rules for local networks
+              # These counters will be dynamically managed by the backend service
+              nft add rule inet bandwidth_accounting accounting ip daddr 192.168.1.0/24 counter name lan_download 2>/dev/null || true
+              nft add rule inet bandwidth_accounting accounting ip saddr 192.168.1.0/24 counter name lan_upload 2>/dev/null || true
+              nft add rule inet bandwidth_accounting accounting ip daddr 192.168.2.0/24 counter name homelab_download 2>/dev/null || true
+              nft add rule inet bandwidth_accounting accounting ip saddr 192.168.2.0/24 counter name homelab_upload 2>/dev/null || true
             '';
 
             # LAN isolation rules (only when enabled)

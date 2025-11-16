@@ -108,9 +108,10 @@ class ConnectionManager:
         dns_stats = collect_dns_stats()
         disk_io = collect_disk_io()
         temperatures = collect_temperatures()
-        print("DEBUG: About to collect device bandwidth")
         device_bandwidth = collect_device_bandwidth_rates()
-        print(f"DEBUG: Collected {len(device_bandwidth)} device bandwidth records")
+
+        # Enrich device bandwidth data with DHCP lease information
+        device_bandwidth = enrich_device_bandwidth_data(device_bandwidth, dhcp_leases)
 
         # Store in database asynchronously
         asyncio.create_task(self._store_metrics(
@@ -274,6 +275,41 @@ class ConnectionManager:
                 
         except Exception as e:
             print(f"Error storing metrics: {e}")
+
+
+def enrich_device_bandwidth_data(device_bandwidth: List, dhcp_leases: List[DHCPLease]):
+    """
+    Enrich device bandwidth data with DHCP lease information (MAC addresses, hostnames)
+
+    Args:
+        device_bandwidth: List of DeviceBandwidth objects
+        dhcp_leases: List of DHCPLease objects
+
+    Returns:
+        List of enriched DeviceBandwidth objects
+    """
+    # Create lookup map from IP to DHCP lease data
+    dhcp_lookup = {}
+    for lease in dhcp_leases:
+        dhcp_lookup[lease.ip_address] = {
+            'mac_address': lease.mac_address,
+            'hostname': lease.hostname
+        }
+
+    # Enrich bandwidth data
+    enriched = []
+    for bw in device_bandwidth:
+        enriched_bw = bw.model_copy()  # Create a copy
+
+        # Look up DHCP data for this IP
+        if bw.ip_address in dhcp_lookup:
+            dhcp_data = dhcp_lookup[bw.ip_address]
+            enriched_bw.mac_address = dhcp_data['mac_address']
+            enriched_bw.hostname = dhcp_data['hostname']
+
+        enriched.append(enriched_bw)
+
+    return enriched
 
 
 # Global connection manager instance
