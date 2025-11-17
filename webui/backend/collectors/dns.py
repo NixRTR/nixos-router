@@ -2,7 +2,7 @@
 DNS (Unbound) statistics collector
 """
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from ..models import DNSMetrics
 
@@ -80,7 +80,7 @@ def get_unbound_stats(instance: str) -> Optional[DNSMetrics]:
             cache_hit_rate = (cache_hits / total_queries) * 100
         
         return DNSMetrics(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             instance=instance,
             total_queries=total_queries,
             cache_hits=cache_hits,

@@ -3,7 +3,7 @@ Bandwidth history API endpoints
 """
 from fastapi import APIRouter, Depends, Query
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from pydantic import BaseModel
 
@@ -97,7 +97,7 @@ async def get_bandwidth_history(
     """
     # Parse time range
     time_delta = parse_time_range(time_range)
-    start_time = datetime.now() - time_delta
+    start_time = datetime.now(timezone.utc) - time_delta
     
     async with AsyncSessionLocal() as session:
         # Build query
@@ -184,7 +184,7 @@ async def get_available_interfaces(
     """
     async with AsyncSessionLocal() as session:
         # Get distinct interfaces from last hour
-        one_hour_ago = datetime.now() - timedelta(hours=1)
+        one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
         
         query = select(InterfaceStatsDB.interface).distinct().where(
             InterfaceStatsDB.timestamp >= one_hour_ago

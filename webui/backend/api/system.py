@@ -3,7 +3,7 @@ System metrics API endpoints
 """
 from fastapi import APIRouter, Depends, Query
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from pydantic import BaseModel
 
@@ -108,7 +108,7 @@ async def get_current_system_metrics(
     - Client statistics
     """
     return {
-        "timestamp": datetime.now(),
+        "timestamp": datetime.now(timezone.utc),
         "system": collect_system_metrics(),
         "disk_io": collect_disk_io(),
         "disk_space": collect_disk_space(),
@@ -182,7 +182,7 @@ async def get_system_history(
     async with AsyncSessionLocal() as session:
         # Parse time range
         time_delta = parse_time_range(time_range)
-        start_time = datetime.now() - time_delta
+        start_time = datetime.now(timezone.utc) - time_delta
         
         # Query database for metrics in time range
         result = await session.execute(
@@ -224,7 +224,7 @@ async def get_disk_io_history(
     async with AsyncSessionLocal() as session:
         # Parse time range
         time_delta = parse_time_range(time_range)
-        start_time = datetime.now() - time_delta
+        start_time = datetime.now(timezone.utc) - time_delta
         
         # Query database for disk I/O metrics
         query = select(DiskIOMetricsDB).where(DiskIOMetricsDB.timestamp >= start_time)
@@ -272,7 +272,7 @@ async def get_temperature_history(
     async with AsyncSessionLocal() as session:
         # Parse time range
         time_delta = parse_time_range(time_range)
-        start_time = datetime.now() - time_delta
+        start_time = datetime.now(timezone.utc) - time_delta
         
         # Query database for temperature metrics
         query = select(TemperatureMetricsDB).where(TemperatureMetricsDB.timestamp >= start_time)

@@ -2,7 +2,7 @@
 Network interface statistics collector
 """
 import psutil
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from ..models import InterfaceStats
 
@@ -20,7 +20,7 @@ def collect_interface_stats() -> List[InterfaceStats]:
     """
     global _previous_stats, _previous_time
     
-    current_time = datetime.now()
+    current_time = datetime.now(timezone.utc)
     io_counters = psutil.net_io_counters(pernic=True)
     
     stats_list = []

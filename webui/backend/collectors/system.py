@@ -2,7 +2,7 @@
 System metrics collector using psutil
 """
 import psutil
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
 from ..models import (
     SystemMetrics, DiskIOMetrics, DiskSpaceMetrics,
@@ -64,7 +64,7 @@ def collect_system_metrics() -> SystemMetrics:
     uptime = get_uptime()
     
     return SystemMetrics(
-        timestamp=datetime.now(),
+        timestamp=datetime.now(timezone.utc),
         cpu_percent=cpu,
         memory_percent=mem_percent,
         memory_used_mb=mem_used,
@@ -88,7 +88,7 @@ def collect_disk_io() -> List[DiskIOMetrics]:
     """
     global _prev_disk_io
     
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     current_time = now.timestamp()
     results = []
     
@@ -141,7 +141,7 @@ def collect_disk_space() -> List[DiskSpaceMetrics]:
         List[DiskSpaceMetrics]: Disk space stats for each filesystem
     """
     results = []
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     
     try:
         partitions = psutil.disk_partitions(all=False)
@@ -183,7 +183,7 @@ def collect_temperatures() -> List[TemperatureMetrics]:
         List[TemperatureMetrics]: Temperature readings for all sensors
     """
     results = []
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     
     try:
         temps = psutil.sensors_temperatures()
@@ -213,7 +213,7 @@ def collect_fan_speeds() -> List[FanMetrics]:
         List[FanMetrics]: Fan speed readings for all fans
     """
     results = []
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     
     try:
         fans = psutil.sensors_fans()

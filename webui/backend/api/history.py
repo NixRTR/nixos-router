@@ -2,7 +2,7 @@
 Historical data API endpoints
 """
 from fastapi import APIRouter, Depends, Query
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +33,7 @@ async def get_system_history(
         List of aggregated system metrics
     """
     if end is None:
-        end = datetime.now()
+        end = datetime.now(timezone.utc)
     if start is None:
         start = end - timedelta(hours=1)
     
@@ -87,7 +87,7 @@ async def get_interface_history(
         List of aggregated interface stats
     """
     if end is None:
-        end = datetime.now()
+        end = datetime.now(timezone.utc)
     if start is None:
         start = end - timedelta(hours=1)
     
@@ -207,7 +207,7 @@ async def get_service_history(
         List of service status records
     """
     if end is None:
-        end = datetime.now()
+        end = datetime.now(timezone.utc)
     if start is None:
         start = end - timedelta(hours=1)
     

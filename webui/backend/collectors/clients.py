@@ -1,7 +1,7 @@
 """
 Client statistics collector
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 from ..models import ClientStats
 from .network_devices import discover_network_devices
@@ -33,7 +33,7 @@ def collect_client_stats() -> List[ClientStats]:
         offline_count = sum(1 for d in network_devices if not d.is_online)
         
         results.append(ClientStats(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             network=network,
             dhcp_clients=dhcp_count,
             static_clients=static_dhcp_count + static_ip_count,

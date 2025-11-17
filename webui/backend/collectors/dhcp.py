@@ -2,7 +2,7 @@
 DHCP lease collector - parses Kea DHCP lease file
 """
 import csv
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 from ..models import DHCPLease
@@ -62,7 +62,7 @@ def parse_kea_leases() -> List[DHCPLease]:
                     hostname=row.get('hostname', '') or f"client-{ip.split('.')[-1]}",
                     lease_start=lease_start,
                     lease_end=lease_end,
-                    last_seen=datetime.now(),
+                    last_seen=datetime.now(timezone.utc),
                     is_static=False
                 )
                 # Store in dict by (network, MAC) - tracks unique devices per network

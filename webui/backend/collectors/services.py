@@ -3,7 +3,7 @@ Systemd service status collector
 """
 import subprocess
 import psutil
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from ..models import ServiceStatus
 
@@ -72,7 +72,7 @@ def get_service_status(service_name: str) -> Optional[ServiceStatus]:
                 pass
         
         return ServiceStatus(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             service_name=service_name,
             is_active=is_active,
             is_enabled=is_enabled,

@@ -4,7 +4,7 @@ Discovers all devices on the network using ARP table and optional active scannin
 """
 import subprocess
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Optional
 from ..models import DHCPLease
@@ -33,7 +33,7 @@ class NetworkDevice:
         self.is_dhcp = is_dhcp
         self.is_static = is_static
         self.is_online = is_online
-        self.last_seen = last_seen or datetime.now()
+        self.last_seen = last_seen or datetime.now(timezone.utc)
         self.vendor = vendor
 
 
@@ -240,7 +240,7 @@ def discover_network_devices(dhcp_leases: List[DHCPLease] = None) -> List[Networ
             is_dhcp=is_dhcp,
             is_static=is_static,
             is_online=True,
-            last_seen=datetime.now(),
+            last_seen=datetime.now(timezone.utc),
             vendor=vendor
         )
         

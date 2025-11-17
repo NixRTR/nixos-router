@@ -5,7 +5,7 @@ import asyncio
 import json
 from typing import List, Set
 from fastapi import WebSocket, WebSocketDisconnect
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -120,7 +120,7 @@ class ConnectionManager:
         
         # Create snapshot for broadcast
         snapshot = MetricsSnapshot(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             system=system_metrics,
             interfaces=interface_stats,
             services=service_statuses,
