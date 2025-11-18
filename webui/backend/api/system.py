@@ -422,26 +422,57 @@ async def get_github_stats(
 async def get_documentation(
     _: str = Depends(get_current_user)
 ) -> dict:
-    """Get project documentation (docs/documentation.md)
+    """Get project documentation (React site index.html)
     
     Returns:
-        dict: Contains 'content' field with documentation content
+        dict: Contains 'content' field with HTML content from React docs site
     """
-    # Use environment variable set by NixOS service (points to installed location)
-    doc_path = os.environ.get("DOCUMENTATION_FILE", "/var/lib/router-webui/docs/documentation.md")
+    # Use environment variable set by NixOS service (points to React docs build directory)
+    doc_dir = os.environ.get("DOCUMENTATION_DIR", "/var/lib/router-webui/docs")
+    index_path = os.path.join(doc_dir, "index.html")
     
     try:
-        with open(doc_path, 'r', encoding='utf-8') as f:
+        with open(index_path, 'r', encoding='utf-8') as f:
             content = f.read()
         return {"content": content}
     except FileNotFoundError:
         raise HTTPException(
             status_code=404,
-            detail=f"Documentation file not found at {doc_path}"
+            detail=f"Documentation not found at {index_path}. React docs site may not be built yet."
         )
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Error reading documentation: {str(e)}"
         )
+
+
+@router.get("/documentation/{path:path}")
+async def get_documentation_page(
+    path: str,
+    _: str = Depends(get_current_user)
+):
+    """Serve static files from React documentation site
+    
+    This allows the frontend to load CSS, JS, images, and other assets
+    from the React docs site.
+    """
+    from fastapi.responses import FileResponse
+    
+    doc_dir = os.environ.get("DOCUMENTATION_DIR", "/var/lib/router-webui/docs")
+    file_path = os.path.join(doc_dir, path)
+    
+    # Security: ensure the path is within the documentation directory
+    if not os.path.abspath(file_path).startswith(os.path.abspath(doc_dir)):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    if os.path.isfile(file_path):
+        return FileResponse(file_path)
+    elif os.path.isdir(file_path):
+        # Try index.html in the directory
+        index_path = os.path.join(file_path, "index.html")
+        if os.path.isfile(index_path):
+            return FileResponse(index_path)
+    
+    raise HTTPException(status_code=404, detail="File not found")
 

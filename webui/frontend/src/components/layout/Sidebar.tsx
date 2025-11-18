@@ -132,10 +132,11 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
                 System Info
               </FlowbiteSidebar.Item>
               <FlowbiteSidebar.Item
-                as={Link}
-                to="/documentation"
+                href="/docs"
+                target="_blank"
+                rel="noopener noreferrer"
                 icon={HiBookOpen}
-                active={location.pathname === '/documentation'}
+                as="a"
                 onClick={handleItemClick}
               >
                 Documentation

@@ -17,3 +17,7 @@ iso/*.iso
 configs
 configs/*
 configs/*/*
+
+# React docs build artifacts (node_modules and cache only - dist/ is committed)
+docs/node_modules/
+docs/.vite/

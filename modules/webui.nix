@@ -121,6 +121,7 @@ in
     systemd.tmpfiles.rules = [
       "d /var/lib/router-webui 0750 router-webui router-webui -"
       "d /var/lib/router-webui/frontend 0755 router-webui router-webui -"
+      "d /var/lib/router-webui/docs 0755 router-webui router-webui -"
     ];
     
     # Copy frontend build to state directory
@@ -219,11 +220,16 @@ in
       '';
     };
     
-    # Documentation installation service
+    # Documentation source and build (pre-built, committed to repository)
+    docsSrc = ../docs;
+    docsBuild = docsSrc + "/dist";
+    
+    # Documentation install service (copies pre-built docs)
     systemd.services.router-webui-docs-init = {
-      description = "Install Router WebUI documentation";
+      description = "Install Router WebUI Documentation (React)";
       wantedBy = [ "multi-user.target" ];
       before = [ "router-webui-backend.service" ];
+      after = [ "local-fs.target" ];
       
       serviceConfig = {
         Type = "oneshot";
@@ -231,13 +237,13 @@ in
       };
       
       script = ''
+        echo "Installing Router WebUI documentation..."
         mkdir -p /var/lib/router-webui/docs
-        # Copy documentation file from source
-        if [ -f ${../docs}/documentation.md ]; then
-          cp ${../docs}/documentation.md /var/lib/router-webui/docs/documentation.md
-          chmod 644 /var/lib/router-webui/docs/documentation.md
-          chown router-webui:router-webui /var/lib/router-webui/docs/documentation.md
-        fi
+        rm -rf /var/lib/router-webui/docs/*
+        cp -r ${docsBuild}/* /var/lib/router-webui/docs/
+        chown -R router-webui:router-webui /var/lib/router-webui/docs
+        chmod -R 755 /var/lib/router-webui/docs
+        echo "Documentation installed successfully"
       '';
     };
     
@@ -257,7 +263,7 @@ in
         KEA_LEASE_FILE = "/var/lib/kea/dhcp4.leases";
         ROUTER_CONFIG_FILE = "/etc/nixos/router-config.nix";
         JWT_SECRET_FILE = "/var/lib/router-webui/jwt-secret";
-        DOCUMENTATION_FILE = "/var/lib/router-webui/docs/documentation.md";
+        DOCUMENTATION_DIR = "/var/lib/router-webui/docs";
         # Provide absolute binary paths for commands used by backend
         NFT_BIN = "${pkgs.nftables}/bin/nft";
         IP_BIN = "${pkgs.iproute2}/bin/ip";

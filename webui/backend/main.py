@@ -145,6 +145,45 @@ async def websocket_route(
     await websocket_endpoint(websocket, token)
 
 
+# Serve documentation site at /docs route
+# This allows the React docs SPA to run independently with its own routing
+docs_path = os.environ.get("DOCUMENTATION_DIR", "/var/lib/router-webui/docs")
+docs_assets_path = os.path.join(docs_path, "assets")
+
+if os.path.exists(docs_assets_path) and os.path.isdir(docs_assets_path):
+    # Mount docs assets
+    app.mount("/docs/assets", StaticFiles(directory=docs_assets_path), name="docs-assets")
+    print(f"Serving documentation assets from {docs_assets_path}")
+    
+    @app.get("/docs/{full_path:path}")
+    async def serve_docs(full_path: str):
+        """Serve React documentation site (SPA)
+        
+        This allows the React docs site to run as a standalone SPA with its own routing.
+        All routes under /docs will serve the docs site, with index.html as fallback for SPA routing.
+        """
+        # Don't intercept API or WebSocket routes
+        if full_path.startswith("api") or full_path.startswith("ws"):
+            return
+        
+        # For root docs path, serve index.html
+        if not full_path or full_path == "/":
+            index_path = os.path.join(docs_path, "index.html")
+            if os.path.isfile(index_path):
+                return FileResponse(index_path)
+        
+        # Try to serve the requested file
+        file_path = os.path.join(docs_path, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        
+        # Default to index.html for SPA routing (React Router handles client-side routing)
+        index_path = os.path.join(docs_path, "index.html")
+        if os.path.isfile(index_path):
+            return FileResponse(index_path)
+else:
+    print(f"Documentation not built yet. Assets directory not found at {docs_assets_path}")
+
 # Serve frontend static files in production
 # This assumes frontend is built to /var/lib/router-webui/frontend
 frontend_path = "/var/lib/router-webui/frontend"
@@ -158,8 +197,8 @@ if os.path.exists(assets_path) and os.path.isdir(assets_path):
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
         """Serve frontend application"""
-        # Don't intercept API or WebSocket routes
-        if full_path.startswith("api") or full_path.startswith("ws"):
+        # Don't intercept API, WebSocket, or docs routes
+        if full_path.startswith("api") or full_path.startswith("ws") or full_path.startswith("docs"):
             return
         
         # For root path, serve index.html

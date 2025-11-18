@@ -20,7 +20,10 @@ A NixOS-based router configuration for home networks.
 - Internet connection for initial setup
 
 ## Documentation
-Documentation is available in [docs/](docs/documentation.md)
+Documentation is available at:
+- **GitHub Pages**: [https://beardedtek.github.io/nixos-router/](https://beardedtek.github.io/nixos-router/)
+- **Local (on router)**: Access via WebUI at `http://router-ip:8080/documentation`
+- **Source**: [docs/](docs/)
 
 ## Quick Start
 
