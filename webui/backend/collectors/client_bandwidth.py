@@ -447,14 +447,18 @@ def collect_client_bandwidth() -> List[Dict]:
         
         # Proactively add all known client IPs to nftables (from ARP and DHCP)
         # This ensures counters are created even before traffic flows
-        # Filter to IPv4 only
+        # Filter to IPv4 only and bridge subnets only (192.168.2.x for br0/homelab, 192.168.3.x for br1/lan)
         all_known_ips = set()
         for ip in arp_table.keys():
             if _is_ipv4(ip):
-                all_known_ips.add(ip)
+                # Only track IPs in bridge subnets
+                if ip.startswith('192.168.2.') or ip.startswith('192.168.3.'):
+                    all_known_ips.add(ip)
         for lease in dhcp_leases:
             if _is_ipv4(lease.ip_address):
-                all_known_ips.add(lease.ip_address)
+                # Only track IPs in bridge subnets
+                if lease.ip_address.startswith('192.168.2.') or lease.ip_address.startswith('192.168.3.'):
+                    all_known_ips.add(lease.ip_address)
         
         for ip in all_known_ips:
             if ip not in _known_ips:
@@ -476,6 +480,10 @@ def collect_client_bandwidth() -> List[Dict]:
         for ip, counter_data in current_counters.items():
             if processed >= settings.bandwidth_max_clients_per_cycle:
                 break
+            
+            # Only track IPs in bridge subnets
+            if not (ip.startswith('192.168.2.') or ip.startswith('192.168.3.')):
+                continue
             
             # Map IP to MAC address
             mac_network = _map_ip_to_mac(ip, arp_table, dhcp_leases)
@@ -530,6 +538,10 @@ def collect_client_bandwidth() -> List[Dict]:
             
             # Skip if already processed (has counters)
             if ip in current_counters:
+                continue
+            
+            # Only track IPs in bridge subnets
+            if not (ip.startswith('192.168.2.') or ip.startswith('192.168.3.')):
                 continue
             
             # Map IP to MAC address

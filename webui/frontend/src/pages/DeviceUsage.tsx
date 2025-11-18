@@ -61,6 +61,7 @@ export function DeviceUsage() {
   const [chartInterval, setChartInterval] = useState('raw');
   const [tableTimeRange, setTableTimeRange] = useState('1h');
   const [tableCustomRange, setTableCustomRange] = useState('');
+  const [interfaceStats, setInterfaceStats] = useState<Record<string, { rx_rate_mbps: number; tx_rate_mbps: number; rx_bytes: number; tx_bytes: number }>>({});
   
   const { connectionStatus } = useMetrics(token);
   
@@ -69,7 +70,7 @@ export function DeviceUsage() {
     navigate('/login');
   };
 
-  // Fetch devices
+  // Fetch devices (filter to bridge subnets only)
   useEffect(() => {
     const fetchDevices = async () => {
       if (!token) return;
@@ -81,7 +82,11 @@ export function DeviceUsage() {
         
         if (response.ok) {
           const data = await response.json();
-          setDevices(data);
+          // Filter to only bridge subnets (192.168.2.x for br0/homelab, 192.168.3.x for br1/lan)
+          const filtered = data.filter((d: NetworkDevice) => 
+            d.ip_address.startsWith('192.168.2.') || d.ip_address.startsWith('192.168.3.')
+          );
+          setDevices(filtered);
         }
       } catch (error) {
         console.error('Failed to fetch devices:', error);
@@ -90,6 +95,24 @@ export function DeviceUsage() {
     
     fetchDevices();
     const interval = setInterval(fetchDevices, 10000);
+    return () => clearInterval(interval);
+  }, [token]);
+
+  // Fetch interface stats
+  useEffect(() => {
+    const fetchInterfaceStats = async () => {
+      if (!token) return;
+      
+      try {
+        const stats = await apiClient.getCurrentInterfaceStats();
+        setInterfaceStats(stats);
+      } catch (error) {
+        console.error('Failed to fetch interface stats:', error);
+      }
+    };
+    
+    fetchInterfaceStats();
+    const interval = setInterval(fetchInterfaceStats, 5000);
     return () => clearInterval(interval);
   }, [token]);
 
@@ -277,6 +300,24 @@ export function DeviceUsage() {
     return device.nickname || device.hostname || 'Unknown';
   };
 
+  // Sort IP address with zero-padded last octet for sorting (but not display)
+  const getSortableIP = (ip: string): string => {
+    const parts = ip.split('.');
+    if (parts.length === 4) {
+      // Zero-pad the last octet to 3 digits
+      const lastOctet = parts[3].padStart(3, '0');
+      return `${parts[0]}.${parts[1]}.${parts[2]}.${lastOctet}`;
+    }
+    return ip;
+  };
+
+  // Sort devices by IP address
+  const sortedDevices = [...devices].sort((a, b) => {
+    const ipA = getSortableIP(a.ip_address);
+    const ipB = getSortableIP(b.ip_address);
+    return ipA.localeCompare(ipB);
+  });
+
   const chartDataFormatted = chartData.map((point) => ({
     time: new Date(point.timestamp).toLocaleTimeString(),
     download: point.rx_mbps || 0,
@@ -303,6 +344,29 @@ export function DeviceUsage() {
           <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-6">Device Usage</h1>
           
           <Card>
+            {/* Interface Stats at Top */}
+            <div className="mb-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <h3 className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Interface Statistics</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {(['br0', 'br1', 'ppp0'] as const).map((iface) => {
+                  const stats = interfaceStats[iface];
+                  return (
+                    <div key={iface} className="text-sm">
+                      <div className="font-medium text-gray-900 dark:text-gray-100">{iface}</div>
+                      {stats ? (
+                        <div className="text-gray-600 dark:text-gray-400 space-y-1 mt-1">
+                          <div>DL: {stats.rx_rate_mbps.toFixed(2)} Mbit/s</div>
+                          <div>UL: {stats.tx_rate_mbps.toFixed(2)} Mbit/s</div>
+                        </div>
+                      ) : (
+                        <div className="text-gray-400 dark:text-gray-500 mt-1">No data</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Time Range Selector for Table */}
             <div className="mb-4 flex flex-wrap gap-4 items-end">
               <div className="min-w-[150px]">
@@ -361,7 +425,7 @@ export function DeviceUsage() {
                   <Table.HeadCell>Enable/Disable</Table.HeadCell>
                 </Table.Head>
                 <Table.Body className="divide-y">
-                  {devices.map((device) => {
+                  {sortedDevices.map((device) => {
                     const mac = device.mac_address.toLowerCase();
                     const averages = bandwidthAverages[mac] || {
                       dl_5m: 0, dl_30m: 0, dl_1h: 0, dl_1d: 0,
@@ -411,7 +475,7 @@ export function DeviceUsage() {
 
             {/* Mobile Card View */}
             <div className="md:hidden space-y-3">
-              {devices.map((device) => {
+              {sortedDevices.map((device) => {
                 const mac = device.mac_address.toLowerCase();
                 const averages = bandwidthAverages[mac] || {
                   dl_5m: 0, dl_30m: 0, dl_1h: 0, dl_1d: 0,

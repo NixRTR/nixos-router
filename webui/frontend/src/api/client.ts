@@ -141,6 +141,11 @@ class APIClient {
     });
     return response.data;
   }
+
+  async getCurrentInterfaceStats(): Promise<Record<string, any>> {
+    const response = await this.client.get('/api/bandwidth/interfaces/current');
+    return response.data;
+  }
 }
 
 export const apiClient = new APIClient();

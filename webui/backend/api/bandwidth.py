@@ -16,6 +16,7 @@ from ..models import (
 from ..collectors.client_bandwidth import collect_client_bandwidth
 from ..collectors.network_devices import discover_network_devices
 from ..collectors.dhcp import parse_kea_leases
+from ..collectors.network import collect_interface_stats
 from ..config import settings
 from sqlalchemy import func
 
@@ -220,6 +221,31 @@ async def get_available_interfaces(
     return sorted(interfaces)
 
 
+@router.get("/interfaces/current")
+async def get_current_interface_stats(
+    _: str = Depends(get_current_user)
+) -> Dict[str, dict]:
+    """Get current interface statistics for br0, br1, and ppp0
+    
+    Returns:
+        Dict mapping interface names to their current stats
+    """
+    stats_list = collect_interface_stats()
+    result = {}
+    
+    # Filter to only br0, br1, ppp0
+    for stat in stats_list:
+        if stat.interface in ['br0', 'br1', 'ppp0']:
+            result[stat.interface] = {
+                'rx_rate_mbps': round(stat.rx_rate_mbps or 0.0, 2),
+                'tx_rate_mbps': round(stat.tx_rate_mbps or 0.0, 2),
+                'rx_bytes': stat.rx_bytes,
+                'tx_bytes': stat.tx_bytes,
+            }
+    
+    return result
+
+
 @router.get("/clients/debug")
 async def get_client_bandwidth_debug(
     _: str = Depends(get_current_user)
@@ -371,11 +397,14 @@ async def get_current_client_bandwidth(
         result = await session.execute(query)
         db_stats = {str(row.mac_address).lower(): row for row in result.scalars().all()}
     
-    # Combine current data with database stats (already filtered to IPv4 by collector)
+    # Combine current data with database stats (already filtered to IPv4 and bridge subnets by collector)
     results = []
     for data in current_data:
-        # Double-check IPv4 (collector should already filter, but be safe)
+        # Double-check IPv4 and bridge subnets (collector should already filter, but be safe)
         if not _is_ipv4(data['ip_address']):
+            continue
+        # Only track IPs in bridge subnets (192.168.2.x for br0/homelab, 192.168.3.x for br1/lan)
+        if not (data['ip_address'].startswith('192.168.2.') or data['ip_address'].startswith('192.168.3.')):
             continue
         mac = data['mac_address'].lower()
         device = device_map.get(mac)
@@ -614,8 +643,11 @@ async def get_bulk_client_bandwidth_history(
         # Get client info from first entry
         first_stat = stats[0]
         ip_address = str(first_stat.ip_address)
-        # Filter to IPv4 only
+        # Filter to IPv4 only and bridge subnets only
         if not _is_ipv4(ip_address):
+            continue
+        # Only track IPs in bridge subnets (192.168.2.x for br0/homelab, 192.168.3.x for br1/lan)
+        if not (ip_address.startswith('192.168.2.') or ip_address.startswith('192.168.3.')):
             continue
         network = first_stat.network
         
