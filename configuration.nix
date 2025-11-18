@@ -125,6 +125,14 @@ in
     dashboard.enable = true;
   };
 
+  # Fonts for WebUI (System Info rendering)
+  fonts = {
+    enableDefaultFonts = true;
+    fonts = with pkgs; [
+      dejavu_fonts  # Monospace font for terminal output rendering
+    ];
+  };
+
   # Essential system packages (keep this minimal - use nix-shell for temporary tools)
   environment.systemPackages = with pkgs; [
     speedtest-cli  # Used regularly by monitoring timer

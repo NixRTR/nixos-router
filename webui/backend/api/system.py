@@ -379,9 +379,14 @@ def _ansi_to_image(ansi_text: str) -> bytes:
     font_bold = None
     
     font_paths = [
+        # NixOS font locations
+        "/run/current-system/sw/share/X11/fonts/TTF/DejaVuSansMono.ttf",
+        "/run/current-system/sw/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/nix/store/*/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/nix/store/*/share/X11/fonts/TTF/DejaVuSansMono.ttf",
+        # Standard Linux locations
         "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
         "/usr/share/fonts/TTF/DejaVuSansMono.ttf",
-        "/nix/store/*/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
     ]
     
     for path in font_paths:
