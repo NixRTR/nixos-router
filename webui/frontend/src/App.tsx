@@ -6,6 +6,7 @@ import { Login } from './components/auth/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Network } from './pages/Network';
 import { Clients } from './pages/Clients';
+import { DeviceUsage } from './pages/DeviceUsage';
 import { System } from './pages/System';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -35,10 +36,18 @@ export default function App() {
           }
         />
         <Route
-          path="/clients"
+          path="/devices"
           element={
             <ProtectedRoute>
               <Clients />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/device-usage"
+          element={
+            <ProtectedRoute>
+              <DeviceUsage />
             </ProtectedRoute>
           }
         />

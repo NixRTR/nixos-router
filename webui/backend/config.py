@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     # Data Collection
     collection_interval: int = 2  # seconds
     
+    # Client Bandwidth Tracking
+    bandwidth_collection_enabled: bool = True
+    bandwidth_max_cpu_percent: float = 80.0  # Skip collection if CPU > this threshold
+    bandwidth_max_clients_per_cycle: int = 50  # Process max N clients per cycle
+    bandwidth_collection_priority: int = 10  # Nice value (lower priority)
+    
     # System Paths
     kea_lease_file: str = "/var/lib/kea/dhcp4.leases"
     router_config_file: str = "/etc/nixos/router-config.nix"

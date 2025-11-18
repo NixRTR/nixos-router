@@ -71,12 +71,22 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
 
               <FlowbiteSidebar.Item
                 as={Link}
-                to="/clients"
+                to="/devices"
                 icon={HiUsers}
-                active={location.pathname === '/clients'}
+                active={location.pathname === '/devices'}
                 onClick={handleItemClick}
               >
-                Network Devices
+                Devices
+              </FlowbiteSidebar.Item>
+
+              <FlowbiteSidebar.Item
+                as={Link}
+                to="/device-usage"
+                icon={HiViewBoards}
+                active={location.pathname === '/device-usage'}
+                onClick={handleItemClick}
+              >
+                Device Usage
               </FlowbiteSidebar.Item>
 
               <FlowbiteSidebar.Item

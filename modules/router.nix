@@ -539,6 +539,42 @@ in {
         '';
       };
 
+      # Initialize nftables counters for per-client bandwidth tracking
+      systemd.services."nft-bandwidth-tracking-init" = {
+        description = "Initialize nftables counters for per-client bandwidth tracking";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "network-pre.target" "nft-device-block-init.service" ];
+        before = [ "network.target" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = ''
+          ${pkgs.nftables}/bin/nft -f - <<'EOF'
+          table inet router_bandwidth {
+            # Counter maps for per-IP traffic tracking (IPv4 only)
+            # IPs are added to these maps dynamically via 'nft add element'
+            # Each IP gets its own counter automatically when added
+            map client_rx_counters {
+              type ipv4_addr : counter
+            }
+            map client_tx_counters {
+              type ipv4_addr : counter
+            }
+            
+            chain forward {
+              type filter hook forward priority 10; policy accept;
+              # Count download (rx) - traffic destined to client IPs
+              # Counter maps are automatically updated when IP matches
+              ip daddr vmap @client_rx_counters
+              # Count upload (tx) - traffic sourced from client IPs
+              ip saddr vmap @client_tx_counters
+            }
+          }
+          EOF
+        '';
+      };
+
       boot.kernel.sysctl = {
         "net.ipv4.ip_forward" = 1;
         "net.ipv6.conf.all.forwarding" = 1;

@@ -114,6 +114,33 @@ class APIClient {
     );
     return response.data;
   }
+
+  // Client bandwidth
+  async getCurrentClientBandwidth(): Promise<any[]> {
+    const response = await this.client.get('/api/bandwidth/clients/current');
+    return response.data;
+  }
+
+  async getClientBandwidthHistory(
+    macAddress: string,
+    range: string = '1h',
+    interval: string = 'raw'
+  ): Promise<any> {
+    const response = await this.client.get(`/api/bandwidth/clients/${macAddress}`, {
+      params: { range, interval },
+    });
+    return response.data;
+  }
+
+  async getBulkClientBandwidthHistory(
+    range: string = '1h',
+    interval: string = 'raw'
+  ): Promise<Record<string, any>> {
+    const response = await this.client.get('/api/bandwidth/clients/history/bulk', {
+      params: { range, interval },
+    });
+    return response.data;
+  }
 }
 
 export const apiClient = new APIClient();

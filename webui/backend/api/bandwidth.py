@@ -2,13 +2,20 @@
 Bandwidth history API endpoints
 """
 from fastapi import APIRouter, Depends, Query
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from pydantic import BaseModel
 
 from ..auth import get_current_user
-from ..database import AsyncSessionLocal, InterfaceStatsDB
+from ..database import AsyncSessionLocal, InterfaceStatsDB, ClientBandwidthStatsDB
+from ..models import (
+    ClientBandwidthHistory, ClientBandwidthCurrent, ClientBandwidthDataPoint
+)
+from ..collectors.client_bandwidth import collect_client_bandwidth
+from ..collectors.network_devices import discover_network_devices
+from ..collectors.dhcp import parse_kea_leases
+from sqlalchemy import func
 
 
 router = APIRouter(prefix="/api/bandwidth", tags=["bandwidth"])
@@ -194,4 +201,383 @@ async def get_available_interfaces(
         interfaces = [row[0] for row in result.all()]
     
     return sorted(interfaces)
+
+
+@router.get("/clients/current")
+async def get_current_client_bandwidth(
+    _: str = Depends(get_current_user)
+) -> List[ClientBandwidthCurrent]:
+    """Get current bandwidth rates for all active clients
+    
+    Returns:
+        List[ClientBandwidthCurrent]: Current bandwidth stats for each client
+    """
+    # Get current bandwidth data from collector
+    current_data = collect_client_bandwidth()
+    
+    # Get device information for hostnames
+    dhcp_leases = parse_kea_leases()
+    devices = discover_network_devices(dhcp_leases)
+    device_map = {d.mac_address.lower(): d for d in devices}
+    
+    # Get latest stats from database for cumulative totals
+    async with AsyncSessionLocal() as session:
+        # Get most recent entry for each MAC address
+        subquery = (
+            select(
+                ClientBandwidthStatsDB.mac_address,
+                func.max(ClientBandwidthStatsDB.timestamp).label('max_timestamp')
+            )
+            .group_by(ClientBandwidthStatsDB.mac_address)
+            .subquery()
+        )
+        
+        query = select(ClientBandwidthStatsDB).join(
+            subquery,
+            (ClientBandwidthStatsDB.mac_address == subquery.c.mac_address) &
+            (ClientBandwidthStatsDB.timestamp == subquery.c.max_timestamp)
+        )
+        
+        result = await session.execute(query)
+        db_stats = {str(row.mac_address).lower(): row for row in result.scalars().all()}
+    
+    # Combine current data with database stats
+    results = []
+    for data in current_data:
+        mac = data['mac_address'].lower()
+        device = device_map.get(mac)
+        
+        # Calculate rates (assuming 5-10 second collection interval)
+        # Use interval bytes to calculate current rate
+        collection_interval = 5.0  # seconds (approximate)
+        rx_mbps = (data['rx_bytes'] * 8) / (collection_interval * 1_000_000)
+        tx_mbps = (data['tx_bytes'] * 8) / (collection_interval * 1_000_000)
+        
+        # Use database cumulative totals if available, otherwise use current
+        db_stat = db_stats.get(mac)
+        rx_total = db_stat.rx_bytes_total if db_stat else data['rx_bytes_total']
+        tx_total = db_stat.tx_bytes_total if db_stat else data['tx_bytes_total']
+        
+        results.append(ClientBandwidthCurrent(
+            mac_address=data['mac_address'],
+            ip_address=data['ip_address'],
+            network=data['network'],
+            hostname=device.hostname if device else None,
+            rx_mbps=round(rx_mbps, 2),
+            tx_mbps=round(tx_mbps, 2),
+            rx_bytes_total=rx_total,
+            tx_bytes_total=tx_total,
+            last_updated=data['timestamp']
+        ))
+    
+    return results
+
+
+@router.get("/clients")
+async def get_all_clients_bandwidth(
+    _: str = Depends(get_current_user)
+) -> List[ClientBandwidthCurrent]:
+    """List all clients with current bandwidth stats
+    
+    Alias for /clients/current for convenience
+    
+    Returns:
+        List[ClientBandwidthCurrent]: Current bandwidth stats for each client
+    """
+    return await get_current_client_bandwidth(_)
+
+
+@router.get("/clients/{mac_address}")
+async def get_client_bandwidth_history(
+    mac_address: str,
+    time_range: str = Query("1h", description="Time range (e.g., 10m, 1h, 1d, 1w)", alias="range"),
+    interval: str = Query("raw", description="Aggregation interval: 'raw', '1m', '5m', '1h'"),
+    _: str = Depends(get_current_user)
+) -> ClientBandwidthHistory:
+    """Get historical bandwidth data for a specific client
+    
+    Args:
+        mac_address: MAC address of the client
+        time_range: Time range string (default: 1h)
+        interval: Aggregation interval - 'raw' for raw samples, or '1m', '5m', '1h' for aggregated
+        
+    Returns:
+        ClientBandwidthHistory: Historical bandwidth data for the client
+    """
+    # Parse time range
+    time_delta = parse_time_range(time_range)
+    start_time = datetime.now(timezone.utc) - time_delta
+    
+    # Normalize MAC address
+    mac_address = mac_address.lower().replace('-', ':')
+    
+    async with AsyncSessionLocal() as session:
+        # Query database for client bandwidth stats
+        query = select(ClientBandwidthStatsDB).where(
+            ClientBandwidthStatsDB.mac_address == mac_address,
+            ClientBandwidthStatsDB.timestamp >= start_time
+        ).order_by(ClientBandwidthStatsDB.timestamp.asc())
+        
+        result = await session.execute(query)
+        stats = result.scalars().all()
+    
+    if not stats:
+        # Return empty history if no data found
+        return ClientBandwidthHistory(
+            mac_address=mac_address,
+            ip_address="",
+            network="",
+            data=[]
+        )
+    
+    # Get client info from first entry
+    first_stat = stats[0]
+    ip_address = str(first_stat.ip_address)
+    network = first_stat.network
+    
+    # Process data points
+    data_points = []
+    
+    if interval == "raw":
+        # Return raw samples
+        for i, stat in enumerate(stats):
+            if i == 0:
+                # First point, no rate calculation
+                data_points.append(ClientBandwidthDataPoint(
+                    timestamp=stat.timestamp,
+                    rx_mbps=0.0,
+                    tx_mbps=0.0,
+                    rx_bytes=stat.rx_bytes,
+                    tx_bytes=stat.tx_bytes
+                ))
+            else:
+                # Calculate rate from previous point
+                prev = stats[i - 1]
+                time_diff = (stat.timestamp - prev.timestamp).total_seconds()
+                
+                if time_diff > 0:
+                    rx_mbps = (stat.rx_bytes * 8) / (time_diff * 1_000_000)
+                    tx_mbps = (stat.tx_bytes * 8) / (time_diff * 1_000_000)
+                else:
+                    rx_mbps = 0.0
+                    tx_mbps = 0.0
+                
+                data_points.append(ClientBandwidthDataPoint(
+                    timestamp=stat.timestamp,
+                    rx_mbps=round(rx_mbps, 2),
+                    tx_mbps=round(tx_mbps, 2),
+                    rx_bytes=stat.rx_bytes,
+                    tx_bytes=stat.tx_bytes
+                ))
+    else:
+        # Aggregate by interval
+        interval_seconds = {
+            "1m": 60,
+            "5m": 300,
+            "1h": 3600
+        }.get(interval, 60)
+        
+        # Group stats by time buckets
+        buckets = {}
+        for stat in stats:
+            # Round timestamp to interval
+            bucket_time = stat.timestamp.replace(
+                second=(stat.timestamp.second // interval_seconds) * interval_seconds,
+                microsecond=0
+            )
+            
+            if bucket_time not in buckets:
+                buckets[bucket_time] = {
+                    'rx_bytes': 0,
+                    'tx_bytes': 0,
+                    'count': 0
+                }
+            
+            buckets[bucket_time]['rx_bytes'] += stat.rx_bytes
+            buckets[bucket_time]['tx_bytes'] += stat.tx_bytes
+            buckets[bucket_time]['count'] += 1
+        
+        # Convert buckets to data points
+        sorted_times = sorted(buckets.keys())
+        for i, bucket_time in enumerate(sorted_times):
+            bucket = buckets[bucket_time]
+            
+            if i == 0:
+                rx_mbps = 0.0
+                tx_mbps = 0.0
+            else:
+                prev_time = sorted_times[i - 1]
+                time_diff = (bucket_time - prev_time).total_seconds()
+                
+                if time_diff > 0:
+                    rx_mbps = (bucket['rx_bytes'] * 8) / (time_diff * 1_000_000)
+                    tx_mbps = (bucket['tx_bytes'] * 8) / (time_diff * 1_000_000)
+                else:
+                    rx_mbps = 0.0
+                    tx_mbps = 0.0
+            
+            data_points.append(ClientBandwidthDataPoint(
+                timestamp=bucket_time,
+                rx_mbps=round(rx_mbps, 2),
+                tx_mbps=round(tx_mbps, 2),
+                rx_bytes=bucket['rx_bytes'],
+                tx_bytes=bucket['tx_bytes']
+            ))
+    
+    return ClientBandwidthHistory(
+        mac_address=mac_address,
+        ip_address=ip_address,
+        network=network,
+        data=data_points
+    )
+
+
+@router.get("/clients/history/bulk")
+async def get_bulk_client_bandwidth_history(
+    time_range: str = Query("1h", description="Time range (e.g., 5m, 30m, 1h, 1d)", alias="range"),
+    interval: str = Query("raw", description="Aggregation interval: 'raw', '1m', '5m', '1h'"),
+    _: str = Depends(get_current_user)
+) -> Dict[str, ClientBandwidthHistory]:
+    """Get historical bandwidth data for all clients in a single call
+    
+    This endpoint efficiently returns aggregated historical data for all clients,
+    avoiding the need to make individual API calls per client.
+    
+    Args:
+        time_range: Time range string (default: 1h)
+        interval: Aggregation interval - 'raw' for raw samples, or '1m', '5m', '1h' for aggregated
+        
+    Returns:
+        Dict mapping MAC addresses to ClientBandwidthHistory objects
+    """
+    # Parse time range
+    time_delta = parse_time_range(time_range)
+    start_time = datetime.now(timezone.utc) - time_delta
+    
+    async with AsyncSessionLocal() as session:
+        # Query database for all clients' bandwidth stats in one query
+        query = select(ClientBandwidthStatsDB).where(
+            ClientBandwidthStatsDB.timestamp >= start_time
+        ).order_by(ClientBandwidthStatsDB.mac_address, ClientBandwidthStatsDB.timestamp.asc())
+        
+        result = await session.execute(query)
+        all_stats = result.scalars().all()
+    
+    # Group by MAC address
+    stats_by_mac: Dict[str, List[ClientBandwidthStatsDB]] = {}
+    for stat in all_stats:
+        mac = str(stat.mac_address).lower()
+        if mac not in stats_by_mac:
+            stats_by_mac[mac] = []
+        stats_by_mac[mac].append(stat)
+    
+    # Process each client's data
+    results: Dict[str, ClientBandwidthHistory] = {}
+    
+    for mac, stats in stats_by_mac.items():
+        if not stats:
+            continue
+        
+        # Get client info from first entry
+        first_stat = stats[0]
+        ip_address = str(first_stat.ip_address)
+        network = first_stat.network
+        
+        # Process data points
+        data_points = []
+        
+        if interval == "raw":
+            # Return raw samples
+            for i, stat in enumerate(stats):
+                if i == 0:
+                    # First point, no rate calculation
+                    data_points.append(ClientBandwidthDataPoint(
+                        timestamp=stat.timestamp,
+                        rx_mbps=0.0,
+                        tx_mbps=0.0,
+                        rx_bytes=stat.rx_bytes,
+                        tx_bytes=stat.tx_bytes
+                    ))
+                else:
+                    # Calculate rate from previous point
+                    prev = stats[i - 1]
+                    time_diff = (stat.timestamp - prev.timestamp).total_seconds()
+                    
+                    if time_diff > 0:
+                        rx_mbps = (stat.rx_bytes * 8) / (time_diff * 1_000_000)
+                        tx_mbps = (stat.tx_bytes * 8) / (time_diff * 1_000_000)
+                    else:
+                        rx_mbps = 0.0
+                        tx_mbps = 0.0
+                    
+                    data_points.append(ClientBandwidthDataPoint(
+                        timestamp=stat.timestamp,
+                        rx_mbps=round(rx_mbps, 2),
+                        tx_mbps=round(tx_mbps, 2),
+                        rx_bytes=stat.rx_bytes,
+                        tx_bytes=stat.tx_bytes
+                    ))
+        else:
+            # Aggregate by interval
+            interval_seconds = {
+                "1m": 60,
+                "5m": 300,
+                "1h": 3600
+            }.get(interval, 60)
+            
+            # Group stats by time buckets
+            buckets = {}
+            for stat in stats:
+                # Round timestamp to interval
+                bucket_time = stat.timestamp.replace(
+                    second=(stat.timestamp.second // interval_seconds) * interval_seconds,
+                    microsecond=0
+                )
+                
+                if bucket_time not in buckets:
+                    buckets[bucket_time] = {
+                        'rx_bytes': 0,
+                        'tx_bytes': 0,
+                        'count': 0
+                    }
+                
+                buckets[bucket_time]['rx_bytes'] += stat.rx_bytes
+                buckets[bucket_time]['tx_bytes'] += stat.tx_bytes
+                buckets[bucket_time]['count'] += 1
+            
+            # Convert buckets to data points
+            sorted_times = sorted(buckets.keys())
+            for i, bucket_time in enumerate(sorted_times):
+                bucket = buckets[bucket_time]
+                
+                if i == 0:
+                    rx_mbps = 0.0
+                    tx_mbps = 0.0
+                else:
+                    prev_time = sorted_times[i - 1]
+                    time_diff = (bucket_time - prev_time).total_seconds()
+                    
+                    if time_diff > 0:
+                        rx_mbps = (bucket['rx_bytes'] * 8) / (time_diff * 1_000_000)
+                        tx_mbps = (bucket['tx_bytes'] * 8) / (time_diff * 1_000_000)
+                    else:
+                        rx_mbps = 0.0
+                        tx_mbps = 0.0
+                
+                data_points.append(ClientBandwidthDataPoint(
+                    timestamp=bucket_time,
+                    rx_mbps=round(rx_mbps, 2),
+                    tx_mbps=round(tx_mbps, 2),
+                    rx_bytes=bucket['rx_bytes'],
+                    tx_bytes=bucket['tx_bytes']
+                ))
+        
+        results[mac] = ClientBandwidthHistory(
+            mac_address=mac,
+            ip_address=ip_address,
+            network=network,
+            data=data_points
+        )
+    
+    return results
 

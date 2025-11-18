@@ -200,3 +200,64 @@ class NetworkDevice(BaseModel):
     class Config:
         from_attributes = True
 
+
+class ClientBandwidthStats(BaseModel):
+    """Per-client bandwidth statistics"""
+    timestamp: datetime
+    mac_address: str
+    ip_address: str
+    network: str = Field(..., pattern="^(homelab|lan)$")
+    rx_bytes: int = Field(..., ge=0)  # download bytes in this interval
+    tx_bytes: int = Field(..., ge=0)  # upload bytes in this interval
+    rx_bytes_total: int = Field(..., ge=0)  # cumulative download
+    tx_bytes_total: int = Field(..., ge=0)  # cumulative upload
+    
+    @field_validator('mac_address')
+    @classmethod
+    def validate_mac(cls, v: str) -> str:
+        """Validate MAC address format"""
+        mac_pattern = r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
+        if not re.match(mac_pattern, v):
+            raise ValueError('Invalid MAC address format')
+        return v.lower().replace('-', ':')
+    
+    @field_validator('ip_address')
+    @classmethod
+    def validate_ip(cls, v: str) -> str:
+        """Validate IP address"""
+        try:
+            IPv4Address(v)
+            return v
+        except ValueError:
+            raise ValueError('Invalid IPv4 address')
+
+
+class ClientBandwidthDataPoint(BaseModel):
+    """Single data point for client bandwidth history"""
+    timestamp: datetime
+    rx_mbps: float = Field(..., ge=0)
+    tx_mbps: float = Field(..., ge=0)
+    rx_bytes: int = Field(..., ge=0)
+    tx_bytes: int = Field(..., ge=0)
+
+
+class ClientBandwidthHistory(BaseModel):
+    """Bandwidth history for a client"""
+    mac_address: str
+    ip_address: str
+    network: str
+    data: List[ClientBandwidthDataPoint]
+
+
+class ClientBandwidthCurrent(BaseModel):
+    """Current bandwidth stats for a client"""
+    mac_address: str
+    ip_address: str
+    network: str
+    hostname: Optional[str] = None
+    rx_mbps: float = Field(..., ge=0)
+    tx_mbps: float = Field(..., ge=0)
+    rx_bytes_total: int = Field(..., ge=0)
+    tx_bytes_total: int = Field(..., ge=0)
+    last_updated: datetime
+

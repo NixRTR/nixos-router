@@ -133,6 +133,23 @@ CREATE TABLE IF NOT EXISTS config_changes (
     error_message TEXT
 );
 
+-- Per-client bandwidth statistics (tracked by MAC address, IPv4 only)
+CREATE TABLE IF NOT EXISTS client_bandwidth_stats (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ NOT NULL,
+    mac_address MACADDR NOT NULL,
+    ip_address INET NOT NULL,
+    network VARCHAR(32) NOT NULL,
+    rx_bytes BIGINT NOT NULL,  -- download bytes in this interval
+    tx_bytes BIGINT NOT NULL,  -- upload bytes in this interval
+    rx_bytes_total BIGINT NOT NULL,  -- cumulative download
+    tx_bytes_total BIGINT NOT NULL  -- cumulative upload
+);
+
+CREATE INDEX IF NOT EXISTS idx_client_bandwidth_mac_time ON client_bandwidth_stats(mac_address, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_client_bandwidth_timestamp ON client_bandwidth_stats(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_client_bandwidth_mac ON client_bandwidth_stats(mac_address);
+
 -- Create hypertable for time-series data (if using TimescaleDB extension)
 -- Uncomment if TimescaleDB is available:
 -- SELECT create_hypertable('system_metrics', 'timestamp', if_not_exists => TRUE);

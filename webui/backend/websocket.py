@@ -10,12 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import MetricsSnapshot, SystemMetrics, InterfaceStats, ServiceStatus, DHCPLease, DNSMetrics
-from .database import AsyncSessionLocal, SystemMetricsDB, InterfaceStatsDB, ServiceStatusDB, DHCPLeaseDB, DiskIOMetricsDB, TemperatureMetricsDB
+from .database import AsyncSessionLocal, SystemMetricsDB, InterfaceStatsDB, ServiceStatusDB, DHCPLeaseDB, DiskIOMetricsDB, TemperatureMetricsDB, ClientBandwidthStatsDB
 from .collectors.system import collect_system_metrics, collect_disk_io, collect_temperatures
 from .collectors.network import collect_interface_stats
 from .collectors.dhcp import parse_kea_leases
 from .collectors.services import collect_service_statuses
 from .collectors.dns import collect_dns_stats
+from .collectors.client_bandwidth import collect_client_bandwidth
 from .config import settings
 
 
@@ -108,6 +109,9 @@ class ConnectionManager:
         disk_io = collect_disk_io()
         temperatures = collect_temperatures()
         
+        # Collect client bandwidth (with CPU governance built-in)
+        client_bandwidth = collect_client_bandwidth() if settings.bandwidth_collection_enabled else []
+        
         # Store in database asynchronously
         asyncio.create_task(self._store_metrics(
             system_metrics,
@@ -115,7 +119,8 @@ class ConnectionManager:
             service_statuses,
             dhcp_leases,
             disk_io,
-            temperatures
+            temperatures,
+            client_bandwidth
         ))
         
         # Create snapshot for broadcast
@@ -137,7 +142,8 @@ class ConnectionManager:
         services: List[ServiceStatus],
         dhcp_leases: List[DHCPLease],
         disk_io: List,
-        temperatures: List
+        temperatures: List,
+        client_bandwidth: List[dict] = None
     ):
         """Store metrics in database
         
@@ -148,6 +154,7 @@ class ConnectionManager:
             dhcp_leases: DHCP leases
             disk_io: Disk I/O metrics
             temperatures: Temperature metrics
+            client_bandwidth: Client bandwidth statistics
         """
         try:
             async with AsyncSessionLocal() as session:
@@ -249,6 +256,21 @@ class ConnectionManager:
                         critical=temp.critical
                     )
                     session.add(temp_db)
+                
+                # Store client bandwidth statistics
+                if client_bandwidth:
+                    for bw_data in client_bandwidth:
+                        bw_db = ClientBandwidthStatsDB(
+                            timestamp=bw_data['timestamp'],
+                            mac_address=bw_data['mac_address'],
+                            ip_address=bw_data['ip_address'],
+                            network=bw_data['network'],
+                            rx_bytes=bw_data['rx_bytes'],
+                            tx_bytes=bw_data['tx_bytes'],
+                            rx_bytes_total=bw_data['rx_bytes_total'],
+                            tx_bytes_total=bw_data['tx_bytes_total']
+                        )
+                        session.add(bw_db)
                 
                 await session.commit()
                 

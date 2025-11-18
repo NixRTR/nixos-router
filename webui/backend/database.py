@@ -193,6 +193,26 @@ class DeviceOverrideDB(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
+
+class ClientBandwidthStatsDB(Base):
+    """Per-client bandwidth statistics (tracked by MAC address)"""
+    __tablename__ = "client_bandwidth_stats"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    mac_address = Column(MACADDR, nullable=False, index=True)
+    ip_address = Column(INET, nullable=False, index=True)
+    network = Column(String(32), nullable=False)
+    rx_bytes = Column(BigInteger, nullable=False)  # download bytes in this interval
+    tx_bytes = Column(BigInteger, nullable=False)  # upload bytes in this interval
+    rx_bytes_total = Column(BigInteger, nullable=False)  # cumulative download
+    tx_bytes_total = Column(BigInteger, nullable=False)  # cumulative upload
+    
+    __table_args__ = (
+        Index('idx_client_bandwidth_mac_time', 'mac_address', 'timestamp', postgresql_using='btree'),
+        Index('idx_client_bandwidth_timestamp', 'timestamp', postgresql_using='btree'),
+    )
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting async database session"""
     async with AsyncSessionLocal() as session:
