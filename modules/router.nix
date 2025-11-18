@@ -607,6 +607,7 @@ in {
         "net.netfilter.nf_conntrack_max" = 262144;  # Handle more concurrent connections
         "net.netfilter.nf_conntrack_tcp_timeout_established" = 86400;  # 24 hours
         "net.netfilter.nf_conntrack_tcp_timeout_time_wait" = 30;
+        "net.netfilter.nf_conntrack_acct" = 1;  # Enable byte/packet counting per connection
         
         # SYN flood protection
         "net.ipv4.tcp_syncookies" = 1;
