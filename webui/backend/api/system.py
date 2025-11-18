@@ -307,8 +307,13 @@ async def get_temperature_history(
 def _get_pyhw_output() -> str:
     """Get pyhw output (system information)
     
-    Uses subprocess to run pyhw command.
+    Uses subprocess to run pyhw command with terminal width set to 105 characters.
     """
+    # Set terminal width to 105 characters
+    env = os.environ.copy()
+    env['COLUMNS'] = '105'
+    env['TERM'] = 'xterm-256color'  # Ensure color support
+    
     # Try running pyhw directly (should be in PATH if installed via pip/nix)
     try:
         result = subprocess.run(
@@ -316,7 +321,7 @@ def _get_pyhw_output() -> str:
             capture_output=True,
             text=True,
             timeout=10,
-            env=os.environ.copy()
+            env=env
         )
         if result.returncode == 0:
             return result.stdout
@@ -330,7 +335,7 @@ def _get_pyhw_output() -> str:
                 capture_output=True,
                 text=True,
                 timeout=10,
-                env=os.environ.copy()
+                env=env
             )
             if result.returncode == 0:
                 return result.stdout
@@ -493,9 +498,35 @@ def _ansi_to_image(ansi_text: str) -> bytes:
         
         return segments
     
-    # Split into lines and parse each
+    # Split into lines and parse each, truncating to 105 characters
     text_lines = ansi_text.splitlines()
-    parsed_lines = [parse_ansi_line(line) for line in text_lines]
+    # Truncate each line to 105 characters (excluding ANSI codes)
+    max_chars = 105
+    truncated_lines = []
+    for line in text_lines:
+        # Count visible characters (excluding ANSI escape sequences)
+        visible_chars = 0
+        i = 0
+        truncated = []
+        while i < len(line):
+            if line[i] == '\x1b' or line[i] == '\033':
+                # Found escape sequence - preserve it
+                if i + 1 < len(line) and line[i + 1] == '[':
+                    j = i + 2
+                    while j < len(line) and line[j] not in 'mHfABCDJK':
+                        j += 1
+                    if j < len(line):
+                        truncated.append(line[i:j+1])
+                        i = j + 1
+                        continue
+            # Regular character
+            if visible_chars < max_chars:
+                truncated.append(line[i])
+                visible_chars += 1
+            i += 1
+        truncated_lines.append(''.join(truncated))
+    
+    parsed_lines = [parse_ansi_line(line) for line in truncated_lines]
     
     if not parsed_lines:
         parsed_lines = [[('No output', (229, 229, 229), (0, 0, 0), False)]]
