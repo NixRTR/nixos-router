@@ -41,10 +41,10 @@ export function Navbar({ hostname, username, connectionStatus, onMenuClick }: Na
   return (
     <FlowbiteNavbar fluid className="border-b">
       <div className="flex items-center gap-3">
-        {/* Hamburger Menu Button - Only visible on mobile */}
+        {/* Hamburger Menu Button - Visible below 1650px */}
         <button
           onClick={onMenuClick}
-          className="p-2 text-gray-500 rounded-lg md:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600"
+          className="p-2 text-gray-500 rounded-lg xl-custom:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600"
           aria-label="Toggle menu"
         >
           <HiMenu className="w-6 h-6" />

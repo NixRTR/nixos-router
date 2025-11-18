@@ -3,7 +3,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Table, Badge, Button, Modal, Select, Label, TextInput } from 'flowbite-react';
+import { Card, Table, Badge, Button, Modal, Select, Label, TextInput, Tooltip as FlowbiteTooltip } from 'flowbite-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
@@ -337,6 +337,18 @@ export function DeviceUsage() {
     return device.nickname || device.hostname || 'Unknown';
   };
 
+  // Helper function to truncate text with tooltip
+  const TruncatedText = ({ text, maxLength = 20 }: { text: string; maxLength?: number }) => {
+    if (text.length <= maxLength) {
+      return <span>{text}</span>;
+    }
+    return (
+      <FlowbiteTooltip content={text} placement="top">
+        <span className="cursor-help truncate block max-w-[200px]">{text}</span>
+      </FlowbiteTooltip>
+    );
+  };
+
   // Sort IP address with zero-padded last octet for sorting (but not display)
   const getSortableIP = (ip: string): string => {
     const parts = ip.split('.');
@@ -505,6 +517,21 @@ export function DeviceUsage() {
               )}
             </div>
 
+            {/* Legend for color indicators */}
+            <div className="mb-4 flex flex-wrap gap-4 text-xs text-gray-600 dark:text-gray-400">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Network:</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                  <span>HOMELAB</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                  <span>LAN</span>
+                </div>
+              </div>
+            </div>
+
             <div className="hidden md:block overflow-x-auto">
               <Table>
                 <Table.Head>
@@ -515,7 +542,7 @@ export function DeviceUsage() {
                     Hostname{getSortIndicator('hostname')}
                   </Table.HeadCell>
                   <Table.HeadCell 
-                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 hidden lg:table-cell"
                     onClick={() => handleSort('mac')}
                   >
                     MAC{getSortIndicator('mac')}
@@ -527,7 +554,7 @@ export function DeviceUsage() {
                     IP{getSortIndicator('ip')}
                   </Table.HeadCell>
                   <Table.HeadCell 
-                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 w-12"
                     onClick={() => handleSort('status')}
                   >
                     Status{getSortIndicator('status')}
@@ -544,9 +571,7 @@ export function DeviceUsage() {
                   >
                     UPLOAD{getSortIndicator('ul')}
                   </Table.HeadCell>
-                  <Table.HeadCell>Chart</Table.HeadCell>
-                  <Table.HeadCell>Details</Table.HeadCell>
-                  <Table.HeadCell>Enable/Disable</Table.HeadCell>
+                  <Table.HeadCell>Actions</Table.HeadCell>
                 </Table.Head>
                 <Table.Body className="divide-y">
                   {sortedDevices.map((device) => {
@@ -558,17 +583,17 @@ export function DeviceUsage() {
                     
                     return (
                       <Table.Row key={device.mac_address} className={!device.is_online ? 'opacity-50' : ''}>
-                        <Table.Cell className="font-medium">
-                          {getDisplayName(device)}
+                        <Table.Cell className="font-medium max-w-[200px]">
+                          <TruncatedText text={getDisplayName(device)} maxLength={20} />
                         </Table.Cell>
-                        <Table.Cell className="font-mono text-sm">
+                        <Table.Cell className="font-mono text-sm hidden lg:table-cell">
                           {device.mac_address}
                         </Table.Cell>
-                        <Table.Cell>{device.ip_address}</Table.Cell>
+                        <Table.Cell className="font-mono text-sm">{device.ip_address}</Table.Cell>
                         <Table.Cell>
-                          <Badge color={device.is_online ? 'success' : 'gray'} size="sm">
-                            {device.is_online ? 'Online' : 'Offline'}
-                          </Badge>
+                          <FlowbiteTooltip content={device.is_online ? 'Online' : 'Offline'} placement="top">
+                            <div className={`w-3 h-3 rounded-full ${device.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                          </FlowbiteTooltip>
                         </Table.Cell>
                         <Table.Cell className="text-sm">
                           {formatBytes(averages.dl_1h)}
@@ -577,23 +602,21 @@ export function DeviceUsage() {
                           {formatBytes(averages.ul_1h)}
                         </Table.Cell>
                         <Table.Cell>
-                          <Button size="xs" color="blue" onClick={() => openChart(device)}>
-                            Chart
-                          </Button>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Button size="xs" color="gray" onClick={() => navigate(`/device-usage/${device.ip_address}`)}>
-                            Details
-                          </Button>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Button
-                            size="xs"
-                            color={isDeviceBlocked(device) ? 'success' : 'failure'}
-                            onClick={() => handleBlockToggle(device)}
-                          >
-                            {isDeviceBlocked(device) ? 'Enable' : 'Disable'}
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button size="xs" color="blue" onClick={() => openChart(device)}>
+                              Chart
+                            </Button>
+                            <Button size="xs" color="gray" onClick={() => navigate(`/device-usage/${device.ip_address}`)}>
+                              Details
+                            </Button>
+                            <Button
+                              size="xs"
+                              color={isDeviceBlocked(device) ? 'success' : 'failure'}
+                              onClick={() => handleBlockToggle(device)}
+                            >
+                              {isDeviceBlocked(device) ? 'Enable' : 'Disable'}
+                            </Button>
+                          </div>
                         </Table.Cell>
                       </Table.Row>
                     );

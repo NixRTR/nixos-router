@@ -21,18 +21,18 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
   const location = useLocation();
 
   const handleItemClick = () => {
-    // Close sidebar on mobile when item is clicked
-    if (window.innerWidth < 768) {
+    // Close sidebar when screen is below 1650px when item is clicked
+    if (window.innerWidth < 1650) {
       onClose();
     }
   };
 
   return (
     <>
-      {/* Mobile Overlay */}
+      {/* Overlay - visible below 1650px */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 xl-custom:hidden"
           onClick={onClose}
         />
       )}
@@ -40,10 +40,10 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
       {/* Sidebar */}
       <div
         className={`
-          fixed md:static inset-y-0 left-0 z-50
+          fixed xl-custom:static inset-y-0 left-0 z-50
           transform transition-transform duration-300 ease-in-out
-          md:transform-none
-          ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          xl-custom:transform-none
+          ${isOpen ? 'translate-x-0' : '-translate-x-full xl-custom:translate-x-0'}
         `}
       >
         <FlowbiteSidebar aria-label="Sidebar with navigation" className="h-full">

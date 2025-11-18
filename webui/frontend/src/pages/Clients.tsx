@@ -3,7 +3,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Table, Badge, TextInput, Select, Button } from 'flowbite-react';
+import { Card, Table, Badge, TextInput, Select, Button, Tooltip } from 'flowbite-react';
 import { HiSearch } from 'react-icons/hi';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
@@ -198,6 +198,37 @@ export function Clients() {
   const onlineCount = devices.filter(d => d.is_online).length;
   const offlineCount = devices.filter(d => !d.is_online).length;
 
+  // Helper function to format last seen date
+  const formatLastSeen = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const itemDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
+    if (itemDate.getTime() === today.getTime()) {
+      // Today - show time only
+      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    } else {
+      // Not today - show MM/DD/YY
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      const year = date.getFullYear().toString().slice(-2);
+      return `${month}/${day}/${year}`;
+    }
+  };
+
+  // Helper function to truncate text with tooltip
+  const TruncatedText = ({ text, maxLength = 20 }: { text: string; maxLength?: number }) => {
+    if (text.length <= maxLength) {
+      return <span>{text}</span>;
+    }
+    return (
+      <Tooltip content={text} placement="top">
+        <span className="cursor-help truncate block max-w-[200px]">{text}</span>
+      </Tooltip>
+    );
+  };
+
   return (
     <div className="flex h-screen">
       <Sidebar 
@@ -269,63 +300,99 @@ export function Clients() {
               </div>
             </div>
 
+            {/* Legend for color indicators */}
+            <div className="mb-4 flex flex-wrap gap-4 text-xs text-gray-600 dark:text-gray-400">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Network:</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                  <span>HOMELAB</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                  <span>LAN</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Type:</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                  <span>Static DHCP</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                  <span>Dynamic DHCP</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+                  <span>Static IP</span>
+                </div>
+              </div>
+            </div>
+
             {/* Desktop Table View */}
-            <div className="hidden md:block">
+            <div className="hidden md:block overflow-x-auto">
               <Table>
                 <Table.Head>
-                  <Table.HeadCell>Status</Table.HeadCell>
+                  <Table.HeadCell className="w-12">Status</Table.HeadCell>
                   <Table.HeadCell>Device</Table.HeadCell>
                   <Table.HeadCell>IP Address</Table.HeadCell>
-                  <Table.HeadCell>MAC Address</Table.HeadCell>
-                  <Table.HeadCell>Vendor</Table.HeadCell>
-                  <Table.HeadCell>Network</Table.HeadCell>
-                  <Table.HeadCell>Type</Table.HeadCell>
-                  <Table.HeadCell>Last Seen</Table.HeadCell>
+                  <Table.HeadCell className="hidden lg:table-cell">MAC Address</Table.HeadCell>
+                  <Table.HeadCell className="hidden xl:table-cell">Vendor</Table.HeadCell>
+                  <Table.HeadCell className="w-12">Network</Table.HeadCell>
+                  <Table.HeadCell className="w-12">Type</Table.HeadCell>
+                  <Table.HeadCell className="w-24">Last Seen</Table.HeadCell>
                   <Table.HeadCell>Actions</Table.HeadCell>
                 </Table.Head>
                 <Table.Body className="divide-y">
                   {filteredDevices.map((device) => (
                     <Table.Row key={device.mac_address} className={!device.is_online ? 'opacity-50' : ''}>
                       <Table.Cell>
-                        <Badge color={device.is_online ? 'success' : 'gray'} size="sm">
-                          {device.is_online ? 'Online' : 'Offline'}
-                        </Badge>
+                        <Tooltip content={device.is_online ? 'Online' : 'Offline'} placement="top">
+                          <div className={`w-3 h-3 rounded-full ${device.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                        </Tooltip>
                       </Table.Cell>
-                      <Table.Cell className="font-medium">
+                      <Table.Cell className="font-medium max-w-[200px]">
                         <div className="flex items-center gap-2">
                           <button
-                            className="text-yellow-500 hover:text-yellow-400"
+                            className="text-yellow-500 hover:text-yellow-400 flex-shrink-0"
                             title={device.favorite ? 'Unfavorite' : 'Favorite'}
                             onClick={() => toggleFavorite(device)}
                           >
                             {device.favorite ? '★' : '☆'}
                           </button>
-                          <span>{device.nickname || device.hostname || 'Unknown'}</span>
-                          <Button size="xs" color="light" onClick={() => editNickname(device)}>Edit</Button>
+                          <TruncatedText text={device.nickname || device.hostname || 'Unknown'} maxLength={20} />
+                          <Button size="xs" color="light" onClick={() => editNickname(device)} className="flex-shrink-0">Edit</Button>
                         </div>
                       </Table.Cell>
-                      <Table.Cell>{device.ip_address}</Table.Cell>
-                      <Table.Cell className="font-mono text-sm">
+                      <Table.Cell className="font-mono text-sm">{device.ip_address}</Table.Cell>
+                      <Table.Cell className="font-mono text-sm hidden lg:table-cell">
                         {device.mac_address}
                       </Table.Cell>
-                      <Table.Cell className="text-sm text-gray-600">
+                      <Table.Cell className="text-sm text-gray-600 hidden xl:table-cell">
                         {device.vendor || '—'}
                       </Table.Cell>
                       <Table.Cell>
-                        <Badge color={device.network === 'homelab' ? 'info' : 'purple'}>
-                          {device.network.toUpperCase()}
-                        </Badge>
+                        <Tooltip content={device.network.toUpperCase()} placement="top">
+                          <div className={`w-3 h-3 rounded-full ${device.network === 'homelab' ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
+                        </Tooltip>
                       </Table.Cell>
                       <Table.Cell>
-                        <Badge color={device.is_dhcp ? (device.is_static ? 'success' : 'warning') : 'gray'}>
-                          {device.is_static ? 'Static DHCP' : (device.is_dhcp ? 'Dynamic DHCP' : 'Static IP')}
-                        </Badge>
+                        <Tooltip 
+                          content={device.is_static ? 'Static DHCP' : (device.is_dhcp ? 'Dynamic DHCP' : 'Static IP')} 
+                          placement="top"
+                        >
+                          <div className={`w-3 h-3 rounded-full ${
+                            device.is_static ? 'bg-green-500' : 
+                            (device.is_dhcp ? 'bg-yellow-500' : 'bg-gray-500')
+                          }`}></div>
+                        </Tooltip>
                       </Table.Cell>
-                      <Table.Cell className="text-sm">
-                        {new Date(device.last_seen).toLocaleString()}
+                      <Table.Cell className="text-sm whitespace-nowrap">
+                        {formatLastSeen(device.last_seen)}
                       </Table.Cell>
                       <Table.Cell>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1">
                           <Button
                             size="xs"
                             color="gray"

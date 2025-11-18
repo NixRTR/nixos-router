@@ -7,7 +7,11 @@ export default {
     "node_modules/flowbite-react/lib/esm/**/*.js",
   ],
   theme: {
-    extend: {},
+    extend: {
+      screens: {
+        'xl-custom': '1650px', // Custom breakpoint for hamburger menu
+      },
+    },
   },
   plugins: [
     require('flowbite/plugin')

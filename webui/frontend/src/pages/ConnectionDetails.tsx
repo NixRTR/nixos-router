@@ -3,7 +3,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Card, Table, Button, Modal, Select, Label, TextInput } from 'flowbite-react';
+import { Card, Table, Button, Modal, Select, Label, TextInput, Tooltip as FlowbiteTooltip } from 'flowbite-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
@@ -231,6 +231,18 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
 
   const breadcrumbLabel = sourcePage === 'device-usage' ? 'Device Usage' : 'Devices';
 
+  // Helper function to truncate text with tooltip
+  const TruncatedText = ({ text, maxLength = 25 }: { text: string; maxLength?: number }) => {
+    if (!text || text.length <= maxLength) {
+      return <span>{text || '—'}</span>;
+    }
+    return (
+      <FlowbiteTooltip content={text} placement="top">
+        <span className="cursor-help truncate block max-w-[250px]">{text}</span>
+      </FlowbiteTooltip>
+    );
+  };
+
   return (
     <div className="flex h-screen">
       <Sidebar 
@@ -327,10 +339,10 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
                     Download{getSortIndicator('download_mb')}
                   </Table.HeadCell>
                   <Table.HeadCell 
-                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 hidden lg:table-cell"
                     onClick={() => handleSort('download_mbps')}
                   >
-                    Peak Download Mbit/s{getSortIndicator('download_mbps')}
+                    Peak DL Mbit/s{getSortIndicator('download_mbps')}
                   </Table.HeadCell>
                   <Table.HeadCell 
                     className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -339,12 +351,12 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
                     Upload{getSortIndicator('upload_mb')}
                   </Table.HeadCell>
                   <Table.HeadCell 
-                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 hidden lg:table-cell"
                     onClick={() => handleSort('upload_mbps')}
                   >
-                    Peak Upload Mbit/s{getSortIndicator('upload_mbps')}
+                    Peak UL Mbit/s{getSortIndicator('upload_mbps')}
                   </Table.HeadCell>
-                  <Table.HeadCell>Chart</Table.HeadCell>
+                  <Table.HeadCell>Actions</Table.HeadCell>
                 </Table.Head>
                 <Table.Body className="divide-y">
                   {sortedConnections.map((conn) => (
@@ -352,19 +364,19 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
                       <Table.Cell className="font-mono text-sm">
                         {conn.remote_ip}:{conn.remote_port}
                       </Table.Cell>
-                      <Table.Cell>
-                        {conn.hostname || '—'}
+                      <Table.Cell className="max-w-[250px]">
+                        <TruncatedText text={conn.hostname || ''} maxLength={25} />
                       </Table.Cell>
                       <Table.Cell className="text-sm">
                         {formatBytes(conn.download_mb)}
                       </Table.Cell>
-                      <Table.Cell className="text-sm">
+                      <Table.Cell className="text-sm hidden lg:table-cell">
                         {conn.download_mbps.toFixed(2)} Mbit/s
                       </Table.Cell>
                       <Table.Cell className="text-sm">
                         {formatBytes(conn.upload_mb)}
                       </Table.Cell>
-                      <Table.Cell className="text-sm">
+                      <Table.Cell className="text-sm hidden lg:table-cell">
                         {conn.upload_mbps.toFixed(2)} Mbit/s
                       </Table.Cell>
                       <Table.Cell>
