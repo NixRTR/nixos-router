@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 import os
 import asyncio
 from datetime import datetime, time, timedelta, timezone
@@ -153,10 +153,17 @@ async def websocket_route(
 docs_path = os.environ.get("DOCUMENTATION_DIR", "/var/lib/router-webui/docs")
 docs_assets_path = os.path.join(docs_path, "assets")
 
+# Only mount static files if docs are built and assets directory exists
 if os.path.exists(docs_assets_path) and os.path.isdir(docs_assets_path):
-    # Mount docs assets
     app.mount("/docs/assets", StaticFiles(directory=docs_assets_path), name="docs-assets")
     print(f"Serving documentation assets from {docs_assets_path}")
+    
+    @app.get("/docs")
+    async def serve_docs_root():
+        """Serve React documentation site root (index.html)"""
+        index_path = os.path.join(docs_path, "index.html")
+        if os.path.isfile(index_path):
+            return FileResponse(index_path)
     
     @app.get("/docs/{full_path:path}")
     async def serve_docs(full_path: str):
@@ -168,12 +175,6 @@ if os.path.exists(docs_assets_path) and os.path.isdir(docs_assets_path):
         # Don't intercept API or WebSocket routes
         if full_path.startswith("api") or full_path.startswith("ws"):
             return
-        
-        # For root docs path, serve index.html
-        if not full_path or full_path == "/":
-            index_path = os.path.join(docs_path, "index.html")
-            if os.path.isfile(index_path):
-                return FileResponse(index_path)
         
         # Try to serve the requested file
         file_path = os.path.join(docs_path, full_path)
