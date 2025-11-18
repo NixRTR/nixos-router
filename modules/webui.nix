@@ -17,6 +17,10 @@ let
       sha256 = "97c7cf2d16ece0decc51c898f2691c3894e6e5f1c60fc9f153c9361dce578c68";
     };
     
+    nativeBuildInputs = with pkgs.python311Packages; [
+      setuptools  # Required for pyproject builds
+    ];
+    
     propagatedBuildInputs = with pkgs.python311Packages; [
       # pyhw only depends on Python standard library according to PyPI
       # But it may have optional dependencies, check if needed
