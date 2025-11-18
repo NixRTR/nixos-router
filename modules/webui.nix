@@ -287,7 +287,7 @@ in
         User = "router-webui";
         Group = "router-webui";
         WorkingDirectory = "${../webui}";
-        ExecStart = "${pythonEnv}/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port ${toString cfg.backendPort} --root-path /api";
+        ExecStart = "${pythonEnv}/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port ${toString cfg.backendPort}";
         Restart = "always";
         RestartSec = "10s";
         
@@ -325,6 +325,7 @@ in
         
         locations = {
           # Proxy API requests to FastAPI backend (must come before /)
+          # FastAPI routers already have /api in their prefix, so proxy to root
           "/api/" = {
             proxyPass = "http://127.0.0.1:${toString cfg.backendPort}/api/";
             proxyWebsockets = true;
@@ -339,9 +340,10 @@ in
             '';
           };
           
-          # Proxy API requests without trailing slash (redirects to /api/)
+          # Proxy API requests without trailing slash
+          # FastAPI routers already have /api in their prefix, so proxy to root
           "/api" = {
-            proxyPass = "http://127.0.0.1:${toString cfg.backendPort}";
+            proxyPass = "http://127.0.0.1:${toString cfg.backendPort}/api";
             proxyWebsockets = true;
             extraConfig = ''
               proxy_set_header Host $host:$server_port;
