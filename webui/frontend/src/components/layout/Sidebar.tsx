@@ -131,16 +131,6 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
               >
                 System Info
               </FlowbiteSidebar.Item>
-              <FlowbiteSidebar.Item
-                href="/docs"
-                target="_blank"
-                rel="noopener noreferrer"
-                icon={HiBookOpen}
-                as="a"
-                onClick={handleItemClick}
-              >
-                Documentation
-              </FlowbiteSidebar.Item>
               <FlowbiteSidebar.Item 
                 icon={HiLogout} 
                 style={{ cursor: 'pointer' }}
@@ -150,6 +140,20 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
                 }}
               >
                 Logout
+              </FlowbiteSidebar.Item>
+            </FlowbiteSidebar.ItemGroup>
+
+            {/* Documentation */}
+            <FlowbiteSidebar.ItemGroup>
+              <FlowbiteSidebar.Item
+                href="/docs"
+                target="_blank"
+                rel="noopener noreferrer"
+                icon={HiBookOpen}
+                as="a"
+                onClick={handleItemClick}
+              >
+                Documentation
               </FlowbiteSidebar.Item>
             </FlowbiteSidebar.ItemGroup>
 
