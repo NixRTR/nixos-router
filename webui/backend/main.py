@@ -88,11 +88,14 @@ async def lifespan(app: FastAPI):
 
 
 # Create FastAPI app
+# Disable default /docs and /redoc routes to avoid conflict with our documentation site
 app = FastAPI(
     title=settings.app_name,
     version="1.0.0",
     description="Router monitoring and management interface",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/api/docs",  # Move API docs to /api/docs instead of /docs
+    redoc_url="/api/redoc"  # Move ReDoc to /api/redoc
 )
 
 # Configure CORS
