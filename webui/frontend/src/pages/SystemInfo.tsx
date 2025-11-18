@@ -80,7 +80,7 @@ export function SystemInfo() {
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 128 128"
-                  className="h-full w-auto dark:opacity-90"
+                  className="w-32 h-full dark:opacity-90"
                   preserveAspectRatio="xMidYMid meet"
                 >
                   <path
@@ -99,7 +99,7 @@ export function SystemInfo() {
               </div>
               
               {/* Fastfetch Text Output */}
-              <div className="flex-1">
+              <div className="flex-1 flex">
                 <pre className="font-mono text-sm whitespace-pre-wrap text-white dark:text-gray-200 bg-transparent dark:bg-transparent p-0 overflow-auto">
                   {textData}
                 </pre>
