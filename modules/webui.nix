@@ -6,63 +6,6 @@ let
   cfg = config.services.router-webui;
   routerConfig = import ../router-config.nix;
   
-  # pypci-ng package (dependency of pyhw, not in nixpkgs)
-  # Try to use from nixpkgs first, otherwise build manually
-  pypci-ng = pkgs.python311Packages.pypci-ng or (pkgs.python311Packages.buildPythonPackage rec {
-    pname = "pypci-ng";
-    version = "0.3.0";
-    format = "pyproject";
-    
-    # Use fetchurl directly since fetchPypi might have issues with hyphenated names
-    src = pkgs.fetchurl {
-      url = "https://files.pythonhosted.org/packages/source/p/pypci-ng/pypci_ng-${version}.tar.gz";
-      sha256 = "36a1ceb3965c1fbcd98a0e3aedec3ac7dc221f81c9aa5094a9408df3d0cd514e";
-    };
-    
-    nativeBuildInputs = with pkgs.python311Packages; [
-      setuptools
-    ];
-    
-    propagatedBuildInputs = with pkgs.python311Packages; [];
-    
-    doCheck = false;
-    
-    meta = with lib; {
-      description = "A pciutils-like library for fetching system PCI/PCI-E information";
-      homepage = "https://pypi.org/project/pypci-ng/";
-      license = licenses.mit;
-    };
-  });
-  
-  # pyhw package (not in nixpkgs, build it manually)
-  pyhw = pkgs.python311Packages.buildPythonPackage rec {
-    pname = "pyhw";
-    version = "0.15.3";
-    format = "pyproject";
-    
-    src = pkgs.python311Packages.fetchPypi {
-      inherit pname version;
-      sha256 = "97c7cf2d16ece0decc51c898f2691c3894e6e5f1c60fc9f153c9361dce578c68";
-    };
-    
-    nativeBuildInputs = with pkgs.python311Packages; [
-      setuptools  # Required for pyproject builds
-    ];
-    
-    propagatedBuildInputs = [
-      pypci-ng  # Required dependency
-    ];
-    
-    # No tests in the package
-    doCheck = false;
-    
-    meta = with lib; {
-      description = "A neofetch-like command line tool for fetching system information";
-      homepage = "https://pypi.org/project/pyhw/";
-      license = licenses.bsd3;
-    };
-  };
-  
   # Python environment with all dependencies
   pythonEnv = pkgs.python311.withPackages (ps: with ps; [
     fastapi
@@ -80,7 +23,6 @@ let
     pamela  # PAM authentication support
     manuf  # MAC address OUI vendor lookup
     pillow  # Image processing for ANSI to image conversion
-    pyhw  # System information tool (neofetch/fastfetch alternative)
   ]);
   
   # Backend source
@@ -297,7 +239,7 @@ in
         NFT_BIN = "${pkgs.nftables}/bin/nft";
         IP_BIN = "${pkgs.iproute2}/bin/ip";
         CONNTRACK_BIN = "${pkgs.conntrack-tools}/bin/conntrack";
-        PYHW_BIN = "${pythonEnv}/bin/pyhw";
+        FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
       };
       
       serviceConfig = {

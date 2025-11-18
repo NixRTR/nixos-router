@@ -304,19 +304,19 @@ async def get_temperature_history(
         ]
 
 
-def _find_pyhw() -> str:
-    """Find pyhw binary path (Nix way)"""
+def _find_fastfetch() -> str:
+    """Find fastfetch binary path (Nix way)"""
     # Check environment variable first (set by NixOS service)
-    env_path = os.environ.get("PYHW_BIN")
+    env_path = os.environ.get("FASTFETCH_BIN")
     if env_path:
         return env_path
     
     # Try common locations
     candidates = [
-        "/run/current-system/sw/bin/pyhw",
-        "/usr/bin/pyhw",
-        "/usr/local/bin/pyhw",
-        "pyhw"
+        "/run/current-system/sw/bin/fastfetch",
+        "/usr/bin/fastfetch",
+        "/usr/local/bin/fastfetch",
+        "fastfetch"
     ]
     for path in candidates:
         try:
@@ -326,26 +326,13 @@ def _find_pyhw() -> str:
         except Exception:
             continue
     
-    # Try using python -m pyhw (most reliable for Nix environments)
-    try:
-        result = subprocess.run(
-            ["python3", "-m", "pyhw", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=2
-        )
-        if result.returncode == 0:
-            return "python3"  # Return python3, we'll use -m pyhw
-    except Exception:
-        pass
-    
-    raise RuntimeError("pyhw binary not found")
+    raise RuntimeError("fastfetch binary not found")
 
 
-def _get_pyhw_output() -> str:
-    """Get pyhw output (system information)
+def _get_fastfetch_output() -> str:
+    """Get fastfetch output (system information)
     
-    Uses subprocess to run pyhw command with terminal width set to 105 characters.
+    Uses subprocess to run fastfetch command with terminal width set to 105 characters.
     """
     # Set terminal width to 105 characters
     env = os.environ.copy()
@@ -353,19 +340,13 @@ def _get_pyhw_output() -> str:
     env['TERM'] = 'xterm-256color'  # Ensure color support
     
     try:
-        pyhw_bin = _find_pyhw()
+        fastfetch_bin = _find_fastfetch()
     except RuntimeError as e:
-        raise RuntimeError(f"pyhw not found: {str(e)}")
-    
-    # If pyhw_bin is "python3", use module mode
-    if pyhw_bin == "python3":
-        cmd = ["python3", "-m", "pyhw"]
-    else:
-        cmd = [pyhw_bin]
+        raise RuntimeError(f"fastfetch not found: {str(e)}")
     
     try:
         result = subprocess.run(
-            cmd,
+            [fastfetch_bin],
             capture_output=True,
             text=True,
             timeout=10,
@@ -374,9 +355,9 @@ def _get_pyhw_output() -> str:
         if result.returncode == 0:
             return result.stdout
         else:
-            raise RuntimeError(f"pyhw failed with return code {result.returncode}: {result.stderr}")
+            raise RuntimeError(f"fastfetch failed with return code {result.returncode}: {result.stderr}")
     except Exception as e:
-        raise RuntimeError(f"Error running pyhw: {str(e)}")
+        raise RuntimeError(f"Error running fastfetch: {str(e)}")
 
 
 def _ansi_to_image(ansi_text: str) -> bytes:
@@ -620,7 +601,7 @@ def _ansi_to_image(ansi_text: str) -> bytes:
 async def get_fastfetch(
     _: str = Depends(get_current_user)
 ) -> dict:
-    """Run pyhw and return the output as PNG image
+    """Run fastfetch and return the output as PNG image
     
     Returns:
         dict: Contains 'image' field with base64-encoded PNG image data
@@ -628,13 +609,13 @@ async def get_fastfetch(
     import base64
     
     try:
-        pyhw_output = _get_pyhw_output()
+        fastfetch_output = _get_fastfetch_output()
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
     
     try:
         # Convert ANSI output to PNG image
-        image_bytes = _ansi_to_image(pyhw_output)
+        image_bytes = _ansi_to_image(fastfetch_output)
         
         # Return as base64-encoded string
         image_base64 = base64.b64encode(image_bytes).decode('utf-8')
