@@ -59,6 +59,8 @@ export function DeviceUsage() {
   const [customRange, setCustomRange] = useState('');
   const [refreshInterval, setRefreshInterval] = useState(10);
   const [chartInterval, setChartInterval] = useState('raw');
+  const [tableTimeRange, setTableTimeRange] = useState('1h');
+  const [tableCustomRange, setTableCustomRange] = useState('');
   
   const { connectionStatus } = useMetrics(token);
   
@@ -114,55 +116,68 @@ export function DeviceUsage() {
   }, [token]);
 
 
-  // Fetch and calculate time period averages
+  // Validate time range format (e.g., "1m", "5m", "10m", "30m", "1h", "3h", "6h", "12h", "1d", "1w", "1M", "1y")
+  const validateTimeRange = (range: string): boolean => {
+    if (!range || range.trim() === '') return false;
+    const pattern = /^(\d+)([mhdwMy])$/i;
+    return pattern.test(range.trim());
+  };
+
+  // Fetch and calculate time period averages for the selected table time range
   useEffect(() => {
     const fetchAverages = async () => {
       if (!token) return;
       
+      const range = tableTimeRange === 'custom' ? tableCustomRange : tableTimeRange;
+      if (!range || (tableTimeRange === 'custom' && !validateTimeRange(range))) {
+        setBandwidthAverages({});
+        return;
+      }
+      
       try {
-        // Fetch bulk data for all time periods
-        const [data5m, data30m, data1h, data1d] = await Promise.all([
-          apiClient.getBulkClientBandwidthHistory('5m', 'raw'),
-          apiClient.getBulkClientBandwidthHistory('30m', '1m'),
-          apiClient.getBulkClientBandwidthHistory('1h', '1m'),
-          apiClient.getBulkClientBandwidthHistory('1d', '1h'),
-        ]);
+        // Fetch bulk data for the selected time period
+        // Use appropriate aggregation interval based on time range
+        let interval = 'raw';
+        if (range.endsWith('d') || range.endsWith('w') || range.endsWith('M') || range.endsWith('y')) {
+          interval = '1h';
+        } else if (range.endsWith('h') && parseInt(range) >= 3) {
+          interval = '5m';
+        } else if (range.endsWith('h')) {
+          interval = '1m';
+        } else {
+          interval = 'raw';
+        }
+
+        const data = await apiClient.getBulkClientBandwidthHistory(range, interval);
 
         const averages: Record<string, BandwidthAverages> = {};
 
-        const calculateAverage = (data: ClientBandwidthDataPoint[]): { rx: number; tx: number } => {
+        // Calculate average MB (not Mbps) - sum bytes and convert to MB
+        const calculateAverageMB = (data: ClientBandwidthDataPoint[]): { rx: number; tx: number } => {
           if (data.length === 0) return { rx: 0, tx: 0 };
-          const sumRx = data.reduce((sum, d) => sum + d.rx_mbps, 0);
-          const sumTx = data.reduce((sum, d) => sum + d.tx_mbps, 0);
+          // Sum all bytes and convert to MB
+          const totalRxBytes = data.reduce((sum, d) => sum + d.rx_bytes, 0);
+          const totalTxBytes = data.reduce((sum, d) => sum + d.tx_bytes, 0);
+          // Convert bytes to MB
           return {
-            rx: sumRx / data.length,
-            tx: sumTx / data.length,
+            rx: totalRxBytes / (1024 * 1024),
+            tx: totalTxBytes / (1024 * 1024),
           };
         };
 
         // Process each MAC address
-        const allMacs = new Set([
-          ...Object.keys(data5m),
-          ...Object.keys(data30m),
-          ...Object.keys(data1h),
-          ...Object.keys(data1d),
-        ]);
-
-        allMacs.forEach((mac) => {
-          const avg5m = calculateAverage(data5m[mac]?.data || []);
-          const avg30m = calculateAverage(data30m[mac]?.data || []);
-          const avg1h = calculateAverage(data1h[mac]?.data || []);
-          const avg1d = calculateAverage(data1d[mac]?.data || []);
+        Object.keys(data).forEach((mac) => {
+          const avg = calculateAverageMB(data[mac]?.data || []);
 
           averages[mac] = {
-            dl_5m: avg5m.rx,
-            dl_30m: avg30m.rx,
-            dl_1h: avg1h.rx,
-            dl_1d: avg1d.rx,
-            ul_5m: avg5m.tx,
-            ul_30m: avg30m.tx,
-            ul_1h: avg1h.tx,
-            ul_1d: avg1d.tx,
+            dl_5m: avg.rx,
+            dl_30m: avg.rx,
+            dl_1h: avg.rx,
+            dl_1d: avg.rx,
+            ul_5m: avg.tx,
+            ul_30m: avg.tx,
+            ul_1h: avg.tx,
+            ul_1d: avg.tx,
           };
         });
 
@@ -175,7 +190,7 @@ export function DeviceUsage() {
     fetchAverages();
     const interval = setInterval(fetchAverages, 60000); // Update every minute
     return () => clearInterval(interval);
-  }, [token]);
+  }, [token, tableTimeRange, tableCustomRange]);
 
   const isDeviceBlocked = (device: NetworkDevice) => {
     if (device.mac_address && blockedMacs.includes(device.mac_address.toLowerCase())) return true;
@@ -227,7 +242,7 @@ export function DeviceUsage() {
     if (!token) return;
     try {
       const range = timeRange === 'custom' ? customRange : timeRange;
-      if (!range || (timeRange === 'custom' && !customRange)) {
+      if (!range || (timeRange === 'custom' && (!customRange || !validateTimeRange(customRange)))) {
         setChartData([]);
         return;
       }
@@ -253,7 +268,7 @@ export function DeviceUsage() {
     }
   }, [timeRange, customRange, chartInterval, refreshInterval, chartModalOpen, selectedDevice, token]);
 
-  const formatMbps = (value: number): string => {
+  const formatMB = (value: number): string => {
     if (value === 0 || !value) return '0.00';
     return value.toFixed(2);
   };
@@ -288,6 +303,51 @@ export function DeviceUsage() {
           <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-6">Device Usage</h1>
           
           <Card>
+            {/* Time Range Selector for Table */}
+            <div className="mb-4 flex flex-wrap gap-4 items-end">
+              <div className="min-w-[150px]">
+                <Label htmlFor="table-range" value="Time Period" />
+                <Select 
+                  id="table-range" 
+                  value={tableTimeRange} 
+                  onChange={(e) => {
+                    setTableTimeRange(e.target.value);
+                    if (e.target.value !== 'custom') {
+                      setTableCustomRange('');
+                    }
+                  }}
+                >
+                  <option value="1m">1 minute</option>
+                  <option value="5m">5 minutes</option>
+                  <option value="10m">10 minutes</option>
+                  <option value="30m">30 minutes</option>
+                  <option value="1h">1 hour</option>
+                  <option value="3h">3 hours</option>
+                  <option value="6h">6 hours</option>
+                  <option value="12h">12 hours</option>
+                  <option value="1d">1 day</option>
+                  <option value="1w">1 week</option>
+                  <option value="1M">1 month</option>
+                  <option value="1y">1 year</option>
+                  <option value="custom">Custom</option>
+                </Select>
+              </div>
+              
+              {tableTimeRange === 'custom' && (
+                <div className="min-w-[150px]">
+                  <Label htmlFor="table-custom" value="Custom Range" />
+                  <TextInput 
+                    id="table-custom" 
+                    placeholder="e.g., 45m, 2h, 3d" 
+                    value={tableCustomRange} 
+                    onChange={(e) => setTableCustomRange(e.target.value)}
+                    color={tableCustomRange && !validateTimeRange(tableCustomRange) ? 'failure' : undefined}
+                    helperText={tableCustomRange && !validateTimeRange(tableCustomRange) ? 'Format: 1m, 5m, 1h, 1d, 1w, 1M, 1y' : undefined}
+                  />
+                </div>
+              )}
+            </div>
+
             <div className="hidden md:block overflow-x-auto">
               <Table>
                 <Table.Head>
@@ -295,8 +355,8 @@ export function DeviceUsage() {
                   <Table.HeadCell>MAC</Table.HeadCell>
                   <Table.HeadCell>IP</Table.HeadCell>
                   <Table.HeadCell>Status</Table.HeadCell>
-                  <Table.HeadCell>DL (5m/30m/1h/1d)</Table.HeadCell>
-                  <Table.HeadCell>UL (5m/30m/1h/1d)</Table.HeadCell>
+                  <Table.HeadCell>DL (MB)</Table.HeadCell>
+                  <Table.HeadCell>UL (MB)</Table.HeadCell>
                   <Table.HeadCell>Chart</Table.HeadCell>
                   <Table.HeadCell>Enable/Disable</Table.HeadCell>
                 </Table.Head>
@@ -323,23 +383,13 @@ export function DeviceUsage() {
                           </Badge>
                         </Table.Cell>
                         <Table.Cell className="text-sm">
-                          <div className="space-y-1">
-                            <div>5m: {formatMbps(averages.dl_5m)}</div>
-                            <div>30m: {formatMbps(averages.dl_30m)}</div>
-                            <div>1h: {formatMbps(averages.dl_1h)}</div>
-                            <div>1d: {formatMbps(averages.dl_1d)}</div>
-                          </div>
+                          {formatMB(averages.dl_1h)} MB
                         </Table.Cell>
                         <Table.Cell className="text-sm">
-                          <div className="space-y-1">
-                            <div>5m: {formatMbps(averages.ul_5m)}</div>
-                            <div>30m: {formatMbps(averages.ul_30m)}</div>
-                            <div>1h: {formatMbps(averages.ul_1h)}</div>
-                            <div>1d: {formatMbps(averages.ul_1d)}</div>
-                          </div>
+                          {formatMB(averages.ul_1h)} MB
                         </Table.Cell>
                         <Table.Cell>
-                          <Button size="xs" color="light" onClick={() => openChart(device)}>
+                          <Button size="xs" color="blue" onClick={() => openChart(device)}>
                             Chart
                           </Button>
                         </Table.Cell>
@@ -388,21 +438,15 @@ export function DeviceUsage() {
                     <div className="grid grid-cols-2 gap-2 text-sm mb-3">
                       <div>
                         <div className="font-semibold">Download</div>
-                        <div>5m: {formatMbps(averages.dl_5m)}</div>
-                        <div>30m: {formatMbps(averages.dl_30m)}</div>
-                        <div>1h: {formatMbps(averages.dl_1h)}</div>
-                        <div>1d: {formatMbps(averages.dl_1d)}</div>
+                        <div>{formatMB(averages.dl_1h)} MB</div>
                       </div>
                       <div>
                         <div className="font-semibold">Upload</div>
-                        <div>5m: {formatMbps(averages.ul_5m)}</div>
-                        <div>30m: {formatMbps(averages.ul_30m)}</div>
-                        <div>1h: {formatMbps(averages.ul_1h)}</div>
-                        <div>1d: {formatMbps(averages.ul_1d)}</div>
+                        <div>{formatMB(averages.ul_1h)} MB</div>
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button size="xs" color="light" onClick={() => openChart(device)} className="flex-1">
+                      <Button size="xs" color="blue" onClick={() => openChart(device)} className="flex-1">
                         Chart
                       </Button>
                       <Button
@@ -431,7 +475,14 @@ export function DeviceUsage() {
                 <div className="flex flex-wrap gap-4">
                   <div className="min-w-[120px]">
                     <Label htmlFor="chart-range" value="Time Range" className="text-xs mb-1" />
-                    <Select id="chart-range" sizing="sm" value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
+                    <Select id="chart-range" sizing="sm" value={timeRange} onChange={(e) => {
+                      setTimeRange(e.target.value);
+                      if (e.target.value !== 'custom') {
+                        setCustomRange('');
+                      }
+                    }}>
+                      <option value="1m">1 minute</option>
+                      <option value="5m">5 minutes</option>
                       <option value="10m">10 minutes</option>
                       <option value="30m">30 minutes</option>
                       <option value="1h">1 hour</option>
@@ -439,8 +490,9 @@ export function DeviceUsage() {
                       <option value="6h">6 hours</option>
                       <option value="12h">12 hours</option>
                       <option value="1d">1 day</option>
-                      <option value="3d">3 days</option>
-                      <option value="7d">7 days</option>
+                      <option value="1w">1 week</option>
+                      <option value="1M">1 month</option>
+                      <option value="1y">1 year</option>
                       <option value="custom">Custom</option>
                     </Select>
                   </div>
@@ -448,7 +500,14 @@ export function DeviceUsage() {
                   {timeRange === 'custom' && (
                     <div className="min-w-[100px]">
                       <Label htmlFor="chart-custom" value="Custom" className="text-xs mb-1" />
-                      <TextInput id="chart-custom" sizing="sm" placeholder="e.g., 45m" value={customRange} onChange={(e) => setCustomRange(e.target.value)} />
+                      <TextInput 
+                        id="chart-custom" 
+                        sizing="sm" 
+                        placeholder="e.g., 45m" 
+                        value={customRange} 
+                        onChange={(e) => setCustomRange(e.target.value)}
+                        color={customRange && !validateTimeRange(customRange) ? 'failure' : undefined}
+                      />
                     </div>
                   )}
                   
@@ -484,14 +543,17 @@ export function DeviceUsage() {
                         tick={{ fontSize: 12 }}
                         interval={Math.floor(chartDataFormatted.length / 8)}
                       />
-                      <YAxis tick={{ fontSize: 12 }} />
+                      <YAxis 
+                        tick={{ fontSize: 12 }} 
+                        label={{ value: 'Mbit/s', angle: -90, position: 'insideLeft' }}
+                      />
                       <Tooltip />
                       <Legend />
                       <Line 
                         type="monotone" 
                         dataKey="download" 
                         stroke="#3b82f6" 
-                        name="Download"
+                        name="Download (Mbit/s)"
                         strokeWidth={2}
                         dot={false}
                         isAnimationActive={false}
@@ -500,7 +562,7 @@ export function DeviceUsage() {
                         type="monotone" 
                         dataKey="upload" 
                         stroke="#10b981" 
-                        name="Upload"
+                        name="Upload (Mbit/s)"
                         strokeWidth={2}
                         dot={false}
                         isAnimationActive={false}

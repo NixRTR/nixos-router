@@ -16,6 +16,21 @@ from ..collectors.dhcp import parse_kea_leases
 from ..database import AsyncSessionLocal, DeviceOverrideDB
 
 
+def _is_ipv4(ip: str) -> bool:
+    """Check if an IP address is IPv4"""
+    try:
+        parts = ip.split('.')
+        if len(parts) != 4:
+            return False
+        for part in parts:
+            num = int(part)
+            if num < 0 or num > 255:
+                return False
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
 router = APIRouter(prefix="/api/devices", tags=["devices"])
 
 
@@ -58,6 +73,9 @@ async def get_all_devices(
     """
     dhcp_leases = parse_kea_leases()
     devices = discover_network_devices(dhcp_leases)
+
+    # Filter to IPv4 only
+    devices = [d for d in devices if _is_ipv4(d.ip_address)]
 
     # Load overrides for all MACs
     macs = [d.mac_address for d in devices]
@@ -131,8 +149,8 @@ async def get_devices_by_network(
     dhcp_leases = parse_kea_leases()
     all_devices = discover_network_devices(dhcp_leases)
     
-    # Filter by network
-    filtered = [d for d in all_devices if d.network == network]
+    # Filter to IPv4 only and by network
+    filtered = [d for d in all_devices if _is_ipv4(d.ip_address) and d.network == network]
     
     return [
         NetworkDevice(

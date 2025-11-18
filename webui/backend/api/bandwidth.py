@@ -20,6 +20,21 @@ from ..config import settings
 from sqlalchemy import func
 
 
+def _is_ipv4(ip: str) -> bool:
+    """Check if an IP address is IPv4"""
+    try:
+        parts = ip.split('.')
+        if len(parts) != 4:
+            return False
+        for part in parts:
+            num = int(part)
+            if num < 0 or num > 255:
+                return False
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
 router = APIRouter(prefix="/api/bandwidth", tags=["bandwidth"])
 
 
@@ -331,6 +346,8 @@ async def get_current_client_bandwidth(
     # Get device information for hostnames
     dhcp_leases = parse_kea_leases()
     devices = discover_network_devices(dhcp_leases)
+    # Filter to IPv4 only
+    devices = [d for d in devices if _is_ipv4(d.ip_address)]
     device_map = {d.mac_address.lower(): d for d in devices}
     
     # Get latest stats from database for cumulative totals
@@ -354,9 +371,12 @@ async def get_current_client_bandwidth(
         result = await session.execute(query)
         db_stats = {str(row.mac_address).lower(): row for row in result.scalars().all()}
     
-    # Combine current data with database stats
+    # Combine current data with database stats (already filtered to IPv4 by collector)
     results = []
     for data in current_data:
+        # Double-check IPv4 (collector should already filter, but be safe)
+        if not _is_ipv4(data['ip_address']):
+            continue
         mac = data['mac_address'].lower()
         device = device_map.get(mac)
         
@@ -594,6 +614,9 @@ async def get_bulk_client_bandwidth_history(
         # Get client info from first entry
         first_stat = stats[0]
         ip_address = str(first_stat.ip_address)
+        # Filter to IPv4 only
+        if not _is_ipv4(ip_address):
+            continue
         network = first_stat.network
         
         # Process data points
