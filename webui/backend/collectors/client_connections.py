@@ -99,10 +99,139 @@ def _resolve_hostname(ip: str) -> Optional[str]:
         return None
 
 
-def _parse_conntrack_output(output: str) -> Dict[Tuple[str, str, int], Dict[str, int]]:
-    """Parse conntrack output to extract connection information
+def _parse_conntrack_proc(proc_output: str) -> Dict[Tuple[str, str, int], Dict[str, int]]:
+    """Parse /proc/net/netfilter/nf_conntrack output
     
-    Format: src=IP dst=IP sport=PORT dport=PORT bytes=RX:TX packets=PACKETS
+    Format: Each line contains connection info with byte counts
+    Example: ipv4     2 tcp      6 431999 ESTABLISHED src=192.168.2.31 dst=3.13.191.95 sport=35712 dport=443 packets=12345 bytes=1234567890 src=3.13.191.95 dst=216.137.218.48 sport=443 dport=35712 packets=9876 bytes=987654321 [ASSURED] mark=0
+    
+    Returns:
+        Dict[(client_ip, remote_ip, remote_port), {rx_bytes_total, tx_bytes_total}]
+    """
+    connections = {}
+    
+    for line in proc_output.splitlines():
+        if not line.strip():
+            continue
+        
+        # Extract src/dst/ports from first part of connection
+        # Format: ipv4 ... src=IP dst=IP sport=PORT dport=PORT ... bytes=TX:RX ...
+        match = re.search(r'src=(\S+)\s+dst=(\S+)\s+sport=(\d+)\s+dport=(\d+)', line)
+        if not match:
+            continue
+        
+        src_ip = match.group(1)
+        dst_ip = match.group(2)
+        src_port = int(match.group(3))
+        dst_port = int(match.group(4))
+        
+        # Only process IPv4 addresses
+        if not _is_ipv4(src_ip) or not _is_ipv4(dst_ip):
+            continue
+        
+        # Only track connections where client is in bridge subnets
+        if not (src_ip.startswith('192.168.2.') or src_ip.startswith('192.168.3.')):
+            continue
+        
+        # Extract bytes from the line
+        # Format: bytes=TX:RX (bytes sent from src->dst : bytes sent from dst->src)
+        bytes_match = re.search(r'bytes=(\d+):(\d+)', line)
+        if not bytes_match:
+            continue
+        
+        bytes_sent = int(bytes_match.group(1))  # TX (src->dst)
+        bytes_recv = int(bytes_match.group(2))    # RX (dst->src)
+        
+        # For client at src_ip:
+        # - tx_bytes_total = bytes_sent (client -> remote)
+        # - rx_bytes_total = bytes_recv (remote -> client)
+        
+        key = (src_ip, dst_ip, dst_port)
+        connections[key] = {
+            'rx_bytes_total': bytes_recv,
+            'tx_bytes_total': bytes_sent
+        }
+    
+    return connections
+
+
+def _parse_conntrack_xml(xml_output: str) -> Dict[Tuple[str, str, int], Dict[str, int]]:
+    """Parse conntrack XML output to extract connection information
+    
+    Returns:
+        Dict[(client_ip, remote_ip, remote_port), {rx_bytes_total, tx_bytes_total}]
+    """
+    connections = {}
+    try:
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(xml_output)
+        
+        for flow in root.findall('.//flow'):
+            # Extract connection info from XML
+            meta = flow.find('meta')
+            if meta is None:
+                continue
+            
+            layer3 = meta.find('layer3')
+            layer4 = meta.find('layer4')
+            if layer3 is None or layer4 is None:
+                continue
+            
+            src_elem = layer3.find('src')
+            dst_elem = layer3.find('dst')
+            if src_elem is None or dst_elem is None:
+                continue
+            
+            src_ip = src_elem.text
+            dst_ip = dst_elem.text
+            
+            # Get ports from layer4
+            sport_elem = layer4.find('sport')
+            dport_elem = layer4.find('dport')
+            if sport_elem is None or dport_elem is None:
+                continue
+            
+            src_port = int(sport_elem.text)
+            dst_port = int(dport_elem.text)
+            
+            # Only process IPv4 addresses
+            if not _is_ipv4(src_ip) or not _is_ipv4(dst_ip):
+                continue
+            
+            # Only track connections where client is in bridge subnets
+            if not (src_ip.startswith('192.168.2.') or src_ip.startswith('192.168.3.')):
+                continue
+            
+            # Extract bytes from orig and reply
+            orig = flow.find('orig')
+            reply = flow.find('reply')
+            
+            bytes_sent = 0
+            bytes_recv = 0
+            
+            if orig is not None:
+                bytes_elem = orig.find('bytes')
+                if bytes_elem is not None:
+                    bytes_sent = int(bytes_elem.text)
+            
+            if reply is not None:
+                bytes_elem = reply.find('bytes')
+                if bytes_elem is not None:
+                    bytes_recv = int(bytes_elem.text)
+            
+            key = (src_ip, dst_ip, dst_port)
+            connections[key] = {
+                'rx_bytes_total': bytes_recv,
+                'tx_bytes_total': bytes_sent
+            }
+    except Exception as e:
+        print(f"Warning: Failed to parse conntrack XML: {e}")
+    
+    return connections
+
+
+def _parse_conntrack_output(output: str) -> Dict[Tuple[str, str, int], Dict[str, int]]:
+    """Parse conntrack extended output (fallback - may not include bytes)
     
     Returns:
         Dict[(client_ip, remote_ip, remote_port), {rx_bytes_total, tx_bytes_total}]
@@ -236,33 +365,45 @@ def collect_client_connections() -> List[Dict]:
     results = []
     
     try:
-        # Query conntrack for active connections
+        # Query conntrack for active connections with byte counts
+        # Use -o xml to get byte counts, or parse /proc/net/netfilter/nf_conntrack directly
+        # Try XML format first as it includes byte counts
         result = _run_conntrack([
-            "-L", "-n", "--output", "extended"
+            "-L", "-n", "-o", "xml"
         ])
         
-        if result.returncode != 0:
+        # Parse connections
+        current_connections = {}
+        
+        if result.returncode != 0 or not result.stdout:
             print(f"Warning: conntrack query failed: {result.stderr}")
-            return results
-        
-        # Debug: log first few lines of output to understand format
-        if result.stdout:
-            lines = result.stdout.splitlines()
-            if lines:
-                print(f"Debug: conntrack returned {len(lines)} lines. First line sample: {lines[0][:200]}")
-        
-        # Parse conntrack output
-        current_connections = _parse_conntrack_output(result.stdout)
+            # Try fallback to /proc
+            try:
+                with open('/proc/net/netfilter/nf_conntrack', 'r') as f:
+                    proc_output = f.read()
+                current_connections = _parse_conntrack_proc(proc_output)
+            except Exception as e:
+                print(f"Warning: Failed to read /proc/net/netfilter/nf_conntrack: {e}")
+                return results
+        else:
+            # Try parsing XML output first
+            if result.stdout and '<?xml' in result.stdout:
+                # XML format - parse it
+                current_connections = _parse_conntrack_xml(result.stdout)
+            else:
+                # Try parsing as extended format (though it might not have bytes)
+                current_connections = _parse_conntrack_output(result.stdout)
+                
+                # If no connections found, try /proc fallback
+                if not current_connections:
+                    try:
+                        with open('/proc/net/netfilter/nf_conntrack', 'r') as f:
+                            proc_output = f.read()
+                        current_connections = _parse_conntrack_proc(proc_output)
+                    except Exception as e:
+                        print(f"Warning: Failed to read /proc/net/netfilter/nf_conntrack: {e}")
         
         if not current_connections:
-            # Debug: check if we got any output at all
-            if result.stdout:
-                lines = result.stdout.splitlines()
-                print(f"Debug: conntrack returned {len(lines)} lines but parsed 0 connections")
-                if lines:
-                    # Show first few non-empty lines for debugging
-                    sample_lines = [l[:150] for l in lines[:3] if l.strip()]
-                    print(f"Debug: Sample lines: {sample_lines}")
             return results
         
         print(f"Debug: Parsed {len(current_connections)} connections from conntrack")
