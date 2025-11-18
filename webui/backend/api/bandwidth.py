@@ -6,6 +6,7 @@ from typing import List, Optional, Dict
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from pydantic import BaseModel
+import re
 
 from ..auth import get_current_user
 from ..database import AsyncSessionLocal, InterfaceStatsDB, ClientBandwidthStatsDB
@@ -256,6 +257,20 @@ async def get_client_bandwidth_debug(
         )
         if result.returncode == 0:
             debug_info["nftables_set"] = result.stdout.splitlines()
+        
+        # List all rules in forward chain to see per-IP rules
+        result = subprocess.run(
+            [nft, "list", "chain", "inet", "router_bandwidth", "forward"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            debug_info["nftables_rules"] = result.stdout.splitlines()
+            # Count per-IP rules (rules with specific IP addresses, not @client_ips)
+            per_ip_rules = [line for line in result.stdout.splitlines() if re.search(r'ip\s+(daddr|saddr)\s+\d+\.\d+\.\d+\.\d+', line)]
+            debug_info["per_ip_rule_count"] = len(per_ip_rules)
+            debug_info["sample_per_ip_rules"] = per_ip_rules[:5] if per_ip_rules else []
         
         # Test collector
         try:

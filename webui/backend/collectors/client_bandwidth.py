@@ -80,24 +80,45 @@ def _add_ip_to_nftables(ip: str) -> bool:
             "add", "element", "inet", "router_bandwidth", "client_ips", "{", ip, "}"
         ])
         
-        if result_set.returncode == 0:
-            # Add per-IP counter rules for rx (download)
-            result_rx = _run_nft([
-                "insert", "rule", "inet", "router_bandwidth", "forward",
-                "ip", "daddr", ip, "counter", "name", f"rx_{ip.replace('.', '_')}"
-            ])
+        if result_set.returncode != 0:
+            # Set add might fail if IP already exists, that's okay
+            if "File exists" not in result_set.stderr and "already exists" not in result_set.stderr.lower():
+                print(f"Warning: Failed to add IP {ip} to set: {result_set.stderr}")
+        
+        # Add per-IP counter rules for rx (download)
+        # Insert at position 0 (before the aggregate counter rules)
+        counter_name_rx = f"rx_{ip.replace('.', '_')}"
+        result_rx = _run_nft([
+            "insert", "rule", "inet", "router_bandwidth", "forward", "position", "0",
+            "ip", "daddr", ip, "counter", "name", counter_name_rx
+        ])
+        
+        if result_rx.returncode != 0:
+            # Rule might already exist, try to add it anyway
+            if "File exists" not in result_rx.stderr and "already exists" not in result_rx.stderr.lower():
+                print(f"Warning: Failed to add RX rule for IP {ip}: {result_rx.stderr}")
+        
+        # Add per-IP counter rules for tx (upload)
+        counter_name_tx = f"tx_{ip.replace('.', '_')}"
+        result_tx = _run_nft([
+            "insert", "rule", "inet", "router_bandwidth", "forward", "position", "0",
+            "ip", "saddr", ip, "counter", "name", counter_name_tx
+        ])
+        
+        if result_tx.returncode != 0:
+            # Rule might already exist
+            if "File exists" not in result_tx.stderr and "already exists" not in result_tx.stderr.lower():
+                print(f"Warning: Failed to add TX rule for IP {ip}: {result_tx.stderr}")
+        
+        # Consider it successful if set was added (rules might already exist)
+        if result_set.returncode == 0 or "File exists" in result_set.stderr or "already exists" in result_set.stderr.lower():
+            _known_ips.add(ip)
+            return True
             
-            # Add per-IP counter rules for tx (upload)
-            result_tx = _run_nft([
-                "insert", "rule", "inet", "router_bandwidth", "forward",
-                "ip", "saddr", ip, "counter", "name", f"tx_{ip.replace('.', '_')}"
-            ])
-            
-            if result_rx.returncode == 0 and result_tx.returncode == 0:
-                _known_ips.add(ip)
-                return True
     except Exception as e:
         print(f"Error adding IP {ip} to nftables: {e}")
+        import traceback
+        traceback.print_exc()
     
     return False
 
@@ -111,16 +132,123 @@ def _read_nftables_counters() -> Dict[str, Dict[str, int]]:
     counters = {}
     
     try:
-        # List all counters in the table
+        # First, try listing counters directly
         result = _run_nft([
             "list", "counters", "inet", "router_bandwidth"
         ])
         
         if result.returncode != 0:
-            print(f"Warning: nft list counters failed: {result.stderr}")
+            # Try listing the full ruleset to see counters in rules
+            result = _run_nft([
+                "list", "ruleset", "inet", "router_bandwidth"
+            ])
+            
+            if result.returncode != 0:
+                print(f"Warning: nft list failed: {result.stderr}")
+                return counters
+            
+            # Parse counters from ruleset output
+            # Format: ip daddr 192.168.1.1 counter name rx_192_168_1_1 packets 1234 bytes 567890
+            rx_rule_pattern = r'ip\s+daddr\s+(\d+\.\d+\.\d+\.\d+)\s+counter\s+name\s+rx_\d+_\d+_\d+_\d+\s+packets\s+\d+\s+bytes\s+(\d+)'
+            tx_rule_pattern = r'ip\s+saddr\s+(\d+\.\d+\.\d+\.\d+)\s+counter\s+name\s+tx_\d+_\d+_\d+_\d+\s+packets\s+\d+\s+bytes\s+(\d+)'
+            
+            for line in result.stdout.splitlines():
+                rx_match = re.search(rx_rule_pattern, line)
+                if rx_match:
+                    ip = rx_match.group(1)
+                    bytes_val = int(rx_match.group(2))
+                    if ip not in counters:
+                        counters[ip] = {'rx_bytes_total': 0, 'tx_bytes_total': 0}
+                    counters[ip]['rx_bytes_total'] = bytes_val
+                
+                tx_match = re.search(tx_rule_pattern, line)
+                if tx_match:
+                    ip = tx_match.group(1)
+                    bytes_val = int(tx_match.group(2))
+                    if ip not in counters:
+                        counters[ip] = {'rx_bytes_total': 0, 'tx_bytes_total': 0}
+                    counters[ip]['tx_bytes_total'] = bytes_val
+            
             return counters
         
-        # Parse counter output
+        # Also try listing ruleset to find counters in rules
+        result_ruleset = _run_nft([
+            "list", "ruleset", "inet", "router_bandwidth"
+        ])
+        
+        if result_ruleset.returncode == 0:
+            # Parse counters from ruleset - look for per-IP rules with named counters
+            # Format can be:
+            # - Single line: ip daddr 192.168.1.1 counter name rx_192_168_1_1 packets 1234 bytes 567890
+            # - Multi-line: ip daddr 192.168.1.1 counter name rx_192_168_1_1 { packets 1234 bytes 567890 }
+            # - Or: ip daddr 192.168.1.1 counter name rx_192_168_1_1
+            #       packets 1234
+            #       bytes 567890
+            rx_rule_pattern = r'ip\s+daddr\s+(\d+\.\d+\.\d+\.\d+)\s+counter\s+name\s+rx_(\d+)_(\d+)_(\d+)_(\d+)'
+            tx_rule_pattern = r'ip\s+saddr\s+(\d+\.\d+\.\d+\.\d+)\s+counter\s+name\s+tx_(\d+)_(\d+)_(\d+)_(\d+)'
+            bytes_pattern = r'bytes\s+(\d+)'
+            
+            current_ip = None
+            current_type = None
+            in_counter_block = False
+            
+            for i, line in enumerate(result_ruleset.stdout.splitlines()):
+                line_stripped = line.strip()
+                
+                # Check for RX rule
+                rx_match = re.search(rx_rule_pattern, line_stripped)
+                if rx_match:
+                    ip = f"{rx_match.group(2)}.{rx_match.group(3)}.{rx_match.group(4)}.{rx_match.group(5)}"
+                    current_ip = ip
+                    current_type = 'rx'
+                    in_counter_block = True
+                    if ip not in counters:
+                        counters[ip] = {'rx_bytes_total': 0, 'tx_bytes_total': 0}
+                    
+                    # Check if bytes is on same line
+                    bytes_match = re.search(bytes_pattern, line_stripped)
+                    if bytes_match:
+                        bytes_val = int(bytes_match.group(1))
+                        counters[ip]['rx_bytes_total'] = bytes_val
+                        current_ip = None
+                        current_type = None
+                        in_counter_block = False
+                    continue
+                
+                # Check for TX rule
+                tx_match = re.search(tx_rule_pattern, line_stripped)
+                if tx_match:
+                    ip = f"{tx_match.group(2)}.{tx_match.group(3)}.{tx_match.group(4)}.{tx_match.group(5)}"
+                    current_ip = ip
+                    current_type = 'tx'
+                    in_counter_block = True
+                    if ip not in counters:
+                        counters[ip] = {'rx_bytes_total': 0, 'tx_bytes_total': 0}
+                    
+                    # Check if bytes is on same line
+                    bytes_match = re.search(bytes_pattern, line_stripped)
+                    if bytes_match:
+                        bytes_val = int(bytes_match.group(1))
+                        counters[ip]['tx_bytes_total'] = bytes_val
+                        current_ip = None
+                        current_type = None
+                        in_counter_block = False
+                    continue
+                
+                # If we're in a counter block, look for bytes value
+                if in_counter_block and current_ip:
+                    bytes_match = re.search(bytes_pattern, line_stripped)
+                    if bytes_match:
+                        bytes_val = int(bytes_match.group(1))
+                        if current_type == 'rx':
+                            counters[current_ip]['rx_bytes_total'] = bytes_val
+                        elif current_type == 'tx':
+                            counters[current_ip]['tx_bytes_total'] = bytes_val
+                        current_ip = None
+                        current_type = None
+                        in_counter_block = False
+        
+        # Parse counter output (if counters were listed separately)
         # Format: counter rx_192_168_1_1 { packets 1234 bytes 567890 }
         # Or multi-line format:
         # counter rx_192_168_1_1 {
