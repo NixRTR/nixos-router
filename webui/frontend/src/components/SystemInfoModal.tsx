@@ -1,5 +1,5 @@
 /**
- * System Info Modal - Displays fastfetch output as HTML
+ * System Info Modal - Displays fastfetch output as WebP image
  */
 import { useState, useEffect } from 'react';
 import { Modal } from 'flowbite-react';
@@ -11,7 +11,7 @@ interface SystemInfoModalProps {
 }
 
 export function SystemInfoModal({ show, onClose }: SystemInfoModalProps) {
-  const [htmlContent, setHtmlContent] = useState<string>('');
+  const [imageData, setImageData] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,7 +20,7 @@ export function SystemInfoModal({ show, onClose }: SystemInfoModalProps) {
       fetchFastfetch();
     } else {
       // Reset state when modal closes
-      setHtmlContent('');
+      setImageData('');
       setError(null);
     }
   }, [show]);
@@ -30,10 +30,10 @@ export function SystemInfoModal({ show, onClose }: SystemInfoModalProps) {
     setError(null);
     try {
       const data = await apiClient.getFastfetch();
-      setHtmlContent(data.html);
+      setImageData(data.image);
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'Failed to fetch system info');
-      setHtmlContent('');
+      setImageData('');
     } finally {
       setLoading(false);
     }
@@ -54,17 +54,12 @@ export function SystemInfoModal({ show, onClose }: SystemInfoModalProps) {
               Error: {error}
             </div>
           )}
-          {!loading && !error && htmlContent && (
-            <div className="overflow-auto max-h-[70vh] w-full">
-              <div 
-                className="font-mono text-xs sm:text-sm bg-black text-white p-4 rounded-lg overflow-x-auto"
-                style={{
-                  fontFamily: "'Courier New', 'Monaco', 'Menlo', 'Consolas', monospace",
-                  lineHeight: '1.4',
-                  whiteSpace: 'pre-wrap',
-                  wordWrap: 'break-word'
-                }}
-                dangerouslySetInnerHTML={{ __html: htmlContent }}
+          {!loading && !error && imageData && (
+            <div className="overflow-auto max-h-[70vh] w-full flex justify-center">
+              <img 
+                src={`data:image/webp;base64,${imageData}`}
+                alt="System Information"
+                className="max-w-full h-auto rounded-lg"
               />
             </div>
           )}

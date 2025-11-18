@@ -107,7 +107,7 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
             <FlowbiteSidebar.ItemGroup>
               <FlowbiteSidebar.Item 
                 icon={HiInformationCircle} 
-                className="cursor-pointer"
+                style={{ cursor: 'pointer' }}
                 onClick={() => {
                   handleItemClick();
                   setSystemInfoModalOpen(true);
@@ -117,7 +117,7 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
               </FlowbiteSidebar.Item>
               <FlowbiteSidebar.Item 
                 icon={HiLogout} 
-                className="cursor-pointer"
+                style={{ cursor: 'pointer' }}
                 onClick={() => {
                   handleItemClick();
                   onLogout();

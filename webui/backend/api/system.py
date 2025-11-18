@@ -325,62 +325,75 @@ def _find_fastfetch() -> str:
     raise RuntimeError("fastfetch binary not found")
 
 
-def _ansi_to_html(ansi_text: str) -> str:
-    """Convert ANSI escape codes to HTML with proper styling
+def _ansi_to_image(ansi_text: str) -> bytes:
+    """Convert ANSI escape codes to WebP image using Pillow
     
-    Converts ANSI escape sequences to HTML spans with CSS styling.
-    Handles colors, backgrounds, and text styles (bold, italic, underline).
+    This is the simplest approach: render ANSI text directly to an image.
+    Returns WebP image bytes.
     """
-    import re
+    from PIL import Image, ImageDraw, ImageFont
     
-    # ANSI color codes mapping (standard 16 colors)
+    # ANSI color codes mapping (standard 16 colors) - RGB tuples
     ansi_colors = {
-        '30': '#000000',  # Black
-        '31': '#cd0000',  # Red
-        '32': '#00cd00',  # Green
-        '33': '#cdcd00',  # Yellow
-        '34': '#0000ee',  # Blue
-        '35': '#cd00cd',  # Magenta
-        '36': '#00cdcd',  # Cyan
-        '37': '#e5e5e5',  # White
-        '90': '#7f7f7f',  # Bright Black
-        '91': '#ff0000',  # Bright Red
-        '92': '#00ff00',  # Bright Green
-        '93': '#ffff00',  # Bright Yellow
-        '94': '#5c5cff',  # Bright Blue
-        '95': '#ff00ff',  # Bright Magenta
-        '96': '#00ffff',  # Bright Cyan
-        '97': '#ffffff',  # Bright White
+        '30': (0, 0, 0),        # Black
+        '31': (205, 0, 0),      # Red
+        '32': (0, 205, 0),      # Green
+        '33': (205, 205, 0),    # Yellow
+        '34': (0, 0, 238),      # Blue
+        '35': (205, 0, 205),    # Magenta
+        '36': (0, 205, 205),    # Cyan
+        '37': (229, 229, 229),  # White
+        '90': (127, 127, 127),  # Bright Black
+        '91': (255, 0, 0),      # Bright Red
+        '92': (0, 255, 0),      # Bright Green
+        '93': (255, 255, 0),    # Bright Yellow
+        '94': (92, 92, 255),    # Bright Blue
+        '95': (255, 0, 255),    # Bright Magenta
+        '96': (0, 255, 255),    # Bright Cyan
+        '97': (255, 255, 255),  # Bright White
     }
     
     # Background colors
     bg_colors = {
-        '40': '#000000',
-        '41': '#cd0000',
-        '42': '#00cd00',
-        '43': '#cdcd00',
-        '44': '#0000ee',
-        '45': '#cd00cd',
-        '46': '#00cdcd',
-        '47': '#e5e5e5',
-        '100': '#7f7f7f',
-        '101': '#ff0000',
-        '102': '#00ff00',
-        '103': '#ffff00',
-        '104': '#5c5cff',
-        '105': '#ff00ff',
-        '106': '#00ffff',
-        '107': '#ffffff',
+        '40': (0, 0, 0),
+        '41': (205, 0, 0),
+        '42': (0, 205, 0),
+        '43': (205, 205, 0),
+        '44': (0, 0, 238),
+        '45': (205, 0, 205),
+        '46': (0, 205, 205),
+        '47': (229, 229, 229),
+        '100': (127, 127, 127),
+        '101': (255, 0, 0),
+        '102': (0, 255, 0),
+        '103': (255, 255, 0),
+        '104': (92, 92, 255),
+        '105': (255, 0, 255),
+        '106': (0, 255, 255),
+        '107': (255, 255, 255),
     }
     
-    html_parts = []
-    i = 0
-    open_spans = []  # Stack of open span tags
+    # Try to use a monospace font, fallback to default
+    try:
+        # Try common monospace fonts
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", 14)
+    except:
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/TTF/DejaVuSansMono.ttf", 14)
+        except:
+            try:
+                font = ImageFont.truetype("Courier", 14)
+            except:
+                font = ImageFont.load_default()
     
-    def close_spans():
-        while open_spans:
-            html_parts.append('</span>')
-            open_spans.pop()
+    # Parse ANSI text and build lines with color/style info
+    lines = []
+    current_fg = (229, 229, 229)  # Default white
+    current_bg = (0, 0, 0)  # Default black
+    current_bold = False
+    
+    i = 0
+    current_line = []
     
     while i < len(ansi_text):
         if ansi_text[i] == '\x1b' or ansi_text[i] == '\033':
@@ -398,81 +411,107 @@ def _ansi_to_html(ansi_text: str) -> str:
                     if code == 'm':
                         # SGR (Select Graphic Rendition) - colors and styles
                         if seq == '' or seq == '0':
-                            # Reset - close all spans
-                            close_spans()
+                            # Reset
+                            current_fg = (229, 229, 229)
+                            current_bg = (0, 0, 0)
+                            current_bold = False
                         else:
                             codes = seq.split(';')
-                            styles = []
-                            
                             for c in codes:
                                 if c == '':
                                     continue
                                 elif c in ansi_colors:
-                                    styles.append(f'color: {ansi_colors[c]}')
+                                    current_fg = ansi_colors[c]
                                 elif c in bg_colors:
-                                    styles.append(f'background-color: {bg_colors[c]}')
+                                    current_bg = bg_colors[c]
                                 elif c == '1':
-                                    styles.append('font-weight: bold')
-                                elif c == '3':
-                                    styles.append('font-style: italic')
-                                elif c == '4':
-                                    styles.append('text-decoration: underline')
+                                    current_bold = True
                                 elif c == '22':
-                                    # Normal intensity (not bold)
-                                    styles.append('font-weight: normal')
-                                elif c == '23':
-                                    # Not italic
-                                    styles.append('font-style: normal')
-                                elif c == '24':
-                                    # Not underlined
-                                    styles.append('text-decoration: none')
-                            
-                            if styles:
-                                # Close previous spans and open new one
-                                close_spans()
-                                style_str = '; '.join(styles)
-                                html_parts.append(f'<span style="{style_str}">')
-                                open_spans.append(style_str)
+                                    current_bold = False
+                                elif c == '39':  # Default foreground
+                                    current_fg = (229, 229, 229)
+                                elif c == '49':  # Default background
+                                    current_bg = (0, 0, 0)
                     
                     i = j + 1
                     continue
         
-        # Regular character - escape HTML
+        # Regular character
         char = ansi_text[i]
-        if char == '<':
-            html_parts.append('&lt;')
-        elif char == '>':
-            html_parts.append('&gt;')
-        elif char == '&':
-            html_parts.append('&amp;')
-        elif char == '\n':
-            html_parts.append('<br>')
+        if char == '\n':
+            lines.append(current_line)
+            current_line = []
         elif char == '\r':
             pass  # Ignore carriage return
         elif char == '\t':
-            html_parts.append('&nbsp;&nbsp;&nbsp;&nbsp;')  # Tab as 4 spaces
-        elif char == ' ':
-            html_parts.append('&nbsp;')
+            # Tab as 4 spaces
+            for _ in range(4):
+                current_line.append((' ', current_fg, current_bg, current_bold))
         else:
-            html_parts.append(char)
+            current_line.append((char, current_fg, current_bg, current_bold))
         
         i += 1
     
-    # Close any remaining open spans
-    close_spans()
+    if current_line:
+        lines.append(current_line)
     
-    return ''.join(html_parts)
+    if not lines:
+        lines = [[('No output', (229, 229, 229), (0, 0, 0), False)]]
+    
+    # Calculate image dimensions
+    char_width = 8  # Approximate character width
+    char_height = 16  # Approximate character height
+    line_height = char_height + 2  # Add some spacing
+    
+    max_line_length = max(len(line) for line in lines) if lines else 1
+    img_width = max_line_length * char_width + 20  # Padding
+    img_height = len(lines) * line_height + 20  # Padding
+    
+    # Create image with black background
+    img = Image.new('RGB', (img_width, img_height), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    
+    # Draw text line by line
+    y = 10
+    for line in lines:
+        x = 10
+        for char, fg, bg, bold in line:
+            # Draw background if not black
+            if bg != (0, 0, 0):
+                draw.rectangle([x, y, x + char_width, y + char_height], fill=bg)
+            
+            # Draw character
+            font_to_use = font
+            if bold:
+                # Try to use bold font, fallback to regular
+                try:
+                    font_to_use = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 14)
+                except:
+                    pass
+            
+            draw.text((x, y), char, fill=fg, font=font_to_use)
+            x += char_width
+        
+        y += line_height
+    
+    # Convert to WebP
+    import io
+    output = io.BytesIO()
+    img.save(output, format='WEBP', quality=85)
+    return output.getvalue()
 
 
 @router.get("/fastfetch")
 async def get_fastfetch(
     _: str = Depends(get_current_user)
 ) -> dict:
-    """Run fastfetch and return the output as HTML with ANSI colors rendered
+    """Run fastfetch and return the output as WebP image
     
     Returns:
-        dict: Contains 'html' field with HTML-rendered fastfetch output
+        dict: Contains 'image' field with base64-encoded WebP image data
     """
+    import base64
+    
     try:
         fastfetch_bin = _find_fastfetch()
     except RuntimeError as e:
@@ -493,10 +532,13 @@ async def get_fastfetch(
                 detail=f"fastfetch failed: {result.stderr or 'Unknown error'}"
             )
         
-        # Convert ANSI output to HTML
-        html_content = _ansi_to_html(result.stdout)
+        # Convert ANSI output to WebP image
+        image_bytes = _ansi_to_image(result.stdout)
         
-        return {"html": html_content}
+        # Return as base64-encoded string
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+        
+        return {"image": image_base64}
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=500, detail="fastfetch timed out")
     except Exception as e:

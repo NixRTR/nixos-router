@@ -27,3 +27,17 @@
   }
 }
 
+/* Ensure clickable sidebar items show pointer cursor */
+@layer utilities {
+  /* Target Flowbite sidebar items that are clickable */
+  [role="menuitem"] {
+    cursor: pointer;
+  }
+  
+  /* More specific targeting for Flowbite sidebar items */
+  button[role="menuitem"],
+  a[role="menuitem"] {
+    cursor: pointer !important;
+  }
+}
+
