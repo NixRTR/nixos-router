@@ -14,7 +14,7 @@ let
     
     src = pkgs.python311Packages.fetchPypi {
       inherit pname version;
-      sha256 = "sha256-97c7cf2d16ece0decc51c898f2691c3894e6e5f1c60fc9f153c9361dce578c68";
+      sha256 = "97c7cf2d16ece0decc51c898f2691c3894e6e5f1c60fc9f153c9361dce578c68";
     };
     
     propagatedBuildInputs = with pkgs.python311Packages; [
