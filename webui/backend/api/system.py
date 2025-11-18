@@ -328,7 +328,7 @@ def _find_fastfetch() -> str:
 def _ansi_to_image(ansi_text: str) -> bytes:
     """Convert ANSI escape codes to WebP image using Pillow
     
-    This is the simplest approach: render ANSI text directly to an image.
+    Renders ANSI text with proper font metrics and accurate spacing.
     Returns WebP image bytes.
     """
     from PIL import Image, ImageDraw, ImageFont
@@ -373,18 +373,56 @@ def _ansi_to_image(ansi_text: str) -> bytes:
         '107': (255, 255, 255),
     }
     
-    # Try to use a monospace font, fallback to default
-    try:
-        # Try common monospace fonts
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", 14)
-    except:
+    # Try to use a monospace font with larger size for better quality
+    font_size = 16
+    font = None
+    font_bold = None
+    
+    font_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/TTF/DejaVuSansMono.ttf",
+        "/nix/store/*/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    ]
+    
+    for path in font_paths:
         try:
-            font = ImageFont.truetype("/usr/share/fonts/TTF/DejaVuSansMono.ttf", 14)
+            if '*' in path:
+                # Try to find font in nix store
+                import glob
+                matches = glob.glob(path)
+                if matches:
+                    font = ImageFont.truetype(matches[0], font_size)
+                    try:
+                        font_bold = ImageFont.truetype(matches[0].replace('DejaVuSansMono', 'DejaVuSansMono-Bold'), font_size)
+                    except:
+                        font_bold = font
+                    break
+            else:
+                font = ImageFont.truetype(path, font_size)
+                try:
+                    bold_path = path.replace('DejaVuSansMono', 'DejaVuSansMono-Bold')
+                    font_bold = ImageFont.truetype(bold_path, font_size)
+                except:
+                    font_bold = font
+                break
         except:
-            try:
-                font = ImageFont.truetype("Courier", 14)
-            except:
-                font = ImageFont.load_default()
+            continue
+    
+    if font is None:
+        try:
+            font = ImageFont.truetype("Courier", font_size)
+            font_bold = font
+        except:
+            font = ImageFont.load_default()
+            font_bold = font
+    
+    # Get actual font metrics
+    test_img = Image.new('RGB', (100, 100), (0, 0, 0))
+    test_draw = ImageDraw.Draw(test_img)
+    bbox = test_draw.textbbox((0, 0), "M", font=font)
+    char_width = bbox[2] - bbox[0]
+    char_height = bbox[3] - bbox[1]
+    line_height = char_height + 2  # Small spacing between lines
     
     # Parse ANSI text and build lines with color/style info
     lines = []
@@ -458,46 +496,48 @@ def _ansi_to_image(ansi_text: str) -> bytes:
     if not lines:
         lines = [[('No output', (229, 229, 229), (0, 0, 0), False)]]
     
-    # Calculate image dimensions
-    char_width = 8  # Approximate character width
-    char_height = 16  # Approximate character height
-    line_height = char_height + 2  # Add some spacing
-    
+    # Calculate image dimensions using actual font metrics
     max_line_length = max(len(line) for line in lines) if lines else 1
-    img_width = max_line_length * char_width + 20  # Padding
-    img_height = len(lines) * line_height + 20  # Padding
+    padding = 20
+    img_width = max_line_length * char_width + (padding * 2)
+    img_height = len(lines) * line_height + (padding * 2)
     
     # Create image with black background
     img = Image.new('RGB', (img_width, img_height), (0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # Draw text line by line
-    y = 10
+    # Draw text line by line, grouping consecutive characters with same style
+    y = padding
     for line in lines:
-        x = 10
-        for char, fg, bg, bold in line:
-            # Draw background if not black
+        x = padding
+        i = 0
+        while i < len(line):
+            # Group consecutive characters with same style
+            char, fg, bg, bold = line[i]
+            start_i = i
+            while i < len(line) and line[i][1:] == (fg, bg, bold):
+                i += 1
+            
+            # Get the text segment
+            text_segment = ''.join(line[j][0] for j in range(start_i, i))
+            
+            # Draw background for the segment
             if bg != (0, 0, 0):
-                draw.rectangle([x, y, x + char_width, y + char_height], fill=bg)
+                segment_width = len(text_segment) * char_width
+                draw.rectangle([x, y, x + segment_width, y + char_height], fill=bg)
             
-            # Draw character
-            font_to_use = font
-            if bold:
-                # Try to use bold font, fallback to regular
-                try:
-                    font_to_use = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 14)
-                except:
-                    pass
+            # Draw text segment
+            font_to_use = font_bold if bold else font
+            draw.text((x, y), text_segment, fill=fg, font=font_to_use)
             
-            draw.text((x, y), char, fill=fg, font=font_to_use)
-            x += char_width
+            x += len(text_segment) * char_width
         
         y += line_height
     
     # Convert to WebP
     import io
     output = io.BytesIO()
-    img.save(output, format='WEBP', quality=85)
+    img.save(output, format='WEBP', quality=90)
     return output.getvalue()
 
 
