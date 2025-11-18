@@ -328,10 +328,11 @@ def _find_fastfetch() -> str:
 def _ansi_to_image(ansi_text: str) -> bytes:
     """Convert ANSI escape codes to WebP image using Pillow
     
-    Renders ANSI text with proper font metrics and accurate spacing.
+    Simplified approach: parse ANSI codes, then render line by line with colors.
     Returns WebP image bytes.
     """
     from PIL import Image, ImageDraw, ImageFont
+    import io
     
     # ANSI color codes mapping (standard 16 colors) - RGB tuples
     ansi_colors = {
@@ -373,43 +374,33 @@ def _ansi_to_image(ansi_text: str) -> bytes:
         '107': (255, 255, 255),
     }
     
-    # Try to use a monospace font with larger size for better quality
+    # Find monospace font
     font_size = 16
     font = None
     font_bold = None
     
     font_paths = [
-        # NixOS font locations
         "/run/current-system/sw/share/X11/fonts/TTF/DejaVuSansMono.ttf",
         "/run/current-system/sw/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-        "/nix/store/*/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-        "/nix/store/*/share/X11/fonts/TTF/DejaVuSansMono.ttf",
-        # Standard Linux locations
         "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
         "/usr/share/fonts/TTF/DejaVuSansMono.ttf",
     ]
     
+    # Also try glob for nix store
+    import glob
+    nix_fonts = glob.glob("/nix/store/*/share/fonts/truetype/dejavu/DejaVuSansMono.ttf")
+    if nix_fonts:
+        font_paths.insert(0, nix_fonts[0])
+    
     for path in font_paths:
         try:
-            if '*' in path:
-                # Try to find font in nix store
-                import glob
-                matches = glob.glob(path)
-                if matches:
-                    font = ImageFont.truetype(matches[0], font_size)
-                    try:
-                        font_bold = ImageFont.truetype(matches[0].replace('DejaVuSansMono', 'DejaVuSansMono-Bold'), font_size)
-                    except:
-                        font_bold = font
-                    break
-            else:
-                font = ImageFont.truetype(path, font_size)
-                try:
-                    bold_path = path.replace('DejaVuSansMono', 'DejaVuSansMono-Bold')
-                    font_bold = ImageFont.truetype(bold_path, font_size)
-                except:
-                    font_bold = font
-                break
+            font = ImageFont.truetype(path, font_size)
+            try:
+                bold_path = path.replace('DejaVuSansMono', 'DejaVuSansMono-Bold')
+                font_bold = ImageFont.truetype(bold_path, font_size)
+            except:
+                font_bold = font
+            break
         except:
             continue
     
@@ -421,38 +412,32 @@ def _ansi_to_image(ansi_text: str) -> bytes:
             font = ImageFont.load_default()
             font_bold = font
     
-    # Get actual font metrics
-    test_img = Image.new('RGB', (100, 100), (0, 0, 0))
-    test_draw = ImageDraw.Draw(test_img)
-    bbox = test_draw.textbbox((0, 0), "M", font=font)
-    char_width = bbox[2] - bbox[0]
-    char_height = bbox[3] - bbox[1]
-    line_height = char_height + 2  # Small spacing between lines
-    
-    # Parse ANSI text and build lines with color/style info
-    lines = []
-    current_fg = (229, 229, 229)  # Default white
-    current_bg = (0, 0, 0)  # Default black
-    current_bold = False
-    
-    i = 0
-    current_line = []
-    
-    while i < len(ansi_text):
-        if ansi_text[i] == '\x1b' or ansi_text[i] == '\033':
-            # Found escape sequence
-            if i + 1 < len(ansi_text) and ansi_text[i + 1] == '[':
-                # Find the end of the escape sequence
-                j = i + 2
-                while j < len(ansi_text) and ansi_text[j] not in 'mHfABCDJK':
-                    j += 1
-                
-                if j < len(ansi_text):
-                    seq = ansi_text[i + 2:j]
-                    code = ansi_text[j]
+    # Parse ANSI text into lines with color/style info
+    def parse_ansi_line(text_line: str):
+        """Parse a single line, returning list of (text, fg_color, bg_color, bold) segments"""
+        segments = []
+        current_fg = (229, 229, 229)  # Default white
+        current_bg = (0, 0, 0)  # Default black
+        current_bold = False
+        current_text = []
+        
+        i = 0
+        while i < len(text_line):
+            if text_line[i] == '\x1b' or text_line[i] == '\033':
+                # Found escape sequence
+                if i + 1 < len(text_line) and text_line[i + 1] == '[':
+                    # Save any accumulated text
+                    if current_text:
+                        segments.append((''.join(current_text), current_fg, current_bg, current_bold))
+                        current_text = []
                     
-                    if code == 'm':
-                        # SGR (Select Graphic Rendition) - colors and styles
+                    # Find the end of the escape sequence
+                    j = i + 2
+                    while j < len(text_line) and text_line[j] not in 'mHfABCDJK':
+                        j += 1
+                    
+                    if j < len(text_line) and text_line[j] == 'm':
+                        seq = text_line[i + 2:j]
                         if seq == '' or seq == '0':
                             # Reset
                             current_fg = (229, 229, 229)
@@ -471,76 +456,81 @@ def _ansi_to_image(ansi_text: str) -> bytes:
                                     current_bold = True
                                 elif c == '22':
                                     current_bold = False
-                                elif c == '39':  # Default foreground
+                                elif c == '39':
                                     current_fg = (229, 229, 229)
-                                elif c == '49':  # Default background
+                                elif c == '49':
                                     current_bg = (0, 0, 0)
                     
                     i = j + 1
                     continue
+            
+            # Regular character
+            current_text.append(text_line[i])
+            i += 1
         
-        # Regular character
-        char = ansi_text[i]
-        if char == '\n':
-            lines.append(current_line)
-            current_line = []
-        elif char == '\r':
-            pass  # Ignore carriage return
-        elif char == '\t':
-            # Tab as 4 spaces
-            for _ in range(4):
-                current_line.append((' ', current_fg, current_bg, current_bold))
-        else:
-            current_line.append((char, current_fg, current_bg, current_bold))
+        # Add remaining text
+        if current_text:
+            segments.append((''.join(current_text), current_fg, current_bg, current_bold))
         
-        i += 1
+        return segments
     
-    if current_line:
-        lines.append(current_line)
+    # Split into lines and parse each
+    text_lines = ansi_text.splitlines()
+    parsed_lines = [parse_ansi_line(line) for line in text_lines]
     
-    if not lines:
-        lines = [[('No output', (229, 229, 229), (0, 0, 0), False)]]
+    if not parsed_lines:
+        parsed_lines = [[('No output', (229, 229, 229), (0, 0, 0), False)]]
     
-    # Calculate image dimensions using actual font metrics
-    max_line_length = max(len(line) for line in lines) if lines else 1
+    # Calculate image dimensions
+    test_img = Image.new('RGB', (100, 100), (0, 0, 0))
+    test_draw = ImageDraw.Draw(test_img)
+    
+    max_width = 0
+    for line_segments in parsed_lines:
+        line_width = 0
+        for text, _, _, _ in line_segments:
+            bbox = test_draw.textbbox((0, 0), text, font=font)
+            line_width += bbox[2] - bbox[0]
+        max_width = max(max_width, line_width)
+    
+    # Get line height
+    bbox = test_draw.textbbox((0, 0), "A", font=font)
+    line_height = bbox[3] - bbox[1]
+    
     padding = 20
-    img_width = max_line_length * char_width + (padding * 2)
-    img_height = len(lines) * line_height + (padding * 2)
+    img_width = max_width + (padding * 2)
+    img_height = len(parsed_lines) * line_height + (padding * 2)
     
     # Create image with black background
     img = Image.new('RGB', (img_width, img_height), (0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # Draw text line by line, grouping consecutive characters with same style
-    y = padding
-    for line in lines:
-        x = padding
-        i = 0
-        while i < len(line):
-            # Group consecutive characters with same style
-            char, fg, bg, bold = line[i]
-            start_i = i
-            while i < len(line) and line[i][1:] == (fg, bg, bold):
-                i += 1
+    # Draw text line by line
+    y_offset = padding
+    for line_segments in parsed_lines:
+        x_offset = padding
+        for text, fg, bg, bold in line_segments:
+            if not text:
+                continue
             
-            # Get the text segment
-            text_segment = ''.join(line[j][0] for j in range(start_i, i))
-            
-            # Draw background for the segment
-            if bg != (0, 0, 0):
-                segment_width = len(text_segment) * char_width
-                draw.rectangle([x, y, x + segment_width, y + char_height], fill=bg)
-            
-            # Draw text segment
+            # Get text dimensions
             font_to_use = font_bold if bold else font
-            draw.text((x, y), text_segment, fill=fg, font=font_to_use)
+            bbox = draw.textbbox((x_offset, y_offset), text, font=font_to_use)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
             
-            x += len(text_segment) * char_width
+            # Draw background if not black
+            if bg != (0, 0, 0):
+                draw.rectangle([x_offset, y_offset, x_offset + text_width, y_offset + text_height], fill=bg)
+            
+            # Draw text
+            draw.text((x_offset, y_offset), text, font=font_to_use, fill=fg)
+            
+            x_offset += text_width
         
-        y += line_height
+        y_offset += line_height
     
     # Convert to WebP
-    import io
     output = io.BytesIO()
     img.save(output, format='WEBP', quality=90)
     return output.getvalue()
