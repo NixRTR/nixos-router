@@ -105,6 +105,10 @@ def _parse_conntrack_proc(proc_output: str) -> Dict[Tuple[str, str, int], Dict[s
     Format: Each line contains connection info with byte counts
     Example: ipv4     2 tcp      6 431999 ESTABLISHED src=192.168.2.31 dst=3.13.191.95 sport=35712 dport=443 packets=12345 bytes=1234567890 src=3.13.191.95 dst=216.137.218.48 sport=443 dport=35712 packets=9876 bytes=987654321 [ASSURED] mark=0
     
+    The format has TWO separate bytes= fields:
+    - First bytes= is for original direction (src->dst)
+    - Second bytes= is for reply direction (dst->src)
+    
     Returns:
         Dict[(client_ip, remote_ip, remote_port), {rx_bytes_total, tx_bytes_total}]
     """
@@ -115,7 +119,7 @@ def _parse_conntrack_proc(proc_output: str) -> Dict[Tuple[str, str, int], Dict[s
             continue
         
         # Extract src/dst/ports from first part of connection
-        # Format: ipv4 ... src=IP dst=IP sport=PORT dport=PORT ... bytes=TX:RX ...
+        # Format: ipv4 ... src=IP dst=IP sport=PORT dport=PORT ...
         match = re.search(r'src=(\S+)\s+dst=(\S+)\s+sport=(\d+)\s+dport=(\d+)', line)
         if not match:
             continue
@@ -134,17 +138,29 @@ def _parse_conntrack_proc(proc_output: str) -> Dict[Tuple[str, str, int], Dict[s
             continue
         
         # Extract bytes from the line
-        # Format: bytes=TX:RX (bytes sent from src->dst : bytes sent from dst->src)
-        bytes_match = re.search(r'bytes=(\d+):(\d+)', line)
-        if not bytes_match:
-            continue
+        # Format has TWO bytes= fields:
+        # 1. First bytes= is for original direction (src->dst) = upload from client
+        # 2. Second bytes= is for reply direction (dst->src) = download to client
+        # Find all bytes= fields in the line
+        bytes_matches = re.findall(r'bytes=(\d+)', line)
         
-        bytes_sent = int(bytes_match.group(1))  # TX (src->dst)
-        bytes_recv = int(bytes_match.group(2))    # RX (dst->src)
+        if len(bytes_matches) < 2:
+            # Try alternative format: bytes=TX:RX (combined format)
+            combined_match = re.search(r'bytes=(\d+):(\d+)', line)
+            if combined_match:
+                bytes_sent = int(combined_match.group(1))  # TX (src->dst)
+                bytes_recv = int(combined_match.group(2))    # RX (dst->src)
+            else:
+                continue
+        else:
+            # First bytes= is original direction (src->dst) = upload
+            # Second bytes= is reply direction (dst->src) = download
+            bytes_sent = int(bytes_matches[0])  # Original direction (client -> remote)
+            bytes_recv = int(bytes_matches[1])  # Reply direction (remote -> client)
         
         # For client at src_ip:
-        # - tx_bytes_total = bytes_sent (client -> remote)
-        # - rx_bytes_total = bytes_recv (remote -> client)
+        # - tx_bytes_total = bytes_sent (client -> remote) = original direction
+        # - rx_bytes_total = bytes_recv (remote -> client) = reply direction
         
         key = (src_ip, dst_ip, dst_port)
         connections[key] = {
@@ -406,7 +422,15 @@ def collect_client_connections() -> List[Dict]:
         if not current_connections:
             return results
         
-        print(f"Debug: Parsed {len(current_connections)} connections from conntrack")
+        # Debug: Check if we have byte counts
+        total_bytes = sum(c.get('rx_bytes_total', 0) + c.get('tx_bytes_total', 0) for c in current_connections.values())
+        print(f"Debug: Parsed {len(current_connections)} connections from conntrack, total bytes: {total_bytes}")
+        
+        # Debug: Show sample connection with bytes
+        if current_connections:
+            sample_key = list(current_connections.keys())[0]
+            sample_data = current_connections[sample_key]
+            print(f"Debug: Sample connection {sample_key}: rx={sample_data.get('rx_bytes_total', 0)}, tx={sample_data.get('tx_bytes_total', 0)}")
         
         # Get ARP table and DHCP leases for IP-to-MAC mapping
         arp_table = parse_arp_table()
