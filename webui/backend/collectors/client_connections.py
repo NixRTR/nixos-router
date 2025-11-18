@@ -29,15 +29,23 @@ def _find_conntrack() -> str:
         "/usr/bin/conntrack",
         "conntrack"
     ]
-    for candidate in candidates:
-        if os.path.exists(candidate) or candidate == "conntrack":
-            return candidate
-    return "conntrack"
+    for path in candidates:
+        try:
+            p = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=2)
+            if p.returncode == 0:
+                return path
+        except Exception:
+            continue
+    raise RuntimeError("conntrack binary not found")
 
 
 def _run_conntrack(args: List[str]) -> subprocess.CompletedProcess:
     """Run conntrack command"""
-    conntrack = _find_conntrack()
+    try:
+        conntrack = _find_conntrack()
+    except RuntimeError as e:
+        return subprocess.CompletedProcess(["conntrack"] + args, 1, "", str(e))
+    
     try:
         result = subprocess.run(
             [conntrack] + args,
