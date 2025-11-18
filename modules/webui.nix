@@ -21,6 +21,7 @@ let
     alembic
     bcrypt
     pamela  # PAM authentication support
+    manuf  # MAC address OUI vendor lookup
   ]);
   
   # Backend source

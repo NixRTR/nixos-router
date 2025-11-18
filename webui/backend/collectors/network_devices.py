@@ -149,13 +149,30 @@ def determine_network(ip_address: str, interface: str) -> str:
     return 'homelab'
 
 
+# Cache the manuf parser instance for performance
+_manuf_parser = None
+
+def _get_manuf_parser():
+    """Get or create the manuf parser instance (cached)"""
+    global _manuf_parser
+    if _manuf_parser is None:
+        try:
+            from manuf import Manuf
+            # Initialize manuf parser (loads OUI database)
+            # The database is automatically downloaded/cached on first use
+            _manuf_parser = Manuf()
+        except ImportError:
+            # manuf not available
+            _manuf_parser = False  # Use False to indicate unavailable
+    return _manuf_parser if _manuf_parser is not False else None
+
+
 def lookup_mac_vendor(mac_address: str) -> Optional[str]:
     """Look up vendor from MAC address OUI (first 3 octets)
     
-    This is a simple implementation. For production, consider using:
-    - manuf Python library
-    - IEEE OUI database
-    - Local OUI cache file
+    Uses the manuf library which provides a comprehensive OUI database
+    based on Wireshark's manufacturer database. Falls back to a small
+    hardcoded dictionary if manuf is not available.
     
     Args:
         mac_address: MAC address (format: aa:bb:cc:dd:ee:ff)
@@ -163,7 +180,21 @@ def lookup_mac_vendor(mac_address: str) -> Optional[str]:
     Returns:
         Vendor name or None
     """
-    # Common vendor OUIs (expand as needed)
+    if not mac_address or len(mac_address) < 8:
+        return None
+    
+    # Try using manuf library first (comprehensive database)
+    parser = _get_manuf_parser()
+    if parser:
+        try:
+            result = parser.get_manuf(mac_address)
+            if result and result.manuf:
+                return result.manuf
+        except Exception as e:
+            # Log error but continue to fallback
+            print(f"Warning: manuf lookup failed for {mac_address}: {e}")
+    
+    # Fallback: Common vendor OUIs (kept for compatibility)
     oui_vendors = {
         '00:07:a6': 'Leviton',
         'd8:a0:11': 'WiZ Connected',
@@ -174,9 +205,6 @@ def lookup_mac_vendor(mac_address: str) -> Optional[str]:
         '6c:29:90': 'WiZ Connected',
         '84:7a:b6': 'Honeywell',
     }
-    
-    if not mac_address or len(mac_address) < 8:
-        return None
     
     # Extract OUI (first 3 octets)
     oui = ':'.join(mac_address.split(':')[:3]).lower()
