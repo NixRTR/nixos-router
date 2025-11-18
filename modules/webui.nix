@@ -10,7 +10,7 @@ let
   # Try to use from nixpkgs first, otherwise build manually
   pypci-ng = pkgs.python311Packages.pypci-ng or (pkgs.python311Packages.buildPythonPackage rec {
     pname = "pypci-ng";
-    version = "0.1.0";
+    version = "0.3.0";
     format = "pyproject";
     
     src = pkgs.python311Packages.fetchPypi {
@@ -27,9 +27,9 @@ let
     doCheck = false;
     
     meta = with lib; {
-      description = "PCI utility library for pyhw";
+      description = "A pciutils-like library for fetching system PCI/PCI-E information";
       homepage = "https://pypi.org/project/pypci-ng/";
-      license = licenses.bsd3;
+      license = licenses.mit;
     };
   });
   
