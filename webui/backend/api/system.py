@@ -329,298 +329,50 @@ def _find_fastfetch() -> str:
     raise RuntimeError("fastfetch binary not found")
 
 
-def _get_fastfetch_output() -> str:
-    """Get fastfetch output (system information)
-    
-    Uses subprocess to run fastfetch command with terminal width set to 105 characters.
-    """
-    # Set terminal width to 105 characters
-    env = os.environ.copy()
-    env['COLUMNS'] = '105'
-    env['TERM'] = 'xterm-256color'  # Ensure color support
-    
-    try:
-        fastfetch_bin = _find_fastfetch()
-    except RuntimeError as e:
-        raise RuntimeError(f"fastfetch not found: {str(e)}")
-    
-    try:
-        result = subprocess.run(
-            [fastfetch_bin],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            env=env
-        )
-        if result.returncode == 0:
-            return result.stdout
-        else:
-            raise RuntimeError(f"fastfetch failed with return code {result.returncode}: {result.stderr}")
-    except Exception as e:
-        raise RuntimeError(f"Error running fastfetch: {str(e)}")
-
-
-def _ansi_to_image(ansi_text: str) -> bytes:
-    """Convert ANSI escape codes to PNG image using Pillow
-    
-    Simplified approach: parse ANSI codes, then render line by line with colors.
-    Returns PNG image bytes.
-    """
-    from PIL import Image, ImageDraw, ImageFont
-    import io
-    
-    # ANSI color codes mapping (standard 16 colors) - RGB tuples
-    ansi_colors = {
-        '30': (0, 0, 0),        # Black
-        '31': (205, 0, 0),      # Red
-        '32': (0, 205, 0),      # Green
-        '33': (205, 205, 0),    # Yellow
-        '34': (0, 0, 238),      # Blue
-        '35': (205, 0, 205),    # Magenta
-        '36': (0, 205, 205),    # Cyan
-        '37': (229, 229, 229),  # White
-        '90': (127, 127, 127),  # Bright Black
-        '91': (255, 0, 0),      # Bright Red
-        '92': (0, 255, 0),      # Bright Green
-        '93': (255, 255, 0),    # Bright Yellow
-        '94': (92, 92, 255),    # Bright Blue
-        '95': (255, 0, 255),    # Bright Magenta
-        '96': (0, 255, 255),    # Bright Cyan
-        '97': (255, 255, 255),  # Bright White
-    }
-    
-    # Background colors
-    bg_colors = {
-        '40': (0, 0, 0),
-        '41': (205, 0, 0),
-        '42': (0, 205, 0),
-        '43': (205, 205, 0),
-        '44': (0, 0, 238),
-        '45': (205, 0, 205),
-        '46': (0, 205, 205),
-        '47': (229, 229, 229),
-        '100': (127, 127, 127),
-        '101': (255, 0, 0),
-        '102': (0, 255, 0),
-        '103': (255, 255, 0),
-        '104': (92, 92, 255),
-        '105': (255, 0, 255),
-        '106': (0, 255, 255),
-        '107': (255, 255, 255),
-    }
-    
-    # Find monospace font
-    font_size = 16
-    font = None
-    font_bold = None
-    
-    font_paths = [
-        "/run/current-system/sw/share/X11/fonts/TTF/DejaVuSansMono.ttf",
-        "/run/current-system/sw/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-        "/usr/share/fonts/TTF/DejaVuSansMono.ttf",
-    ]
-    
-    # Also try glob for nix store
-    import glob
-    nix_fonts = glob.glob("/nix/store/*/share/fonts/truetype/dejavu/DejaVuSansMono.ttf")
-    if nix_fonts:
-        font_paths.insert(0, nix_fonts[0])
-    
-    for path in font_paths:
-        try:
-            font = ImageFont.truetype(path, font_size)
-            try:
-                bold_path = path.replace('DejaVuSansMono', 'DejaVuSansMono-Bold')
-                font_bold = ImageFont.truetype(bold_path, font_size)
-            except:
-                font_bold = font
-            break
-        except:
-            continue
-    
-    if font is None:
-        try:
-            font = ImageFont.truetype("Courier", font_size)
-            font_bold = font
-        except:
-            font = ImageFont.load_default()
-            font_bold = font
-    
-    # Parse ANSI text into lines with color/style info
-    def parse_ansi_line(text_line: str):
-        """Parse a single line, returning list of (text, fg_color, bg_color, bold) segments"""
-        segments = []
-        current_fg = (229, 229, 229)  # Default white
-        current_bg = (0, 0, 0)  # Default black
-        current_bold = False
-        current_text = []
-        
-        i = 0
-        while i < len(text_line):
-            if text_line[i] == '\x1b' or text_line[i] == '\033':
-                # Found escape sequence
-                if i + 1 < len(text_line) and text_line[i + 1] == '[':
-                    # Save any accumulated text
-                    if current_text:
-                        segments.append((''.join(current_text), current_fg, current_bg, current_bold))
-                        current_text = []
-                    
-                    # Find the end of the escape sequence
-                    j = i + 2
-                    while j < len(text_line) and text_line[j] not in 'mHfABCDJK':
-                        j += 1
-                    
-                    if j < len(text_line) and text_line[j] == 'm':
-                        seq = text_line[i + 2:j]
-                        if seq == '' or seq == '0':
-                            # Reset
-                            current_fg = (229, 229, 229)
-                            current_bg = (0, 0, 0)
-                            current_bold = False
-                        else:
-                            codes = seq.split(';')
-                            for c in codes:
-                                if c == '':
-                                    continue
-                                elif c in ansi_colors:
-                                    current_fg = ansi_colors[c]
-                                elif c in bg_colors:
-                                    current_bg = bg_colors[c]
-                                elif c == '1':
-                                    current_bold = True
-                                elif c == '22':
-                                    current_bold = False
-                                elif c == '39':
-                                    current_fg = (229, 229, 229)
-                                elif c == '49':
-                                    current_bg = (0, 0, 0)
-                    
-                    i = j + 1
-                    continue
-            
-            # Regular character
-            current_text.append(text_line[i])
-            i += 1
-        
-        # Add remaining text
-        if current_text:
-            segments.append((''.join(current_text), current_fg, current_bg, current_bold))
-        
-        return segments
-    
-    # Split into lines and parse each, truncating to 105 characters
-    text_lines = ansi_text.splitlines()
-    # Truncate each line to 105 characters (excluding ANSI codes)
-    max_chars = 105
-    truncated_lines = []
-    for line in text_lines:
-        # Count visible characters (excluding ANSI escape sequences)
-        visible_chars = 0
-        i = 0
-        truncated = []
-        while i < len(line):
-            if line[i] == '\x1b' or line[i] == '\033':
-                # Found escape sequence - preserve it
-                if i + 1 < len(line) and line[i + 1] == '[':
-                    j = i + 2
-                    while j < len(line) and line[j] not in 'mHfABCDJK':
-                        j += 1
-                    if j < len(line):
-                        truncated.append(line[i:j+1])
-                        i = j + 1
-                        continue
-            # Regular character
-            if visible_chars < max_chars:
-                truncated.append(line[i])
-                visible_chars += 1
-            i += 1
-        truncated_lines.append(''.join(truncated))
-    
-    parsed_lines = [parse_ansi_line(line) for line in truncated_lines]
-    
-    if not parsed_lines:
-        parsed_lines = [[('No output', (229, 229, 229), (0, 0, 0), False)]]
-    
-    # Calculate image dimensions
-    test_img = Image.new('RGB', (100, 100), (0, 0, 0))
-    test_draw = ImageDraw.Draw(test_img)
-    
-    max_width = 0
-    for line_segments in parsed_lines:
-        line_width = 0
-        for text, _, _, _ in line_segments:
-            bbox = test_draw.textbbox((0, 0), text, font=font)
-            line_width += bbox[2] - bbox[0]
-        max_width = max(max_width, line_width)
-    
-    # Get line height
-    bbox = test_draw.textbbox((0, 0), "A", font=font)
-    line_height = bbox[3] - bbox[1]
-    
-    padding = 20
-    img_width = max_width + (padding * 2)
-    img_height = len(parsed_lines) * line_height + (padding * 2)
-    
-    # Create image with black background
-    img = Image.new('RGB', (img_width, img_height), (0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    
-    # Draw text line by line
-    y_offset = padding
-    for line_segments in parsed_lines:
-        x_offset = padding
-        for text, fg, bg, bold in line_segments:
-            if not text:
-                continue
-            
-            # Get text dimensions
-            font_to_use = font_bold if bold else font
-            bbox = draw.textbbox((x_offset, y_offset), text, font=font_to_use)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
-            
-            # Draw background if not black
-            if bg != (0, 0, 0):
-                draw.rectangle([x_offset, y_offset, x_offset + text_width, y_offset + text_height], fill=bg)
-            
-            # Draw text
-            draw.text((x_offset, y_offset), text, font=font_to_use, fill=fg)
-            
-            x_offset += text_width
-        
-        y_offset += line_height
-    
-    # Convert to PNG
-    output = io.BytesIO()
-    img.save(output, format='PNG')
-    return output.getvalue()
+def _strip_ansi_codes(text: str) -> str:
+    """Remove ANSI escape codes from text"""
+    import re
+    # Remove ANSI escape sequences
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    return ansi_escape.sub('', text)
 
 
 @router.get("/fastfetch")
 async def get_fastfetch(
     _: str = Depends(get_current_user)
 ) -> dict:
-    """Run fastfetch and return the output as PNG image
+    """Run fastfetch and return plain text output (no logo, no colors)
     
     Returns:
-        dict: Contains 'image' field with base64-encoded PNG image data
+        dict: Contains 'text' field with plain text system information
     """
-    import base64
-    
     try:
-        fastfetch_output = _get_fastfetch_output()
+        fastfetch_bin = _find_fastfetch()
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
     
     try:
-        # Convert ANSI output to PNG image
-        image_bytes = _ansi_to_image(fastfetch_output)
+        # Run fastfetch with --logo none to remove logo
+        # Colors will be stripped from output
+        result = subprocess.run(
+            [fastfetch_bin, "--logo", "none"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
         
-        # Return as base64-encoded string
-        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-        
-        return {"image": image_base64}
+        if result.returncode == 0:
+            # Strip ANSI codes to get plain text
+            text_output = _strip_ansi_codes(result.stdout)
+            return {"text": text_output}
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"fastfetch failed with return code {result.returncode}: {result.stderr}"
+            )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error rendering system info: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error running fastfetch: {str(e)}"
+        )
 

@@ -22,7 +22,6 @@ let
     bcrypt
     pamela  # PAM authentication support
     manuf  # MAC address OUI vendor lookup
-    pillow  # Image processing for ANSI to image conversion
   ]);
   
   # Backend source
