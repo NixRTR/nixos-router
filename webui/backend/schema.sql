@@ -143,12 +143,34 @@ CREATE TABLE IF NOT EXISTS client_bandwidth_stats (
     rx_bytes BIGINT NOT NULL,  -- download bytes in this interval
     tx_bytes BIGINT NOT NULL,  -- upload bytes in this interval
     rx_bytes_total BIGINT NOT NULL,  -- cumulative download
-    tx_bytes_total BIGINT NOT NULL  -- cumulative upload
+    tx_bytes_total BIGINT NOT NULL,  -- cumulative upload
+    aggregation_level VARCHAR(2) DEFAULT 'raw'  -- 'raw', '1m', '5m', '1h', '1d'
 );
 
 CREATE INDEX IF NOT EXISTS idx_client_bandwidth_mac_time ON client_bandwidth_stats(mac_address, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_client_bandwidth_timestamp ON client_bandwidth_stats(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_client_bandwidth_mac ON client_bandwidth_stats(mac_address);
+CREATE INDEX IF NOT EXISTS idx_client_bandwidth_agg_level ON client_bandwidth_stats(aggregation_level, timestamp DESC);
+
+-- Per-connection bandwidth statistics (tracked by client IP and remote IP:Port, IPv4 only)
+CREATE TABLE IF NOT EXISTS client_connection_stats (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ NOT NULL,
+    client_ip INET NOT NULL,
+    client_mac MACADDR NOT NULL,
+    remote_ip INET NOT NULL,
+    remote_port INTEGER NOT NULL,
+    rx_bytes BIGINT NOT NULL,  -- download bytes in this interval
+    tx_bytes BIGINT NOT NULL,  -- upload bytes in this interval
+    rx_bytes_total BIGINT NOT NULL,  -- cumulative download
+    tx_bytes_total BIGINT NOT NULL,  -- cumulative upload
+    aggregation_level VARCHAR(2) DEFAULT 'raw'  -- 'raw', '1m', '5m', '1h', '1d'
+);
+
+CREATE INDEX IF NOT EXISTS idx_client_connection_client_time ON client_connection_stats(client_ip, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_client_connection_client_remote ON client_connection_stats(client_ip, remote_ip, remote_port, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_client_connection_timestamp ON client_connection_stats(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_client_connection_agg_level ON client_connection_stats(aggregation_level, timestamp DESC);
 
 -- Create hypertable for time-series data (if using TimescaleDB extension)
 -- Uncomment if TimescaleDB is available:

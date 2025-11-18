@@ -2,18 +2,20 @@
 Bandwidth history API endpoints
 """
 from fastapi import APIRouter, Depends, Query
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from pydantic import BaseModel
 import re
 
 from ..auth import get_current_user
-from ..database import AsyncSessionLocal, InterfaceStatsDB, ClientBandwidthStatsDB
+from ..database import AsyncSessionLocal, InterfaceStatsDB, ClientBandwidthStatsDB, ClientConnectionStatsDB
 from ..models import (
-    ClientBandwidthHistory, ClientBandwidthCurrent, ClientBandwidthDataPoint
+    ClientBandwidthHistory, ClientBandwidthCurrent, ClientBandwidthDataPoint,
+    ClientConnectionCurrent, ClientConnectionHistory, ClientConnectionDataPoint
 )
 from ..collectors.client_bandwidth import collect_client_bandwidth
+from ..collectors.client_connections import _resolve_hostname
 from ..collectors.network_devices import discover_network_devices
 from ..collectors.dhcp import parse_kea_leases
 from ..collectors.network import collect_interface_stats
@@ -748,4 +750,285 @@ async def get_bulk_client_bandwidth_history(
         )
     
     return results
+
+
+def _get_aggregation_level_for_range(time_delta: timedelta) -> str:
+    """Determine appropriate aggregation level based on time range"""
+    total_seconds = time_delta.total_seconds()
+    
+    if total_seconds <= 2 * 24 * 3600:  # <= 2 days
+        return 'raw'
+    elif total_seconds <= 7 * 24 * 3600:  # <= 7 days
+        return '1m'
+    elif total_seconds <= 30 * 24 * 3600:  # <= 30 days
+        return '5m'
+    elif total_seconds <= 90 * 24 * 3600:  # <= 90 days
+        return '1h'
+    else:  # > 90 days
+        return '1d'
+
+
+@router.get("/connections/{client_ip}/current")
+async def get_client_connections_current(
+    client_ip: str,
+    time_range: str = Query("1h", description="Time range (e.g., 5m, 30m, 1h, 1d)", alias="range"),
+    _: str = Depends(get_current_user)
+) -> List[ClientConnectionCurrent]:
+    """Get current connections for a client with cumulative totals for the time period
+    
+    Args:
+        client_ip: Client IP address
+        time_range: Time range string (default: 1h)
+        
+    Returns:
+        List[ClientConnectionCurrent]: Current connection stats with hostnames
+    """
+    # Validate IPv4
+    if not _is_ipv4(client_ip):
+        return []
+    
+    # Only track IPs in bridge subnets
+    if not (client_ip.startswith('192.168.2.') or client_ip.startswith('192.168.3.')):
+        return []
+    
+    # Parse time range
+    time_delta = parse_time_range(time_range)
+    start_time = datetime.now(timezone.utc) - time_delta
+    
+    # Determine aggregation level
+    agg_level = _get_aggregation_level_for_range(time_delta)
+    
+    async with AsyncSessionLocal() as session:
+        # Query database for connection stats in time range
+        query = select(ClientConnectionStatsDB).where(
+            ClientConnectionStatsDB.client_ip == client_ip,
+            ClientConnectionStatsDB.timestamp >= start_time,
+            ClientConnectionStatsDB.aggregation_level == agg_level
+        ).order_by(ClientConnectionStatsDB.remote_ip, ClientConnectionStatsDB.remote_port, ClientConnectionStatsDB.timestamp.asc())
+        
+        result = await session.execute(query)
+        stats = result.scalars().all()
+    
+    # Group by remote_ip:remote_port and calculate totals
+    connection_totals: Dict[Tuple[str, int], Dict] = {}
+    
+    for stat in stats:
+        key = (str(stat.remote_ip), stat.remote_port)
+        
+        if key not in connection_totals:
+            connection_totals[key] = {
+                'rx_bytes_total': 0,
+                'tx_bytes_total': 0,
+                'rx_bytes_sum': 0,
+                'tx_bytes_sum': 0,
+                'last_timestamp': stat.timestamp,
+                'last_rx_total': 0,
+                'last_tx_total': 0
+            }
+        
+        # Sum interval bytes for cumulative total
+        connection_totals[key]['rx_bytes_sum'] += stat.rx_bytes
+        connection_totals[key]['tx_bytes_sum'] += stat.tx_bytes
+        
+        # Track latest cumulative totals
+        if stat.timestamp > connection_totals[key]['last_timestamp']:
+            connection_totals[key]['last_timestamp'] = stat.timestamp
+            connection_totals[key]['last_rx_total'] = stat.rx_bytes_total
+            connection_totals[key]['last_tx_total'] = stat.tx_bytes_total
+    
+    # Calculate current rates from most recent data
+    # Get the most recent stats for each connection
+    recent_stats: Dict[Tuple[str, int], ClientConnectionStatsDB] = {}
+    for stat in stats:
+        key = (str(stat.remote_ip), stat.remote_port)
+        if key not in recent_stats or stat.timestamp > recent_stats[key].timestamp:
+            recent_stats[key] = stat
+    
+    # Build results
+    results = []
+    for (remote_ip, remote_port), totals in connection_totals.items():
+        # Resolve hostname
+        hostname = _resolve_hostname(remote_ip)
+        
+        # Calculate cumulative MB for time period
+        download_mb = totals['rx_bytes_sum'] / (1024 * 1024)
+        upload_mb = totals['tx_bytes_sum'] / (1024 * 1024)
+        
+        # Calculate current rate (Mbit/s) from most recent data point
+        # Use collection interval (5 seconds) to estimate rate
+        download_mbps = 0.0
+        upload_mbps = 0.0
+        
+        if (remote_ip, remote_port) in recent_stats:
+            recent = recent_stats[(remote_ip, remote_port)]
+            collection_interval = 5.0  # seconds
+            download_mbps = (recent.rx_bytes * 8) / (collection_interval * 1_000_000)
+            upload_mbps = (recent.tx_bytes * 8) / (collection_interval * 1_000_000)
+        
+        results.append(ClientConnectionCurrent(
+            remote_ip=remote_ip,
+            remote_port=remote_port,
+            hostname=hostname,
+            download_mb=round(download_mb, 2),
+            download_mbps=round(download_mbps, 2),
+            upload_mb=round(upload_mb, 2),
+            upload_mbps=round(upload_mbps, 2)
+        ))
+    
+    return results
+
+
+@router.get("/connections/{client_ip}/history")
+async def get_connection_history(
+    client_ip: str,
+    remote_ip: str,
+    remote_port: int = Query(..., ge=1, le=65535),
+    time_range: str = Query("1h", description="Time range (e.g., 5m, 30m, 1h, 1d)", alias="range"),
+    interval: str = Query("raw", description="Aggregation interval: 'raw', '1m', '5m', '1h'"),
+    _: str = Depends(get_current_user)
+) -> ClientConnectionHistory:
+    """Get historical data for a specific connection
+    
+    Args:
+        client_ip: Client IP address
+        remote_ip: Remote IP address
+        remote_port: Remote port number
+        time_range: Time range string (default: 1h)
+        interval: Aggregation interval - 'raw' for raw samples, or '1m', '5m', '1h' for aggregated
+        
+    Returns:
+        ClientConnectionHistory: Historical connection data for charting
+    """
+    # Validate IPv4
+    if not _is_ipv4(client_ip) or not _is_ipv4(remote_ip):
+        return ClientConnectionHistory(
+            client_ip=client_ip,
+            remote_ip=remote_ip,
+            remote_port=remote_port,
+            data=[]
+        )
+    
+    # Only track IPs in bridge subnets
+    if not (client_ip.startswith('192.168.2.') or client_ip.startswith('192.168.3.')):
+        return ClientConnectionHistory(
+            client_ip=client_ip,
+            remote_ip=remote_ip,
+            remote_port=remote_port,
+            data=[]
+        )
+    
+    # Parse time range
+    time_delta = parse_time_range(time_range)
+    start_time = datetime.now(timezone.utc) - time_delta
+    
+    # Determine aggregation level for query
+    agg_level = _get_aggregation_level_for_range(time_delta)
+    
+    async with AsyncSessionLocal() as session:
+        # Query database for connection stats
+        query = select(ClientConnectionStatsDB).where(
+            ClientConnectionStatsDB.client_ip == client_ip,
+            ClientConnectionStatsDB.remote_ip == remote_ip,
+            ClientConnectionStatsDB.remote_port == remote_port,
+            ClientConnectionStatsDB.timestamp >= start_time,
+            ClientConnectionStatsDB.aggregation_level == agg_level
+        ).order_by(ClientConnectionStatsDB.timestamp.asc())
+        
+        result = await session.execute(query)
+        stats = result.scalars().all()
+    
+    # Process data points
+    data_points = []
+    
+    if interval == "raw" or agg_level != 'raw':
+        # Return data as-is (already aggregated if agg_level != 'raw')
+        for i, stat in enumerate(stats):
+            if i == 0:
+                # First point, no rate calculation
+                data_points.append(ClientConnectionDataPoint(
+                    timestamp=stat.timestamp,
+                    rx_mbps=0.0,
+                    tx_mbps=0.0,
+                    rx_bytes=stat.rx_bytes,
+                    tx_bytes=stat.tx_bytes
+                ))
+            else:
+                # Calculate rate from previous point
+                prev = stats[i - 1]
+                time_diff = (stat.timestamp - prev.timestamp).total_seconds()
+                
+                if time_diff > 0:
+                    rx_mbps = (stat.rx_bytes * 8) / (time_diff * 1_000_000)
+                    tx_mbps = (stat.tx_bytes * 8) / (time_diff * 1_000_000)
+                else:
+                    rx_mbps = 0.0
+                    tx_mbps = 0.0
+                
+                data_points.append(ClientConnectionDataPoint(
+                    timestamp=stat.timestamp,
+                    rx_mbps=round(rx_mbps, 2),
+                    tx_mbps=round(tx_mbps, 2),
+                    rx_bytes=stat.rx_bytes,
+                    tx_bytes=stat.tx_bytes
+                ))
+    else:
+        # Aggregate by interval (only if we have raw data)
+        interval_seconds = {
+            "1m": 60,
+            "5m": 300,
+            "1h": 3600
+        }.get(interval, 60)
+        
+        # Group stats by time buckets
+        buckets = {}
+        for stat in stats:
+            # Round timestamp to interval boundary
+            timestamp_seconds = int(stat.timestamp.timestamp())
+            rounded_seconds = (timestamp_seconds // interval_seconds) * interval_seconds
+            bucket_time = datetime.fromtimestamp(rounded_seconds, tz=timezone.utc).replace(microsecond=0)
+            
+            if bucket_time not in buckets:
+                buckets[bucket_time] = {
+                    'rx_bytes': 0,
+                    'tx_bytes': 0,
+                    'count': 0
+                }
+            
+            buckets[bucket_time]['rx_bytes'] += stat.rx_bytes
+            buckets[bucket_time]['tx_bytes'] += stat.tx_bytes
+            buckets[bucket_time]['count'] += 1
+        
+        # Convert buckets to data points
+        sorted_times = sorted(buckets.keys())
+        for i, bucket_time in enumerate(sorted_times):
+            bucket = buckets[bucket_time]
+            
+            if i == 0:
+                rx_mbps = 0.0
+                tx_mbps = 0.0
+            else:
+                prev_time = sorted_times[i - 1]
+                time_diff = (bucket_time - prev_time).total_seconds()
+                
+                if time_diff > 0:
+                    rx_mbps = (bucket['rx_bytes'] * 8) / (time_diff * 1_000_000)
+                    tx_mbps = (bucket['tx_bytes'] * 8) / (time_diff * 1_000_000)
+                else:
+                    rx_mbps = 0.0
+                    tx_mbps = 0.0
+            
+            data_points.append(ClientConnectionDataPoint(
+                timestamp=bucket_time,
+                rx_mbps=round(rx_mbps, 2),
+                tx_mbps=round(tx_mbps, 2),
+                rx_bytes=bucket['rx_bytes'],
+                tx_bytes=bucket['tx_bytes']
+            ))
+    
+    return ClientConnectionHistory(
+        client_ip=client_ip,
+        remote_ip=remote_ip,
+        remote_port=remote_port,
+        data=data_points
+    )
 

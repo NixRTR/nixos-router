@@ -7,6 +7,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Network } from './pages/Network';
 import { Clients } from './pages/Clients';
 import { DeviceUsage } from './pages/DeviceUsage';
+import { ConnectionDetails } from './pages/ConnectionDetails';
 import { System } from './pages/System';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -48,6 +49,22 @@ export default function App() {
           element={
             <ProtectedRoute>
               <DeviceUsage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/device-usage/:ipAddress"
+          element={
+            <ProtectedRoute>
+              <ConnectionDetails sourcePage="device-usage" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/devices/:ipAddress"
+          element={
+            <ProtectedRoute>
+              <ConnectionDetails sourcePage="devices" />
             </ProtectedRoute>
           }
         />

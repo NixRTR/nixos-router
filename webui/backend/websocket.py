@@ -10,13 +10,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import MetricsSnapshot, SystemMetrics, InterfaceStats, ServiceStatus, DHCPLease, DNSMetrics
-from .database import AsyncSessionLocal, SystemMetricsDB, InterfaceStatsDB, ServiceStatusDB, DHCPLeaseDB, DiskIOMetricsDB, TemperatureMetricsDB, ClientBandwidthStatsDB
+from .database import AsyncSessionLocal, SystemMetricsDB, InterfaceStatsDB, ServiceStatusDB, DHCPLeaseDB, DiskIOMetricsDB, TemperatureMetricsDB, ClientBandwidthStatsDB, ClientConnectionStatsDB
 from .collectors.system import collect_system_metrics, collect_disk_io, collect_temperatures
 from .collectors.network import collect_interface_stats
 from .collectors.dhcp import parse_kea_leases
 from .collectors.services import collect_service_statuses
 from .collectors.dns import collect_dns_stats
 from .collectors.client_bandwidth import collect_client_bandwidth
+from .collectors.client_connections import collect_client_connections
 from .config import settings
 
 
@@ -112,6 +113,9 @@ class ConnectionManager:
         # Collect client bandwidth (with CPU governance built-in)
         client_bandwidth = collect_client_bandwidth() if settings.bandwidth_collection_enabled else []
         
+        # Collect client connections
+        client_connections = collect_client_connections() if settings.bandwidth_collection_enabled else []
+        
         # Store in database asynchronously
         asyncio.create_task(self._store_metrics(
             system_metrics,
@@ -120,7 +124,8 @@ class ConnectionManager:
             dhcp_leases,
             disk_io,
             temperatures,
-            client_bandwidth
+            client_bandwidth,
+            client_connections
         ))
         
         # Create snapshot for broadcast
@@ -143,7 +148,8 @@ class ConnectionManager:
         dhcp_leases: List[DHCPLease],
         disk_io: List,
         temperatures: List,
-        client_bandwidth: List[dict] = None
+        client_bandwidth: List[dict] = None,
+        client_connections: List[dict] = None
     ):
         """Store metrics in database
         
@@ -268,9 +274,27 @@ class ConnectionManager:
                             rx_bytes=bw_data['rx_bytes'],
                             tx_bytes=bw_data['tx_bytes'],
                             rx_bytes_total=bw_data['rx_bytes_total'],
-                            tx_bytes_total=bw_data['tx_bytes_total']
+                            tx_bytes_total=bw_data['tx_bytes_total'],
+                            aggregation_level='raw'
                         )
                         session.add(bw_db)
+                
+                # Store client connection statistics
+                if client_connections:
+                    for conn_data in client_connections:
+                        conn_db = ClientConnectionStatsDB(
+                            timestamp=conn_data['timestamp'],
+                            client_ip=conn_data['client_ip'],
+                            client_mac=conn_data['client_mac'],
+                            remote_ip=conn_data['remote_ip'],
+                            remote_port=conn_data['remote_port'],
+                            rx_bytes=conn_data['rx_bytes'],
+                            tx_bytes=conn_data['tx_bytes'],
+                            rx_bytes_total=conn_data['rx_bytes_total'],
+                            tx_bytes_total=conn_data['tx_bytes_total'],
+                            aggregation_level='raw'
+                        )
+                        session.add(conn_db)
                 
                 await session.commit()
                 

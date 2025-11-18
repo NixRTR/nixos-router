@@ -261,3 +261,64 @@ class ClientBandwidthCurrent(BaseModel):
     tx_bytes_total: int = Field(..., ge=0)
     last_updated: datetime
 
+
+class ClientConnectionStats(BaseModel):
+    """Per-connection bandwidth statistics"""
+    timestamp: datetime
+    client_ip: str
+    client_mac: str
+    remote_ip: str
+    remote_port: int = Field(..., ge=1, le=65535)
+    rx_bytes: int = Field(..., ge=0)  # download bytes in this interval
+    tx_bytes: int = Field(..., ge=0)  # upload bytes in this interval
+    rx_bytes_total: int = Field(..., ge=0)  # cumulative download
+    tx_bytes_total: int = Field(..., ge=0)  # cumulative upload
+    aggregation_level: str = Field(default='raw', pattern="^(raw|1m|5m|1h|1d)$")
+    
+    @field_validator('client_ip', 'remote_ip')
+    @classmethod
+    def validate_ip(cls, v: str) -> str:
+        """Validate IP address"""
+        try:
+            IPv4Address(v)
+            return v
+        except ValueError:
+            raise ValueError('Invalid IPv4 address')
+    
+    @field_validator('client_mac')
+    @classmethod
+    def validate_mac(cls, v: str) -> str:
+        """Validate MAC address format"""
+        mac_pattern = r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
+        if not re.match(mac_pattern, v):
+            raise ValueError('Invalid MAC address format')
+        return v.lower().replace('-', ':')
+
+
+class ClientConnectionCurrent(BaseModel):
+    """Current connection stats with hostname"""
+    remote_ip: str
+    remote_port: int
+    hostname: Optional[str] = None
+    download_mb: float = Field(..., ge=0)  # cumulative MB for time period
+    download_mbps: float = Field(..., ge=0)  # current rate in Mbit/s
+    upload_mb: float = Field(..., ge=0)  # cumulative MB for time period
+    upload_mbps: float = Field(..., ge=0)  # current rate in Mbit/s
+
+
+class ClientConnectionDataPoint(BaseModel):
+    """Single data point for connection history"""
+    timestamp: datetime
+    rx_mbps: float = Field(..., ge=0)
+    tx_mbps: float = Field(..., ge=0)
+    rx_bytes: int = Field(..., ge=0)
+    tx_bytes: int = Field(..., ge=0)
+
+
+class ClientConnectionHistory(BaseModel):
+    """Connection history for charting"""
+    client_ip: str
+    remote_ip: str
+    remote_port: int
+    data: List[ClientConnectionDataPoint]
+

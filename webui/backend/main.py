@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
+import asyncio
+from datetime import datetime, time, timedelta, timezone
 
 from .config import settings
 from .database import init_db
@@ -16,6 +18,37 @@ from .api.history import router as history_router
 from .api.bandwidth import router as bandwidth_router
 from .api.devices import router as devices_router
 from .api.system import router as system_router
+from .collectors.aggregation import run_aggregation_job
+
+
+async def daily_aggregation_task():
+    """Background task that runs aggregation job daily at 2 AM"""
+    while True:
+        try:
+            # Calculate time until next 2 AM UTC
+            now = datetime.now(timezone.utc)
+            target_hour = 2  # 2 AM UTC
+            
+            # If it's already past 2 AM today, schedule for tomorrow
+            if now.hour >= target_hour:
+                next_run = datetime(now.year, now.month, now.day, target_hour, 0, 0, tzinfo=timezone.utc) + timedelta(days=1)
+            else:
+                next_run = datetime(now.year, now.month, now.day, target_hour, 0, 0, tzinfo=timezone.utc)
+            
+            wait_seconds = (next_run - now).total_seconds()
+            print(f"Aggregation job scheduled for {next_run} (in {wait_seconds/3600:.1f} hours)")
+            
+            await asyncio.sleep(wait_seconds)
+            
+            # Run aggregation job
+            await run_aggregation_job()
+            
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"Error in daily aggregation task: {e}")
+            # Wait 1 hour before retrying on error
+            await asyncio.sleep(3600)
 
 
 @asynccontextmanager
@@ -35,10 +68,21 @@ async def lifespan(app: FastAPI):
     await manager.start_broadcasting()
     print("WebSocket broadcaster started")
     
+    # Start daily aggregation task
+    aggregation_task = asyncio.create_task(daily_aggregation_task())
+    print("Daily aggregation task started")
+    
     yield
     
     # Shutdown
     print("Shutting down...")
+    aggregation_task.cancel()
+    try:
+        await aggregation_task
+    except asyncio.CancelledError:
+        pass
+    print("Aggregation task stopped")
+    
     await manager.stop_broadcasting()
     print("WebSocket broadcaster stopped")
 

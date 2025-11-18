@@ -146,6 +146,35 @@ class APIClient {
     const response = await this.client.get('/api/bandwidth/interfaces/current');
     return response.data;
   }
+
+  // Client connections
+  async getClientConnections(
+    clientIp: string,
+    timeRange: string = '1h'
+  ): Promise<any[]> {
+    const response = await this.client.get(`/api/bandwidth/connections/${clientIp}/current`, {
+      params: { range: timeRange },
+    });
+    return response.data;
+  }
+
+  async getConnectionHistory(
+    clientIp: string,
+    remoteIp: string,
+    remotePort: number,
+    timeRange: string = '1h',
+    interval: string = 'raw'
+  ): Promise<any> {
+    const response = await this.client.get(`/api/bandwidth/connections/${clientIp}/history`, {
+      params: {
+        remote_ip: remoteIp,
+        remote_port: remotePort,
+        range: timeRange,
+        interval,
+      },
+    });
+    return response.data;
+  }
 }
 
 export const apiClient = new APIClient();

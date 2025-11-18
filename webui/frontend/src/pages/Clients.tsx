@@ -325,13 +325,22 @@ export function Clients() {
                         {new Date(device.last_seen).toLocaleString()}
                       </Table.Cell>
                       <Table.Cell>
-                        <Button
-                          size="xs"
-                          color={isDeviceBlocked(device) ? 'success' : 'failure'}
-                          onClick={() => handleBlockToggle(device)}
-                        >
-                          {isDeviceBlocked(device) ? 'Enable' : 'Disable'}
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            size="xs"
+                            color="gray"
+                            onClick={() => navigate(`/devices/${device.ip_address}`)}
+                          >
+                            Details
+                          </Button>
+                          <Button
+                            size="xs"
+                            color={isDeviceBlocked(device) ? 'success' : 'failure'}
+                            onClick={() => handleBlockToggle(device)}
+                          >
+                            {isDeviceBlocked(device) ? 'Enable' : 'Disable'}
+                          </Button>
+                        </div>
                       </Table.Cell>
                     </Table.Row>
                   ))}
@@ -403,14 +412,24 @@ export function Clients() {
                       <span>{new Date(device.last_seen).toLocaleString()}</span>
                     </div>
                     <div className="pt-3">
-                      <Button
-                        size="xs"
-                        color={isDeviceBlocked(device) ? 'success' : 'failure'}
-                        onClick={() => handleBlockToggle(device)}
-                        className="w-full"
-                      >
-                        {isDeviceBlocked(device) ? 'Enable' : 'Disable'}
-                      </Button>
+                      <div className="flex gap-2 mb-2">
+                        <Button
+                          size="xs"
+                          color="gray"
+                          onClick={() => navigate(`/devices/${device.ip_address}`)}
+                          className="flex-1"
+                        >
+                          Details
+                        </Button>
+                        <Button
+                          size="xs"
+                          color={isDeviceBlocked(device) ? 'success' : 'failure'}
+                          onClick={() => handleBlockToggle(device)}
+                          className="flex-1"
+                        >
+                          {isDeviceBlocked(device) ? 'Enable' : 'Disable'}
+                        </Button>
+                      </div>
                       <div className="mt-2 flex gap-2">
                         <Button size="xs" color="light" className="flex-1" onClick={() => editNickname(device)}>Edit Nickname</Button>
                         <Button size="xs" color={device.favorite ? 'warning' : 'light'} onClick={() => toggleFavorite(device)}>

@@ -422,6 +422,7 @@ export function DeviceUsage() {
                   <Table.HeadCell>DL (MB)</Table.HeadCell>
                   <Table.HeadCell>UL (MB)</Table.HeadCell>
                   <Table.HeadCell>Chart</Table.HeadCell>
+                  <Table.HeadCell>Details</Table.HeadCell>
                   <Table.HeadCell>Enable/Disable</Table.HeadCell>
                 </Table.Head>
                 <Table.Body className="divide-y">
@@ -455,6 +456,11 @@ export function DeviceUsage() {
                         <Table.Cell>
                           <Button size="xs" color="blue" onClick={() => openChart(device)}>
                             Chart
+                          </Button>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Button size="xs" color="gray" onClick={() => navigate(`/device-usage/${device.ip_address}`)}>
+                            Details
                           </Button>
                         </Table.Cell>
                         <Table.Cell>
@@ -512,6 +518,9 @@ export function DeviceUsage() {
                     <div className="flex gap-2">
                       <Button size="xs" color="blue" onClick={() => openChart(device)} className="flex-1">
                         Chart
+                      </Button>
+                      <Button size="xs" color="gray" onClick={() => navigate(`/device-usage/${device.ip_address}`)} className="flex-1">
+                        Details
                       </Button>
                       <Button
                         size="xs"

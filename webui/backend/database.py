@@ -207,10 +207,36 @@ class ClientBandwidthStatsDB(Base):
     tx_bytes = Column(BigInteger, nullable=False)  # upload bytes in this interval
     rx_bytes_total = Column(BigInteger, nullable=False)  # cumulative download
     tx_bytes_total = Column(BigInteger, nullable=False)  # cumulative upload
+    aggregation_level = Column(String(2), default='raw', nullable=False)  # 'raw', '1m', '5m', '1h', '1d'
     
     __table_args__ = (
         Index('idx_client_bandwidth_mac_time', 'mac_address', 'timestamp', postgresql_using='btree'),
         Index('idx_client_bandwidth_timestamp', 'timestamp', postgresql_using='btree'),
+        Index('idx_client_bandwidth_agg_level', 'aggregation_level', 'timestamp', postgresql_using='btree'),
+    )
+
+
+class ClientConnectionStatsDB(Base):
+    """Per-connection bandwidth statistics (tracked by client IP and remote IP:Port)"""
+    __tablename__ = "client_connection_stats"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    client_ip = Column(INET, nullable=False, index=True)
+    client_mac = Column(MACADDR, nullable=False)
+    remote_ip = Column(INET, nullable=False)
+    remote_port = Column(Integer, nullable=False)
+    rx_bytes = Column(BigInteger, nullable=False)  # download bytes in this interval
+    tx_bytes = Column(BigInteger, nullable=False)  # upload bytes in this interval
+    rx_bytes_total = Column(BigInteger, nullable=False)  # cumulative download
+    tx_bytes_total = Column(BigInteger, nullable=False)  # cumulative upload
+    aggregation_level = Column(String(2), default='raw', nullable=False)  # 'raw', '1m', '5m', '1h', '1d'
+    
+    __table_args__ = (
+        Index('idx_client_connection_client_time', 'client_ip', 'timestamp', postgresql_using='btree'),
+        Index('idx_client_connection_client_remote', 'client_ip', 'remote_ip', 'remote_port', 'timestamp', postgresql_using='btree'),
+        Index('idx_client_connection_timestamp', 'timestamp', postgresql_using='btree'),
+        Index('idx_client_connection_agg_level', 'aggregation_level', 'timestamp', postgresql_using='btree'),
     )
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
