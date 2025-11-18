@@ -190,6 +190,17 @@ def _parse_conntrack_proc(proc_output: str) -> Dict[Tuple[str, str, int], Dict[s
     return connections
 
 
+def _parse_conntrack_stats(stats_output: str) -> Dict[Tuple[str, str, int], Dict[str, int]]:
+    """Parse conntrack stats output format
+    
+    Returns:
+        Dict[(client_ip, remote_ip, remote_port), {rx_bytes_total, tx_bytes_total}]
+    """
+    # Stats format parsing - this is a placeholder
+    # The actual format may vary, so we'll need to adapt based on actual output
+    return {}
+
+
 def _parse_conntrack_xml(xml_output: str) -> Dict[Tuple[str, str, int], Dict[str, int]]:
     """Parse conntrack XML output to extract connection information
     
@@ -400,43 +411,93 @@ def collect_client_connections() -> List[Dict]:
     results = []
     
     try:
-        # Query conntrack for active connections with byte counts
-        # Use -o xml to get byte counts, or parse /proc/net/netfilter/nf_conntrack directly
-        # Try XML format first as it includes byte counts
-        result = _run_conntrack([
-            "-L", "-n", "-o", "xml"
-        ])
+        # Try reading from /proc/net/nf_conntrack first (most reliable for byte counts)
+        # This file contains the raw conntrack data with byte counts
+        proc_paths = [
+            '/proc/net/nf_conntrack',  # Standard location (confirmed to exist)
+            '/proc/net/netfilter/nf_conntrack',  # Alternative location
+        ]
+        proc_output = None
+        for proc_path in proc_paths:
+            try:
+                with open(proc_path, 'r') as f:
+                    proc_output = f.read()
+                print(f"Debug: Successfully read conntrack data from {proc_path}")
+                break
+            except FileNotFoundError:
+                continue
+            except Exception as e:
+                print(f"Warning: Failed to read {proc_path}: {e}")
+                continue
         
         # Parse connections
         current_connections = {}
         
-        if result.returncode != 0 or not result.stdout:
-            print(f"Warning: conntrack query failed: {result.stderr}")
-            # Try fallback to /proc
-            try:
-                with open('/proc/net/netfilter/nf_conntrack', 'r') as f:
-                    proc_output = f.read()
-                current_connections = _parse_conntrack_proc(proc_output)
-            except Exception as e:
-                print(f"Warning: Failed to read /proc/net/netfilter/nf_conntrack: {e}")
-                return results
+        if proc_output:
+            # Use /proc data directly (has byte counts)
+            current_connections = _parse_conntrack_proc(proc_output)
         else:
-            # Try parsing XML output first
+            # Fallback to conntrack command if /proc is not available
+            # Query conntrack for active connections with byte counts
+            # Try different output formats to get byte counts
+            # First try: -o stats (includes byte counts)
+            # Second try: -o xml (includes byte counts)
+            # Fallback: extended output (may not have bytes)
+            result = _run_conntrack([
+                "-L", "-n", "-o", "stats"
+            ])
+            
+            # If stats format doesn't work, try XML
+            if result.returncode != 0 or not result.stdout:
+                result = _run_conntrack([
+                    "-L", "-n", "-o", "xml"
+                ])
+            
+            if result.returncode != 0 or not result.stdout:
+                print(f"Warning: conntrack query failed: {result.stderr}")
+                return results
+            
+            # Try parsing different output formats
             if result.stdout and '<?xml' in result.stdout:
                 # XML format - parse it
                 current_connections = _parse_conntrack_xml(result.stdout)
+                print(f"Debug: Using XML parser, found {len(current_connections)} connections")
+            elif result.stdout and 'stats' in result.stdout.lower() or 'bytes' in result.stdout.lower():
+                # Stats format or output with bytes - try to parse it
+                # Stats format might be different, try parsing as extended first
+                current_connections = _parse_conntrack_output(result.stdout)
+                if not current_connections:
+                    # Try parsing stats format
+                    current_connections = _parse_conntrack_stats(result.stdout)
+                print(f"Debug: Using stats/extended parser, found {len(current_connections)} connections")
             else:
                 # Try parsing as extended format (though it might not have bytes)
                 current_connections = _parse_conntrack_output(result.stdout)
+                print(f"Debug: Using extended parser, found {len(current_connections)} connections")
                 
                 # If no connections found, try /proc fallback
                 if not current_connections:
-                    try:
-                        with open('/proc/net/netfilter/nf_conntrack', 'r') as f:
-                            proc_output = f.read()
+                    proc_paths = [
+                        '/proc/net/nf_conntrack',  # Standard location (confirmed to exist)
+                        '/proc/net/netfilter/nf_conntrack',  # Alternative location
+                    ]
+                    proc_output = None
+                    for proc_path in proc_paths:
+                        try:
+                            with open(proc_path, 'r') as f:
+                                proc_output = f.read()
+                            print(f"Debug: Fallback: Successfully read conntrack data from {proc_path}")
+                            break
+                        except FileNotFoundError:
+                            continue
+                        except Exception as e:
+                            print(f"Warning: Failed to read {proc_path}: {e}")
+                            continue
+                    
+                    if proc_output:
                         current_connections = _parse_conntrack_proc(proc_output)
-                    except Exception as e:
-                        print(f"Warning: Failed to read /proc/net/netfilter/nf_conntrack: {e}")
+                    else:
+                        print(f"Warning: Could not find conntrack data in /proc (tried: {proc_paths})")
         
         if not current_connections:
             return results
