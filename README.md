@@ -10,6 +10,8 @@ A NixOS-based router configuration for home networks.
 - Web dashboard for monitoring
 - Dynamic DNS updates (Linode)
 - Firewall and NAT
+- Secrets management via [sops-nix](https://github.com/Mic92/sops-nix)
+- Installation Script
 
 ## Requirements
 
@@ -17,21 +19,12 @@ A NixOS-based router configuration for home networks.
 - Network interfaces for WAN and LAN
 - Internet connection for initial setup
 
-## Installation
+## Documentation
+Documentation is available in [docs/](docs/documentation.md)
 
-### Option 1: Custom ISO
+## Quick Start
 
-1. Build the ISO:
-   ```bash
-   cd iso
-   ./build-iso.sh
-   ```
-
-2. Write ISO to USB and boot
-
-3. Follow on-screen installation menu
-
-### Option 2: Online Installer
+### Option 1: Online Installer
 
 Boot from standard NixOS ISO and run:
 
@@ -41,7 +34,22 @@ chmod +x install.sh
 sudo ./install.sh
 ```
 
-## Configuration
+### Option 2: Custom ISO
+
+#### This is still a work in progress
+
+1. Build the ISO:
+
+   ```bash
+   cd iso
+   ./build-iso.sh
+   ```
+
+2. Write ISO to USB and boot
+
+3. Follow on-screen installation menu
+
+## Manual Configuration
 
 Edit `router-config.nix` to configure:
 
@@ -57,6 +65,7 @@ Edit `router-config.nix` to configure:
 Access at `http://router-ip:8080`
 
 Shows:
+
 - System metrics (CPU, memory, load)
 - Network interface statistics
 - Device usage and bandwidth
@@ -66,8 +75,11 @@ Shows:
 
 - `router-config.nix` - Main configuration file
 - `configuration.nix` - NixOS system configuration
+- `docs/` - Project Documentation (IN PROGRESS)
+- `iso/` - Files related to buiding the Installation ISO
 - `modules/` - Router modules (router, dns, dhcp, webui, etc.)
 - `scripts/` - Installation and update scripts
+- `secrets/` - Example SOPS secrets.yaml
 - `webui/` - Web dashboard (FastAPI backend, React frontend)
 
 ## Updating

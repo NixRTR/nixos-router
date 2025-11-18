@@ -82,6 +82,123 @@ sync_repository() {
     log_success "Repository sync complete"
 }
 
+check_config_structure() {
+    local config_file="${TARGET_DIR}/router-config.nix"
+    
+    if [[ ! -f "$config_file" ]]; then
+        log_warning "router-config.nix not found, skipping structure check"
+        return
+    fi
+    
+    log_info "Checking router-config.nix structure..."
+    
+    local missing_sections=()
+    
+    # Check for required top-level sections
+    if ! grep -q "^[[:space:]]*domain[[:space:]]*=" "$config_file"; then
+        missing_sections+=("domain")
+    fi
+    
+    if ! grep -q "^[[:space:]]*nameservers[[:space:]]*=" "$config_file"; then
+        missing_sections+=("nameservers")
+    fi
+    
+    if ! grep -q "^[[:space:]]*homelab[[:space:]]*=" "$config_file"; then
+        missing_sections+=("homelab")
+    fi
+    
+    # Check for second 'lan' section (network config, not bridge config)
+    local lan_network_count
+    lan_network_count=$(grep -c "^[[:space:]]*lan[[:space:]]*=" "$config_file" || echo "0")
+    if [[ $lan_network_count -lt 2 ]]; then
+        missing_sections+=("lan (network config)")
+    fi
+    
+    if ! grep -q "^[[:space:]]*portForwards[[:space:]]*=" "$config_file"; then
+        missing_sections+=("portForwards")
+    fi
+    
+    if ! grep -q "^[[:space:]]*dyndns[[:space:]]*=" "$config_file"; then
+        missing_sections+=("dyndns")
+    fi
+    
+    if ! grep -q "^[[:space:]]*dns[[:space:]]*=" "$config_file"; then
+        missing_sections+=("dns (global)")
+    fi
+    
+    if ! grep -q "^[[:space:]]*webui[[:space:]]*=" "$config_file"; then
+        missing_sections+=("webui")
+    fi
+    
+    if [[ ${#missing_sections[@]} -eq 0 ]]; then
+        log_success "router-config.nix structure is complete"
+        return
+    fi
+    
+    log_warning "Missing sections in router-config.nix: ${missing_sections[*]}"
+    echo
+    read -p "Would you like to add the missing sections now? [y/N]: " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_info "Skipping structure update. You can add missing sections manually."
+        return
+    fi
+    
+    # Backup before modifying
+    local timestamp
+    timestamp=$(date +"%Y%m%d-%H%M%S")
+    local backup="${config_file}.bak-${timestamp}"
+    cp "$config_file" "$backup"
+    log_info "Backup created: $backup"
+    
+    # Add missing sections interactively
+    for section in "${missing_sections[@]}"; do
+        case "$section" in
+            "domain")
+                read -p "Enter domain [example.com]: " domain_input
+                domain="${domain_input:-example.com}"
+                # Add domain after hostname
+                sed -i "/^[[:space:]]*hostname[[:space:]]*=/a\  domain = \"$domain\";" "$config_file"
+                ;;
+            "nameservers")
+                read -p "Enter nameservers (space-separated) [1.1.1.1 9.9.9.9]: " nameservers_input
+                nameservers="${nameservers_input:-1.1.1.1 9.9.9.9}"
+                nameservers_nix="[ $(echo "$nameservers" | sed 's/\([^ ]*\)/"\1"/g') ]"
+                # Add nameservers after domain
+                sed -i "/^[[:space:]]*domain[[:space:]]*=/a\  nameservers = $nameservers_nix;" "$config_file"
+                ;;
+            "homelab")
+                log_info "Adding homelab network configuration section..."
+                # This is complex, so we'll add a minimal template
+                # Find where to insert (after lan bridges section closes)
+                # For now, just warn the user
+                log_warning "homelab section is complex - please add it manually. See docs/documentation.md for structure."
+                ;;
+            "lan (network config)")
+                log_warning "LAN network configuration section is complex - please add it manually. See docs/documentation.md for structure."
+                ;;
+            "portForwards")
+                # Add empty portForwards array before closing brace
+                sed -i '$ i\  portForwards = [];' "$config_file"
+                ;;
+            "dyndns")
+                # Add minimal dyndns config
+                sed -i '$ i\  dyndns = { enable = false; provider = "linode"; domain = ""; subdomain = ""; domainId = 0; recordId = 0; checkInterval = "5m"; };' "$config_file"
+                ;;
+            "dns (global)")
+                # Add minimal global DNS config
+                sed -i '$ i\  dns = { enable = true; upstreamServers = [ "1.1.1.1@853#cloudflare-dns.com" "9.9.9.9@853#dns.quad9.net" ]; };' "$config_file"
+                ;;
+            "webui")
+                # Add minimal webui config
+                sed -i '$ i\  webui = { enable = true; port = 8080; collectionInterval = 2; database = { host = "localhost"; port = 5432; name = "router_webui"; user = "router_webui"; }; retentionDays = 30; };' "$config_file"
+                ;;
+        esac
+    done
+    
+    log_success "Structure check complete. Please review $config_file and adjust as needed."
+}
+
 apply_configuration() {
     log_info "Running nixos-rebuild switch with flake ${TARGET_DIR}#router"
     nixos-rebuild switch --flake "${TARGET_DIR}#router"
@@ -99,6 +216,7 @@ main() {
 
     backup_existing_config
     sync_repository
+    check_config_structure
     apply_configuration
 }
 

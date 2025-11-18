@@ -28,6 +28,12 @@ HOSTNAME="${HOSTNAME_INPUT:-nixos-router}"
 read -p "Enter timezone [America/Anchorage]: " TIMEZONE_INPUT
 TIMEZONE="${TIMEZONE_INPUT:-America/Anchorage}"
 
+read -p "Enter domain [example.com]: " DOMAIN_INPUT
+DOMAIN="${DOMAIN_INPUT:-example.com}"
+
+read -p "Enter nameservers (space-separated) [1.1.1.1 9.9.9.9]: " NAMESERVERS_INPUT
+NAMESERVERS="${NAMESERVERS_INPUT:-1.1.1.1 9.9.9.9}"
+
 # Network configuration
 echo
 echo "Network Configuration:"
@@ -345,6 +351,9 @@ setup_router_config() {
     # Generate router configuration file
     log_info "Generating router configuration file"
 
+    # Convert nameservers to Nix array format
+    NAMESERVERS_NIX="[ $(echo "$NAMESERVERS" | sed 's/\([^ ]*\)/"\1"/g') ]"
+
     if [[ "$MULTI_LAN_MODE" == "false" ]]; then
         # Simple mode - single bridge
         # Convert space-separated interfaces to Nix array format
@@ -358,9 +367,12 @@ setup_router_config() {
 {
   # System settings
   hostname = "$HOSTNAME";
+  domain = "$DOMAIN";
   timezone = "$TIMEZONE";
   username = "routeradmin";
-  
+
+  nameservers = $NAMESERVERS_NIX;
+
   # SSH authorized keys for the router admin user
   sshKeys = [
     # Add your SSH public keys here, one per line
@@ -389,25 +401,136 @@ setup_router_config() {
     isolation = false;  # No isolation with single bridge
   };
 
-  # DHCP configuration
-  dhcp = {
-    homelab = {
-      interface = "br0";
-      network = "$LAN_NETWORK";
-      prefix = $LAN_PREFIX;
+  # HOMELAB network configuration
+  homelab = {
+    # Network settings
+    ipAddress = "$LAN_IP";
+    subnet = "$LAN_NETWORK/$LAN_PREFIX";
+
+    # DHCP settings
+    dhcp = {
+      enable = true;
       start = "$DHCP_START";
       end = "$DHCP_END";
       leaseTime = "$DHCP_LEASE";
-      gateway = "$LAN_IP";
-      dns = "$LAN_IP";
+      dnsServers = [
+        "$LAN_IP"
+      ];
+
+      # Dynamic DNS domain for DHCP clients (optional)
+      # If set, ALL DHCP clients get automatic DNS entries
+      # Example: client with hostname "phone" gets "phone.dhcp.homelab.local"
+      # If no hostname provided, uses: "dhcp-<last-octet>.dhcp.homelab.local"
+      dynamicDomain = "";  # Set to "" to disable dynamic DNS
+
+      reservations = [
+        # Example: { hostname = "desktop"; hwAddress = "11:22:33:44:55:66"; ipAddress = "192.168.3.50"; }
+        # Example: { hostname = "laptop"; hwAddress = "aa:bb:cc:dd:ee:ff"; ipAddress = "192.168.3.51"; }
+      ];
+    };
+
+    # DNS settings for this network
+    dns = {
+      enable = true;  # Set to false to disable DNS server for this network
+      # DNS A Records (hostname → IP address)
+      a_records = {
+        # Add your DNS records here
+      };
+
+      # DNS CNAME Records (alias → canonical name)
+      cname_records = {
+        # Add more aliases as needed:
+        # "app.jeandr.net" = { target = "hera.jeandr.net"; comment = "Application"; };
+        # "api.jeandr.net" = { target = "hera.jeandr.net"; comment = "API"; };
+      };
+
+      # Blocklist configuration
+      blocklists = {
+        enable = false;  # Master switch - set to false to disable all blocking
+
+        stevenblack = {
+          enable = false;
+          url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+          description = "Ads and malware blocking (250K+ domains)";
+          updateInterval = "24h";
+        };
+
+        phishing-army = {
+          enable = false;
+          url = "https://phishing.army/download/phishing_army_blocklist.txt";
+          description = "Phishing and scam protection";
+          updateInterval = "12h";
+        };
+      };
+      whitelist = [
+      ];
     };
   };
 
-  # Port forwarding (add your rules here)
-  portForwards = [];
+  # Port Forwarding Rules
+  portForwards = [
+    # Add your port forwarding rules here
+    # {
+    #   proto = "both";
+    #   externalPort = 443;
+    #   destination = "192.168.2.33";
+    #   destinationPort = 443;
+    # }
+  ];
 
-  # Optional features (disabled by default)
-  dyndns.enable = false;
+  # Dynamic DNS Configuration
+  dyndns = {
+    enable = false;
+    provider = "linode";
+
+    # Domain and record to update
+    domain = "";
+    subdomain = "";  # Root domain
+
+    # Linode API credentials (stored in sops secrets)
+    domainId = 0;
+    recordId = 0;
+
+    # Update interval
+    checkInterval = "5m";
+  };
+
+  # Global DNS configuration
+  dns = {
+    enable = true;
+
+    # Upstream DNS servers (shared by all networks)
+    upstreamServers = [
+      "1.1.1.1@853#cloudflare-dns.com"  # Cloudflare DNS over TLS
+      "9.9.9.9@853#dns.quad9.net"        # Quad9 DNS over TLS
+    ];
+  };
+
+  # Web UI Configuration
+  webui = {
+    # Enable web-based monitoring dashboard
+    enable = true;
+
+    # Port for the WebUI (default: 8080)
+    port = 8080;
+
+    # Data collection interval in seconds (default: 2)
+    # Lower = more frequent updates, higher CPU usage
+    # Higher = less frequent updates, lower CPU usage
+    collectionInterval = 2;
+
+    # Database settings (PostgreSQL)
+    database = {
+      host = "localhost";
+      port = 5432;
+      name = "router_webui";
+      user = "router_webui";
+    };
+
+    # Historical data retention in days (default: 30)
+    # Older data is automatically cleaned up
+    retentionDays = 30;
+  };
 }
 EOF
 
@@ -433,9 +556,12 @@ EOF
 {
   # System settings
   hostname = "$HOSTNAME";
+  domain = "$DOMAIN";
   timezone = "$TIMEZONE";
   username = "routeradmin";
-  
+
+  nameservers = $NAMESERVERS_NIX;
+
   # SSH authorized keys for the router admin user
   sshKeys = [
     # Add your SSH public keys here, one per line
@@ -450,6 +576,10 @@ EOF
 
   # LAN configuration - Multiple isolated networks
   lan = {
+    # Physical port mapping (for reference):
+    # enp4s0, enp5s0 = HOMELAB (left two ports on 4-port card)
+    # enp6s0, enp7s0 = LAN (right two ports on 4-port card)
+
     bridges = [
       # HOMELAB network - servers, IoT devices
       {
@@ -474,10 +604,11 @@ EOF
     ];
 
     # Block traffic between HOMELAB and LAN at the router level
+    # (Hera and Triton have dual NICs and can bridge as needed)
     isolation = true;
 
-    # Exception: Allow specific devices to bypass isolation
-    # Format: { source = "IP"; sourceBridge = "brX"; destBridge = "brY"; description = "..."; }
+    # Exception: Allow specific LAN devices to access HOMELAB
+    # Format: { source = "LAN IP"; sourceBridge = "br1"; destBridge = "br0"; }
     isolationExceptions = [
       # Add your exceptions here, example:
       # {
@@ -489,38 +620,211 @@ EOF
     ];
   };
 
-  # DHCP configuration - per network
-  dhcp = {
-    # HOMELAB (br0)
-    homelab = {
-      interface = "br0";
-      network = "$HOMELAB_NETWORK";
-      prefix = 24;
+  # HOMELAB network configuration
+  homelab = {
+    # Network settings
+    ipAddress = "$HOMELAB_IP";
+    subnet = "$HOMELAB_NETWORK/24";
+
+    # DHCP settings
+    dhcp = {
+      enable = true;  # Set to false to disable DHCP for this network
       start = "$HOMELAB_DHCP_START";
       end = "$HOMELAB_DHCP_END";
       leaseTime = "$DHCP_LEASE";
-      gateway = "$HOMELAB_IP";
-      dns = "$HOMELAB_IP";
+      dnsServers = [
+        "$HOMELAB_IP"
+      ];
+
+      # Dynamic DNS domain for DHCP clients (optional)
+      # If set, ALL DHCP clients get automatic DNS entries
+      # Example: client with hostname "phone" gets "phone.dhcp.homelab.local"
+      # If no hostname provided, uses: "dhcp-<last-octet>.dhcp.homelab.local"
+      dynamicDomain = "";  # Set to "" to disable dynamic DNS
+
+      reservations = [
+        # Example: { hostname = "desktop"; hwAddress = "11:22:33:44:55:66"; ipAddress = "192.168.3.50"; }
+        # Example: { hostname = "laptop"; hwAddress = "aa:bb:cc:dd:ee:ff"; ipAddress = "192.168.3.51"; }
+      ];
     };
 
-    # LAN (br1)
-    lan = {
-      interface = "br1";
-      network = "$LAN_NETWORK";
-      prefix = 24;
-      start = "$LAN_DHCP_START";
-      end = "$LAN_DHCP_END";
-      leaseTime = "$DHCP_LEASE";
-      gateway = "$LAN_IP";
-      dns = "$LAN_IP";
+    # DNS settings for this network
+    dns = {
+      enable = true;  # Set to false to disable DNS server for this network
+      # DNS A Records (hostname → IP address)
+      a_records = {
+        # Add your DNS records here
+      };
+
+      # DNS CNAME Records (alias → canonical name)
+      cname_records = {
+        # Add more aliases as needed:
+        # "app.jeandr.net" = { target = "hera.jeandr.net"; comment = "Application"; };
+        # "api.jeandr.net" = { target = "hera.jeandr.net"; comment = "API"; };
+      };
+
+      # Blocklist configuration
+      blocklists = {
+        enable = false;  # Master switch - set to false to disable all blocking
+
+        stevenblack = {
+          enable = false;
+          url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+          description = "Ads and malware blocking (250K+ domains)";
+          updateInterval = "24h";
+        };
+
+        phishing-army = {
+          enable = false;
+          url = "https://phishing.army/download/phishing_army_blocklist.txt";
+          description = "Phishing and scam protection";
+          updateInterval = "12h";
+        };
+      };
+      whitelist = [
+      ];
     };
   };
 
-  # Port forwarding (add your rules here)
-  portForwards = [];
+  # LAN network configuration
+  lan = {
+    # Network settings
+    ipAddress = "$LAN_IP";
+    subnet = "$LAN_NETWORK/24";
 
-  # Optional features (disabled by default)
-  dyndns.enable = false;
+    # DHCP settings
+    dhcp = {
+      enable = true;  # Set to false to disable DHCP for this network
+      start = "$LAN_DHCP_START";
+      end = "$LAN_DHCP_END";
+      leaseTime = "$DHCP_LEASE";
+      dnsServers = [
+        "$LAN_IP"
+      ];
+
+      # Dynamic DNS domain for DHCP clients (optional)
+      # If set, ALL DHCP clients get automatic DNS entries
+      # Example: client with hostname "phone" gets "phone.dhcp.lan.local"
+      # If no hostname provided, uses: "dhcp-<last-octet>.dhcp.lan.local"
+      dynamicDomain = "";  # Set to "" to disable dynamic DNS
+
+      reservations = [
+        # Example: { hostname = "desktop"; hwAddress = "11:22:33:44:55:66"; ipAddress = "192.168.3.50"; }
+        # Example: { hostname = "laptop"; hwAddress = "aa:bb:cc:dd:ee:ff"; ipAddress = "192.168.3.51"; }
+      ];
+    };
+
+    # DNS settings for this network
+    dns = {
+      enable = true;  # Set to false to disable DNS server for this network
+      # DNS A Records (hostname → IP address)
+      a_records = {
+        # Add LAN-specific devices here:
+        # "workstation.jeandr.net" = { ip = "192.168.3.101"; comment = "Main workstation"; };
+        # "desktop.jeandr.net" = { ip = "192.168.3.50"; comment = "Desktop computer"; };
+      };
+
+      # DNS CNAME Records (alias → canonical name)
+      cname_records = {
+        # Add more aliases as needed
+      };
+
+      # Blocklist configuration (can differ from HOMELAB)
+      blocklists = {
+        enable = false;  # Master switch
+
+        stevenblack = {
+          enable = false;
+          url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+          description = "Ads and malware blocking (250K+ domains)";
+          updateInterval = "24h";
+        };
+
+        phishing-army = {
+          enable = false;
+          url = "https://phishing.army/download/phishing_army_blocklist.txt";
+          description = "Phishing and scam protection";
+          updateInterval = "12h";
+        };
+
+        # LAN might want more aggressive blocking for family devices:
+
+        adaway = {
+          enable = false;
+          url = "https://adaway.org/hosts.txt";
+          description = "Mobile-focused ad blocking";
+          updateInterval = "1w";
+        };
+      };
+      whitelist = [
+      ];
+    };
+  };
+
+  # Port Forwarding Rules
+  portForwards = [
+    # Add your port forwarding rules here
+    # {
+    #   proto = "both";
+    #   externalPort = 443;
+    #   destination = "192.168.2.33";
+    #   destinationPort = 443;
+    # }
+  ];
+
+  # Dynamic DNS Configuration
+  dyndns = {
+    enable = false;
+    provider = "linode";
+
+    # Domain and record to update
+    domain = "";
+    subdomain = "";  # Root domain
+
+    # Linode API credentials (stored in sops secrets)
+    domainId = 0;
+    recordId = 0;
+
+    # Update interval
+    checkInterval = "5m";
+  };
+
+  # Global DNS configuration
+  dns = {
+    enable = true;
+
+    # Upstream DNS servers (shared by all networks)
+    upstreamServers = [
+      "1.1.1.1@853#cloudflare-dns.com"  # Cloudflare DNS over TLS
+      "9.9.9.9@853#dns.quad9.net"        # Quad9 DNS over TLS
+    ];
+  };
+
+  # Web UI Configuration
+  webui = {
+    # Enable web-based monitoring dashboard
+    enable = true;
+
+    # Port for the WebUI (default: 8080)
+    port = 8080;
+
+    # Data collection interval in seconds (default: 2)
+    # Lower = more frequent updates, higher CPU usage
+    # Higher = less frequent updates, lower CPU usage
+    collectionInterval = 2;
+
+    # Database settings (PostgreSQL)
+    database = {
+      host = "localhost";
+      port = 5432;
+      name = "router_webui";
+      user = "router_webui";
+    };
+
+    # Historical data retention in days (default: 30)
+    # Older data is automatically cleaned up
+    retentionDays = 30;
+  };
 }
 EOF
 
