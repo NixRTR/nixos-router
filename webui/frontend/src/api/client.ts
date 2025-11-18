@@ -188,6 +188,12 @@ class APIClient {
     const response = await this.client.get<{ text: string }>('/api/system/fastfetch');
     return response.data;
   }
+
+  // GitHub stats
+  async getGitHubStats(): Promise<{ stars: number; forks: number }> {
+    const response = await this.client.get<{ stars: number; forks: number }>('/api/system/github-stats');
+    return response.data;
+  }
 }
 
 export const apiClient = new APIClient();

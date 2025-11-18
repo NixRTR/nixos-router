@@ -22,6 +22,7 @@ let
     bcrypt
     pamela  # PAM authentication support
     manuf  # MAC address OUI vendor lookup
+    httpx  # HTTP client for GitHub API requests
   ]);
   
   # Backend source

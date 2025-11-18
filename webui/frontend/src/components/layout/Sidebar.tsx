@@ -1,7 +1,7 @@
 /**
  * Sidebar navigation with Flowbite - Mobile responsive with hamburger menu
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar as FlowbiteSidebar } from 'flowbite-react';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -12,7 +12,8 @@ import {
   HiLogout,
   HiInformationCircle,
 } from 'react-icons/hi';
-import { SystemInfoModal } from '../SystemInfoModal';
+import { FaGithub } from 'react-icons/fa';
+import { apiClient } from '../../api/client';
 
 interface SidebarProps {
   onLogout: () => void;
@@ -22,7 +23,22 @@ interface SidebarProps {
 
 export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
   const location = useLocation();
-  const [systemInfoModalOpen, setSystemInfoModalOpen] = useState(false);
+  const [githubStats, setGitHubStats] = useState<{ stars: number; forks: number } | null>(null);
+
+  useEffect(() => {
+    // Fetch GitHub stats on mount
+    const fetchGitHubStats = async () => {
+      try {
+        const stats = await apiClient.getGitHubStats();
+        setGitHubStats(stats);
+      } catch (error) {
+        console.error('Failed to fetch GitHub stats:', error);
+        // Set default values if fetch fails
+        setGitHubStats({ stars: 0, forks: 0 });
+      }
+    };
+    fetchGitHubStats();
+  }, []);
 
   const handleItemClick = () => {
     // Close sidebar when screen is below 1650px when item is clicked
@@ -105,13 +121,12 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
             </FlowbiteSidebar.ItemGroup>
 
             <FlowbiteSidebar.ItemGroup>
-              <FlowbiteSidebar.Item 
-                icon={HiInformationCircle} 
-                style={{ cursor: 'pointer' }}
-                onClick={() => {
-                  handleItemClick();
-                  setSystemInfoModalOpen(true);
-                }}
+              <FlowbiteSidebar.Item
+                as={Link}
+                to="/system-info"
+                icon={HiInformationCircle}
+                active={location.pathname === '/system-info'}
+                onClick={handleItemClick}
               >
                 System Info
               </FlowbiteSidebar.Item>
@@ -126,15 +141,38 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
                 Logout
               </FlowbiteSidebar.Item>
             </FlowbiteSidebar.ItemGroup>
+
+            {/* GitHub Links */}
+            <FlowbiteSidebar.ItemGroup>
+              <FlowbiteSidebar.Item
+                href="https://github.com/BeardedTek/nixos-router"
+                target="_blank"
+                rel="noopener noreferrer"
+                icon={FaGithub}
+                as="a"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span>GitHub</span>
+                  {githubStats !== null && (
+                    <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                      ⭐ {githubStats.stars} 🍴 {githubStats.forks}
+                    </span>
+                  )}
+                </div>
+              </FlowbiteSidebar.Item>
+              <FlowbiteSidebar.Item
+                href="https://github.com/BeardedTek/nixos-router/issues"
+                target="_blank"
+                rel="noopener noreferrer"
+                icon={HiInformationCircle}
+                as="a"
+              >
+                Issues
+              </FlowbiteSidebar.Item>
+            </FlowbiteSidebar.ItemGroup>
           </FlowbiteSidebar.Items>
         </FlowbiteSidebar>
       </div>
-      
-      {/* System Info Modal */}
-      <SystemInfoModal 
-        show={systemInfoModalOpen} 
-        onClose={() => setSystemInfoModalOpen(false)} 
-      />
     </>
   );
 }

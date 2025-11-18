@@ -12,6 +12,7 @@ const Clients = lazy(() => import('./pages/Clients').then(m => ({ default: m.Cli
 const DeviceUsage = lazy(() => import('./pages/DeviceUsage').then(m => ({ default: m.DeviceUsage })));
 const ConnectionDetails = lazy(() => import('./pages/ConnectionDetails').then(m => ({ default: m.ConnectionDetails })));
 const System = lazy(() => import('./pages/System').then(m => ({ default: m.System })));
+const SystemInfo = lazy(() => import('./pages/SystemInfo').then(m => ({ default: m.SystemInfo })));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -96,6 +97,16 @@ export default function App() {
             <ProtectedRoute>
               <Suspense fallback={<PageLoader />}>
                 <System />
+              </Suspense>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/system-info"
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoader />}>
+                <SystemInfo />
               </Suspense>
             </ProtectedRoute>
           }

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from pydantic import BaseModel
 import subprocess
 import os
+import httpx
 
 from ..auth import get_current_user
 from ..models import (
@@ -375,4 +376,44 @@ async def get_fastfetch(
             status_code=500,
             detail=f"Error running fastfetch: {str(e)}"
         )
+
+
+class GitHubStats(BaseModel):
+    """GitHub repository statistics"""
+    stars: int
+    forks: int
+
+
+@router.get("/github-stats", response_model=GitHubStats)
+async def get_github_stats(
+    _: str = Depends(get_current_user)
+) -> GitHubStats:
+    """Get GitHub repository statistics (stars and forks)
+    
+    Returns:
+        GitHubStats: Repository stars and forks count
+    """
+    repo_owner = "BeardedTek"
+    repo_name = "nixos-router"
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                f"https://api.github.com/repos/{repo_owner}/{repo_name}",
+                headers={"Accept": "application/vnd.github.v3+json"}
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            return GitHubStats(
+                stars=data.get("stargazers_count", 0),
+                forks=data.get("forks_count", 0)
+            )
+    except httpx.HTTPError as e:
+        # If GitHub API fails, return zeros (don't break the UI)
+        print(f"Warning: Failed to fetch GitHub stats: {e}")
+        return GitHubStats(stars=0, forks=0)
+    except Exception as e:
+        print(f"Warning: Error fetching GitHub stats: {e}")
+        return GitHubStats(stars=0, forks=0)
 
