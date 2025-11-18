@@ -147,6 +147,13 @@ class APIClient {
     return response.data;
   }
 
+  async getInterfaceTotals(timeRange: string = '1h'): Promise<Record<string, any>> {
+    const response = await this.client.get('/api/bandwidth/interfaces/totals', {
+      params: { range: timeRange },
+    });
+    return response.data;
+  }
+
   // Client connections
   async getClientConnections(
     clientIp: string,

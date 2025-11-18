@@ -61,7 +61,9 @@ export function DeviceUsage() {
   const [chartInterval, setChartInterval] = useState('raw');
   const [tableTimeRange, setTableTimeRange] = useState('1h');
   const [tableCustomRange, setTableCustomRange] = useState('');
-  const [interfaceStats, setInterfaceStats] = useState<Record<string, { rx_rate_mbps: number; tx_rate_mbps: number; rx_bytes: number; tx_bytes: number }>>({});
+  const [interfaceStats, setInterfaceStats] = useState<Record<string, { rx_mb: number; tx_mb: number }>>({});
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   
   const { connectionStatus } = useMetrics(token);
   
@@ -98,13 +100,19 @@ export function DeviceUsage() {
     return () => clearInterval(interval);
   }, [token]);
 
-  // Fetch interface stats
+  // Fetch interface stats totals for the selected time period
   useEffect(() => {
     const fetchInterfaceStats = async () => {
       if (!token) return;
       
+      const range = tableTimeRange === 'custom' ? tableCustomRange : tableTimeRange;
+      if (!range || (tableTimeRange === 'custom' && !validateTimeRange(range))) {
+        setInterfaceStats({});
+        return;
+      }
+      
       try {
-        const stats = await apiClient.getCurrentInterfaceStats();
+        const stats = await apiClient.getInterfaceTotals(range);
         setInterfaceStats(stats);
       } catch (error) {
         console.error('Failed to fetch interface stats:', error);
@@ -112,9 +120,9 @@ export function DeviceUsage() {
     };
     
     fetchInterfaceStats();
-    const interval = setInterval(fetchInterfaceStats, 5000);
+    const interval = setInterval(fetchInterfaceStats, 60000); // Update every minute
     return () => clearInterval(interval);
-  }, [token]);
+  }, [token, tableTimeRange, tableCustomRange]);
 
   // Fetch blocked list
   useEffect(() => {
@@ -311,12 +319,68 @@ export function DeviceUsage() {
     return ip;
   };
 
-  // Sort devices by IP address
+  // Handle column sorting
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // Toggle direction
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New column, start with ascending
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  // Sort devices based on selected column
   const sortedDevices = [...devices].sort((a, b) => {
-    const ipA = getSortableIP(a.ip_address);
-    const ipB = getSortableIP(b.ip_address);
-    return ipA.localeCompare(ipB);
+    if (!sortColumn) {
+      // Default: sort by IP address
+      const ipA = getSortableIP(a.ip_address);
+      const ipB = getSortableIP(b.ip_address);
+      return ipA.localeCompare(ipB);
+    }
+
+    let comparison = 0;
+    switch (sortColumn) {
+      case 'hostname':
+        comparison = getDisplayName(a).localeCompare(getDisplayName(b));
+        break;
+      case 'mac':
+        comparison = a.mac_address.localeCompare(b.mac_address);
+        break;
+      case 'ip':
+        comparison = getSortableIP(a.ip_address).localeCompare(getSortableIP(b.ip_address));
+        break;
+      case 'status':
+        // Online first, then offline
+        comparison = (a.is_online ? 0 : 1) - (b.is_online ? 0 : 1);
+        break;
+      case 'dl':
+        const macA = a.mac_address.toLowerCase();
+        const macB = b.mac_address.toLowerCase();
+        const avgA = bandwidthAverages[macA]?.dl_1h || 0;
+        const avgB = bandwidthAverages[macB]?.dl_1h || 0;
+        comparison = avgA - avgB;
+        break;
+      case 'ul':
+        const macA2 = a.mac_address.toLowerCase();
+        const macB2 = b.mac_address.toLowerCase();
+        const avgA2 = bandwidthAverages[macA2]?.ul_1h || 0;
+        const avgB2 = bandwidthAverages[macB2]?.ul_1h || 0;
+        comparison = avgA2 - avgB2;
+        break;
+      default:
+        return 0;
+    }
+
+    return sortDirection === 'asc' ? comparison : -comparison;
   });
+
+  // Get sort indicator for a column
+  const getSortIndicator = (column: string) => {
+    if (sortColumn !== column) return null;
+    return sortDirection === 'asc' ? ' ↑' : ' ↓';
+  };
 
   const chartDataFormatted = chartData.map((point) => ({
     time: new Date(point.timestamp).toLocaleTimeString(),
@@ -355,8 +419,8 @@ export function DeviceUsage() {
                       <div className="font-medium text-gray-900 dark:text-gray-100">{iface}</div>
                       {stats ? (
                         <div className="text-gray-600 dark:text-gray-400 space-y-1 mt-1">
-                          <div>DL: {stats.rx_rate_mbps.toFixed(2)} Mbit/s</div>
-                          <div>UL: {stats.tx_rate_mbps.toFixed(2)} Mbit/s</div>
+                          <div>DL: {formatMB(stats.rx_mb)} MB</div>
+                          <div>UL: {formatMB(stats.tx_mb)} MB</div>
                         </div>
                       ) : (
                         <div className="text-gray-400 dark:text-gray-500 mt-1">No data</div>
@@ -415,12 +479,42 @@ export function DeviceUsage() {
             <div className="hidden md:block overflow-x-auto">
               <Table>
                 <Table.Head>
-                  <Table.HeadCell>Hostname</Table.HeadCell>
-                  <Table.HeadCell>MAC</Table.HeadCell>
-                  <Table.HeadCell>IP</Table.HeadCell>
-                  <Table.HeadCell>Status</Table.HeadCell>
-                  <Table.HeadCell>DL (MB)</Table.HeadCell>
-                  <Table.HeadCell>UL (MB)</Table.HeadCell>
+                  <Table.HeadCell 
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    onClick={() => handleSort('hostname')}
+                  >
+                    Hostname{getSortIndicator('hostname')}
+                  </Table.HeadCell>
+                  <Table.HeadCell 
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    onClick={() => handleSort('mac')}
+                  >
+                    MAC{getSortIndicator('mac')}
+                  </Table.HeadCell>
+                  <Table.HeadCell 
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    onClick={() => handleSort('ip')}
+                  >
+                    IP{getSortIndicator('ip')}
+                  </Table.HeadCell>
+                  <Table.HeadCell 
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    onClick={() => handleSort('status')}
+                  >
+                    Status{getSortIndicator('status')}
+                  </Table.HeadCell>
+                  <Table.HeadCell 
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    onClick={() => handleSort('dl')}
+                  >
+                    DL (MB){getSortIndicator('dl')}
+                  </Table.HeadCell>
+                  <Table.HeadCell 
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    onClick={() => handleSort('ul')}
+                  >
+                    UL (MB){getSortIndicator('ul')}
+                  </Table.HeadCell>
                   <Table.HeadCell>Chart</Table.HeadCell>
                   <Table.HeadCell>Details</Table.HeadCell>
                   <Table.HeadCell>Enable/Disable</Table.HeadCell>

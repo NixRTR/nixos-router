@@ -6,14 +6,16 @@ from typing import List, Optional, Dict
 from datetime import datetime
 from pydantic import BaseModel
 import subprocess
-from sqlalchemy import select
+from sqlalchemy import select, or_
+from sqlalchemy.sql import cast
+from sqlalchemy.types import String
 from sqlalchemy.ext.asyncio import AsyncSession
 import os
 
 from ..auth import get_current_user
 from ..collectors.network_devices import discover_network_devices, get_device_count_by_network
 from ..collectors.dhcp import parse_kea_leases
-from ..database import AsyncSessionLocal, DeviceOverrideDB
+from ..database import AsyncSessionLocal, DeviceOverrideDB, NetworkDeviceDB
 
 
 def _is_ipv4(ip: str) -> bool:
@@ -67,6 +69,7 @@ async def get_all_devices(
     Returns devices from:
     - ARP table (currently active)
     - DHCP leases (known clients)
+    - Database (historical offline devices)
     
     Returns:
         List[NetworkDevice]: All discovered devices
@@ -76,6 +79,44 @@ async def get_all_devices(
 
     # Filter to IPv4 only
     devices = [d for d in devices if _is_ipv4(d.ip_address)]
+    
+    # Create a set of MAC addresses we already have from discovery
+    seen_macs = {d.mac_address.lower() for d in devices}
+    
+    # Also query database for offline devices that might not be in current discovery
+    async with AsyncSessionLocal() as session:
+        # Get all devices from database that are in bridge subnets
+        # Use cast to string for LIKE comparison with INET type
+        result = await session.execute(
+            select(NetworkDeviceDB).where(
+                or_(
+                    cast(NetworkDeviceDB.ip_address, String).like('192.168.2.%'),
+                    cast(NetworkDeviceDB.ip_address, String).like('192.168.3.%')
+                )
+            )
+        )
+        db_devices = result.scalars().all()
+        
+        # Add devices from database that we haven't seen yet
+        for db_dev in db_devices:
+            mac_lower = str(db_dev.mac_address).lower()
+            # Only add if IPv4 and not already in discovered devices
+            if _is_ipv4(str(db_dev.ip_address)) and mac_lower not in seen_macs:
+                # Create a NetworkDevice from database entry
+                from ..collectors.network_devices import NetworkDevice as ND
+                device = ND(
+                    network=db_dev.network,
+                    ip_address=str(db_dev.ip_address),
+                    mac_address=str(db_dev.mac_address),
+                    hostname=db_dev.hostname,
+                    vendor=db_dev.vendor,
+                    is_dhcp=db_dev.is_dhcp,
+                    is_static=db_dev.is_static,
+                    is_online=db_dev.is_online,
+                    last_seen=db_dev.last_seen,
+                )
+                devices.append(device)
+                seen_macs.add(mac_lower)
 
     # Load overrides for all MACs
     macs = [d.mac_address for d in devices]

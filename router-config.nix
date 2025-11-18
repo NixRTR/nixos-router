@@ -7,6 +7,9 @@
   timezone = "America/Anchorage";
   username = "routeradmin";
 
+  # Nameservers for /etc/resolv.conf (used by the router itself)
+  nameservers = [ "1.1.1.1" "9.9.9.9" "192.168.3.33" ];
+
   # SSH authorized keys for the router admin user
   sshKeys = [
     # Add your SSH public keys here, one per line

@@ -53,6 +53,8 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
   const [chartInterval, setChartInterval] = useState('raw');
   const [tableTimeRange, setTableTimeRange] = useState('1h');
   const [tableCustomRange, setTableCustomRange] = useState('');
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   
   const { connectionStatus } = useMetrics(token);
   
@@ -133,12 +135,59 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
     return ip;
   };
 
-  // Sort connections by IP address
+  // Handle column sorting
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // Toggle direction
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New column, start with ascending
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  // Sort connections based on selected column
   const sortedConnections = [...connections].sort((a, b) => {
-    const ipA = getSortableIP(a.remote_ip);
-    const ipB = getSortableIP(b.remote_ip);
-    return ipA.localeCompare(ipB);
+    if (!sortColumn) {
+      // Default: sort by IP address
+      const ipA = getSortableIP(a.remote_ip);
+      const ipB = getSortableIP(b.remote_ip);
+      return ipA.localeCompare(ipB);
+    }
+
+    let comparison = 0;
+    switch (sortColumn) {
+      case 'ip':
+        comparison = getSortableIP(a.remote_ip).localeCompare(getSortableIP(b.remote_ip));
+        break;
+      case 'hostname':
+        comparison = (a.hostname || '').localeCompare(b.hostname || '');
+        break;
+      case 'download_mb':
+        comparison = a.download_mb - b.download_mb;
+        break;
+      case 'download_mbps':
+        comparison = a.download_mbps - b.download_mbps;
+        break;
+      case 'upload_mb':
+        comparison = a.upload_mb - b.upload_mb;
+        break;
+      case 'upload_mbps':
+        comparison = a.upload_mbps - b.upload_mbps;
+        break;
+      default:
+        return 0;
+    }
+
+    return sortDirection === 'asc' ? comparison : -comparison;
   });
+
+  // Get sort indicator for a column
+  const getSortIndicator = (column: string) => {
+    if (sortColumn !== column) return null;
+    return sortDirection === 'asc' ? ' ↑' : ' ↓';
+  };
 
   const chartDataFormatted = chartData.map((point) => ({
     time: new Date(point.timestamp).toLocaleTimeString(),
@@ -232,12 +281,42 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
             <div className="hidden md:block overflow-x-auto">
               <Table>
                 <Table.Head>
-                  <Table.HeadCell>IP Address : Port</Table.HeadCell>
-                  <Table.HeadCell>Hostname</Table.HeadCell>
-                  <Table.HeadCell>Download MB</Table.HeadCell>
-                  <Table.HeadCell>Download Mbit/s</Table.HeadCell>
-                  <Table.HeadCell>Upload MB</Table.HeadCell>
-                  <Table.HeadCell>Upload Mbit/s</Table.HeadCell>
+                  <Table.HeadCell 
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    onClick={() => handleSort('ip')}
+                  >
+                    IP Address : Port{getSortIndicator('ip')}
+                  </Table.HeadCell>
+                  <Table.HeadCell 
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    onClick={() => handleSort('hostname')}
+                  >
+                    Hostname{getSortIndicator('hostname')}
+                  </Table.HeadCell>
+                  <Table.HeadCell 
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    onClick={() => handleSort('download_mb')}
+                  >
+                    Download MB{getSortIndicator('download_mb')}
+                  </Table.HeadCell>
+                  <Table.HeadCell 
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    onClick={() => handleSort('download_mbps')}
+                  >
+                    Download Mbit/s{getSortIndicator('download_mbps')}
+                  </Table.HeadCell>
+                  <Table.HeadCell 
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    onClick={() => handleSort('upload_mb')}
+                  >
+                    Upload MB{getSortIndicator('upload_mb')}
+                  </Table.HeadCell>
+                  <Table.HeadCell 
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    onClick={() => handleSort('upload_mbps')}
+                  >
+                    Upload Mbit/s{getSortIndicator('upload_mbps')}
+                  </Table.HeadCell>
                   <Table.HeadCell>Chart</Table.HeadCell>
                 </Table.Head>
                 <Table.Body className="divide-y">

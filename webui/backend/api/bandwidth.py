@@ -248,6 +248,68 @@ async def get_current_interface_stats(
     return result
 
 
+@router.get("/interfaces/totals")
+async def get_interface_totals(
+    time_range: str = Query("1h", description="Time range (e.g., 10m, 1h, 1d, 1w)", alias="range"),
+    _: str = Depends(get_current_user)
+) -> Dict[str, dict]:
+    """Get interface statistics totals (MB) for br0, br1, and ppp0 over a time period
+    
+    Args:
+        time_range: Time range string (e.g., "1h", "1d", "1w")
+        
+    Returns:
+        Dict mapping interface names to their total stats in MB
+    """
+    # Parse time range
+    time_delta = parse_time_range(time_range)
+    start_time = datetime.now(timezone.utc) - time_delta
+    
+    result = {}
+    
+    async with AsyncSessionLocal() as session:
+        for iface in ['br0', 'br1', 'ppp0']:
+            # Get oldest stat in time period (start)
+            start_query = select(InterfaceStatsDB).where(
+                InterfaceStatsDB.interface == iface,
+                InterfaceStatsDB.timestamp >= start_time
+            ).order_by(InterfaceStatsDB.timestamp.asc()).limit(1)
+            
+            start_result = await session.execute(start_query)
+            start_stat = start_result.scalar_one_or_none()
+            
+            # Get newest stat in time period (end)
+            end_query = select(InterfaceStatsDB).where(
+                InterfaceStatsDB.interface == iface,
+                InterfaceStatsDB.timestamp >= start_time
+            ).order_by(InterfaceStatsDB.timestamp.desc()).limit(1)
+            
+            end_result = await session.execute(end_query)
+            end_stat = end_result.scalar_one_or_none()
+            
+            if start_stat and end_stat:
+                # Calculate difference (total bytes transferred)
+                rx_bytes_total = max(0, (end_stat.rx_bytes or 0) - (start_stat.rx_bytes or 0))
+                tx_bytes_total = max(0, (end_stat.tx_bytes or 0) - (start_stat.tx_bytes or 0))
+                
+                # Convert to MB
+                rx_mb = rx_bytes_total / (1024 * 1024)
+                tx_mb = tx_bytes_total / (1024 * 1024)
+                
+                result[iface] = {
+                    'rx_mb': round(rx_mb, 2),
+                    'tx_mb': round(tx_mb, 2),
+                }
+            else:
+                # No data available
+                result[iface] = {
+                    'rx_mb': 0.0,
+                    'tx_mb': 0.0,
+                }
+    
+    return result
+
+
 @router.get("/clients/debug")
 async def get_client_bandwidth_debug(
     _: str = Depends(get_current_user)
