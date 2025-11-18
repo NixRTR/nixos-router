@@ -94,6 +94,14 @@ def _add_ip_to_nftables(ip: str) -> bool:
         return True
     
     try:
+        # First verify the table and chain exist
+        result_check = _run_nft([
+            "list", "chain", "inet", "router_bandwidth", "forward"
+        ])
+        if result_check.returncode != 0:
+            print(f"Warning: Chain inet router_bandwidth forward does not exist: {result_check.stderr}")
+            return False
+        
         # Add IP to set
         result_set = _run_nft([
             "add", "element", "inet", "router_bandwidth", "client_ips", "{", ip, "}"
@@ -110,48 +118,66 @@ def _add_ip_to_nftables(ip: str) -> bool:
                 _known_ips.add(ip)
                 return True
         
-        # Add per-IP counter rules for rx (download)
-        # Try insert without position first (adds to beginning by default)
+        # Add per-IP counter rules using a here-document approach via stdin
+        # This is more reliable than passing arguments
         counter_name_rx = f"rx_{ip.replace('.', '_')}"
-        result_rx = _run_nft([
-            "insert", "rule", "inet", "router_bandwidth", "forward",
-            "ip", "daddr", ip, "counter", "name", counter_name_rx
-        ])
+        counter_name_tx = f"tx_{ip.replace('.', '_')}"
+        
+        nft = _find_nft()
+        
+        # Try to add RX rule using stdin (nft requires newline)
+        rx_rule_cmd = f"insert rule inet router_bandwidth forward ip daddr {ip} counter name {counter_name_rx}\n"
+        result_rx = subprocess.run(
+            [nft, "-f", "-"],
+            input=rx_rule_cmd,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
         
         if result_rx.returncode != 0:
-            # Rule might already exist, check error
+            # Rule might already exist
             if "File exists" not in result_rx.stderr and "already exists" not in result_rx.stderr.lower():
-                # If "No such file" error, try using "add" instead of "insert"
-                if "No such file" in result_rx.stderr:
-                    result_rx = _run_nft([
-                        "add", "rule", "inet", "router_bandwidth", "forward",
-                        "ip", "daddr", ip, "counter", "name", counter_name_rx
-                    ])
-                    if result_rx.returncode != 0 and "File exists" not in result_rx.stderr and "already exists" not in result_rx.stderr.lower():
+                # Try using "add" instead of "insert"
+                rx_rule_cmd = f"add rule inet router_bandwidth forward ip daddr {ip} counter name {counter_name_rx}\n"
+                result_rx = subprocess.run(
+                    [nft, "-f", "-"],
+                    input=rx_rule_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result_rx.returncode != 0 and "File exists" not in result_rx.stderr and "already exists" not in result_rx.stderr.lower():
+                    # Don't warn if it's just that the rule already exists
+                    if "File exists" not in result_rx.stderr:
                         print(f"Warning: Failed to add RX rule for IP {ip}: {result_rx.stderr}")
-                else:
-                    print(f"Warning: Failed to add RX rule for IP {ip}: {result_rx.stderr}")
         
-        # Add per-IP counter rules for tx (upload)
-        counter_name_tx = f"tx_{ip.replace('.', '_')}"
-        result_tx = _run_nft([
-            "insert", "rule", "inet", "router_bandwidth", "forward",
-            "ip", "saddr", ip, "counter", "name", counter_name_tx
-        ])
+        # Add TX rule
+        tx_rule_cmd = f"insert rule inet router_bandwidth forward ip saddr {ip} counter name {counter_name_tx}\n"
+        result_tx = subprocess.run(
+            [nft, "-f", "-"],
+            input=tx_rule_cmd,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
         
         if result_tx.returncode != 0:
             # Rule might already exist
             if "File exists" not in result_tx.stderr and "already exists" not in result_tx.stderr.lower():
-                # If "No such file" error, try using "add" instead of "insert"
-                if "No such file" in result_tx.stderr:
-                    result_tx = _run_nft([
-                        "add", "rule", "inet", "router_bandwidth", "forward",
-                        "ip", "saddr", ip, "counter", "name", counter_name_tx
-                    ])
-                    if result_tx.returncode != 0 and "File exists" not in result_tx.stderr and "already exists" not in result_tx.stderr.lower():
+                # Try using "add" instead of "insert"
+                tx_rule_cmd = f"add rule inet router_bandwidth forward ip saddr {ip} counter name {counter_name_tx}\n"
+                result_tx = subprocess.run(
+                    [nft, "-f", "-"],
+                    input=tx_rule_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result_tx.returncode != 0 and "File exists" not in result_tx.stderr and "already exists" not in result_tx.stderr.lower():
+                    # Don't warn if it's just that the rule already exists
+                    if "File exists" not in result_tx.stderr:
                         print(f"Warning: Failed to add TX rule for IP {ip}: {result_tx.stderr}")
-                else:
-                    print(f"Warning: Failed to add TX rule for IP {ip}: {result_tx.stderr}")
         
         # Consider it successful if set was added (rules might already exist)
         if result_set.returncode == 0 or "File exists" in result_set.stderr or "already exists" in result_set.stderr.lower():
