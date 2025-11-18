@@ -898,13 +898,44 @@ async def get_client_connections_current(
             connection_totals[key]['last_rx_total'] = stat.rx_bytes_total
             connection_totals[key]['last_tx_total'] = stat.tx_bytes_total
     
-    # Calculate current rates from most recent data
-    # Get the most recent stats for each connection
-    recent_stats: Dict[Tuple[str, int], ClientConnectionStatsDB] = {}
+    # Calculate peak rates from all data points in the time period
+    # Group stats by connection and calculate rates between consecutive points
+    connection_rates: Dict[Tuple[str, int], Dict[str, float]] = {}
+    
+    # First, group stats by connection
+    connection_stats: Dict[Tuple[str, int], List[ClientConnectionStatsDB]] = {}
     for stat in stats:
         key = (str(stat.remote_ip), stat.remote_port)
-        if key not in recent_stats or stat.timestamp > recent_stats[key].timestamp:
-            recent_stats[key] = stat
+        if key not in connection_stats:
+            connection_stats[key] = []
+        connection_stats[key].append(stat)
+    
+    # Calculate peak rates for each connection
+    for key, conn_stats in connection_stats.items():
+        # Sort by timestamp
+        conn_stats_sorted = sorted(conn_stats, key=lambda s: s.timestamp)
+        
+        peak_download_mbps = 0.0
+        peak_upload_mbps = 0.0
+        
+        # Calculate rate between consecutive points and track peak
+        for i in range(1, len(conn_stats_sorted)):
+            prev = conn_stats_sorted[i - 1]
+            curr = conn_stats_sorted[i]
+            time_diff = (curr.timestamp - prev.timestamp).total_seconds()
+            
+            if time_diff > 0:
+                # Calculate rate for this interval
+                rx_mbps = (curr.rx_bytes * 8) / (time_diff * 1_000_000)
+                tx_mbps = (curr.tx_bytes * 8) / (time_diff * 1_000_000)
+                
+                peak_download_mbps = max(peak_download_mbps, rx_mbps)
+                peak_upload_mbps = max(peak_upload_mbps, tx_mbps)
+        
+        connection_rates[key] = {
+            'download_mbps': peak_download_mbps,
+            'upload_mbps': peak_upload_mbps
+        }
     
     # Build results
     results = []
@@ -916,16 +947,9 @@ async def get_client_connections_current(
         download_mb = totals['rx_bytes_sum'] / (1024 * 1024)
         upload_mb = totals['tx_bytes_sum'] / (1024 * 1024)
         
-        # Calculate current rate (Mbit/s) from most recent data point
-        # Use collection interval (5 seconds) to estimate rate
-        download_mbps = 0.0
-        upload_mbps = 0.0
-        
-        if (remote_ip, remote_port) in recent_stats:
-            recent = recent_stats[(remote_ip, remote_port)]
-            collection_interval = 5.0  # seconds
-            download_mbps = (recent.rx_bytes * 8) / (collection_interval * 1_000_000)
-            upload_mbps = (recent.tx_bytes * 8) / (collection_interval * 1_000_000)
+        # Get peak rates (maximum speed during the time period)
+        download_mbps = connection_rates.get((remote_ip, remote_port), {}).get('download_mbps', 0.0)
+        upload_mbps = connection_rates.get((remote_ip, remote_port), {}).get('upload_mbps', 0.0)
         
         results.append(ClientConnectionCurrent(
             remote_ip=remote_ip,

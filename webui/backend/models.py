@@ -301,9 +301,9 @@ class ClientConnectionCurrent(BaseModel):
     remote_port: int
     hostname: Optional[str] = None
     download_mb: float = Field(..., ge=0)  # cumulative MB for time period
-    download_mbps: float = Field(..., ge=0)  # current rate in Mbit/s
+    download_mbps: float = Field(..., ge=0)  # peak rate in Mbit/s during time period
     upload_mb: float = Field(..., ge=0)  # cumulative MB for time period
-    upload_mbps: float = Field(..., ge=0)  # current rate in Mbit/s
+    upload_mbps: float = Field(..., ge=0)  # peak rate in Mbit/s during time period
 
 
 class ClientConnectionDataPoint(BaseModel):

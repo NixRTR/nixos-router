@@ -297,25 +297,25 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
                     className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                     onClick={() => handleSort('download_mb')}
                   >
-                    Download MB{getSortIndicator('download_mb')}
+                    Download{getSortIndicator('download_mb')}
                   </Table.HeadCell>
                   <Table.HeadCell 
                     className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                     onClick={() => handleSort('download_mbps')}
                   >
-                    Download Mbit/s{getSortIndicator('download_mbps')}
+                    Peak Download Mbit/s{getSortIndicator('download_mbps')}
                   </Table.HeadCell>
                   <Table.HeadCell 
                     className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                     onClick={() => handleSort('upload_mb')}
                   >
-                    Upload MB{getSortIndicator('upload_mb')}
+                    Upload{getSortIndicator('upload_mb')}
                   </Table.HeadCell>
                   <Table.HeadCell 
                     className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                     onClick={() => handleSort('upload_mbps')}
                   >
-                    Upload Mbit/s{getSortIndicator('upload_mbps')}
+                    Peak Upload Mbit/s{getSortIndicator('upload_mbps')}
                   </Table.HeadCell>
                   <Table.HeadCell>Chart</Table.HeadCell>
                 </Table.Head>
@@ -329,13 +329,13 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
                         {conn.hostname || '—'}
                       </Table.Cell>
                       <Table.Cell className="text-sm">
-                        {formatMB(conn.download_mb)} MB
+                        {formatMB(conn.download_mb)}
                       </Table.Cell>
                       <Table.Cell className="text-sm">
                         {conn.download_mbps.toFixed(2)} Mbit/s
                       </Table.Cell>
                       <Table.Cell className="text-sm">
-                        {formatMB(conn.upload_mb)} MB
+                        {formatMB(conn.upload_mb)}
                       </Table.Cell>
                       <Table.Cell className="text-sm">
                         {conn.upload_mbps.toFixed(2)} Mbit/s
@@ -369,12 +369,12 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
                   <div className="grid grid-cols-2 gap-2 text-sm mb-3">
                     <div>
                       <div className="font-semibold">Download</div>
-                      <div>{formatMB(conn.download_mb)} MB</div>
+                      <div>{formatMB(conn.download_mb)}</div>
                       <div className="text-xs text-gray-500">{conn.download_mbps.toFixed(2)} Mbit/s</div>
                     </div>
                     <div>
                       <div className="font-semibold">Upload</div>
-                      <div>{formatMB(conn.upload_mb)} MB</div>
+                      <div>{formatMB(conn.upload_mb)}</div>
                       <div className="text-xs text-gray-500">{conn.upload_mbps.toFixed(2)} Mbit/s</div>
                     </div>
                   </div>
