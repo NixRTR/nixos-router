@@ -9,8 +9,8 @@ export default defineConfig({
       jsxRuntime: 'automatic',
     }),
   ],
-  // Base path for GitHub Pages (set via environment variable)
-  base: process.env.VITE_BASE_PATH || '/',
+  // Base path: defaults to /docs/ for local, set VITE_BASE_PATH=/nixos-router/ for GitHub Pages
+  base: process.env.VITE_BASE_PATH || '/docs/',
   build: {
     // Enable minification and compression
     minify: 'esbuild',
