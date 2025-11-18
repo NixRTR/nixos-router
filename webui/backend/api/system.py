@@ -417,3 +417,36 @@ async def get_github_stats(
         print(f"Warning: Error fetching GitHub stats: {e}")
         return GitHubStats(stars=0, forks=0)
 
+
+@router.get("/documentation")
+async def get_documentation(
+    _: str = Depends(get_current_user)
+) -> dict:
+    """Get project documentation (README.md)
+    
+    Returns:
+        dict: Contains 'content' field with README.md content
+    """
+    # README.md is at the project root, which is ../../ from webui/backend/api/
+    import pathlib
+    
+    # Get the project root (webui/backend/api/ -> webui/backend/ -> webui/ -> root)
+    current_file = pathlib.Path(__file__)
+    project_root = current_file.parent.parent.parent
+    readme_path = project_root / "README.md"
+    
+    try:
+        with open(readme_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return {"content": content}
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail="Documentation file not found"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error reading documentation: {str(e)}"
+        )
+

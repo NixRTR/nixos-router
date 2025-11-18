@@ -1,41 +1,39 @@
 # NixOS Router
 
-A production-grade, declarative NixOS router configuration with enterprise-level features and optimizations.
+A NixOS-based router configuration for home networks.
 
-## ✨ Highlights
+## Features
 
-- **🌐 Multi-Network Support** - Isolated LAN segments with selective access control
-- **🚀 Performance Optimized** - BBR congestion control, MSS clamping, hardware offloading
-- **📊 Modern Web Dashboard** - Real-time monitoring with React + FastAPI (NEW!)
-- **📈 Historical Metrics** - 30 days of bandwidth and system data in PostgreSQL
-- **🔒 Security Hardened** - Encrypted secrets, SYN flood protection, reverse path filtering
-- **🔧 Easy Management** - One-command install and updates
-- **☁️ Dynamic DNS** - Automatic Linode DNS updates for changing WAN IPs
+- Multi-network support (isolated LAN segments)
+- DHCP server (Kea)
+- DNS server (Unbound with ad-blocking)
+- Web dashboard for monitoring
+- Dynamic DNS updates (Linode)
+- Firewall and NAT
 
-## 🚀 Quick Start
+## Requirements
 
-### Option 1: Custom ISO (Recommended)
+- NixOS-capable hardware
+- Network interfaces for WAN and LAN
+- Internet connection for initial setup
 
-Build and use our custom installation ISO with automated menu system:
+## Installation
 
-1. **Build the ISO** (from NixOS/NixOS WSL):
+### Option 1: Custom ISO
+
+1. Build the ISO:
    ```bash
    cd iso
    ./build-iso.sh
    ```
 
-2. **Write to USB** and boot from it
-3. **(Optional)** Add your `router-config.nix` to the USB's `/config/` directory for automated installation
-4. **Select installation option** from the automated menu
+2. Write ISO to USB and boot
 
-The custom ISO includes everything needed for installation (no internet required during install) and supports automated installation with pre-configured `router-config.nix` on the **same USB drive**!
-
-👉 **See [iso/README.md](iso/README.md)** for detailed build and usage instructions  
-👉 **On Windows/WSL?** See [iso/BUILD-ON-WSL.md](iso/BUILD-ON-WSL.md) for step-by-step guide
+3. Follow on-screen installation menu
 
 ### Option 2: Online Installer
 
-Boot from standard NixOS installer ISO and run:
+Boot from standard NixOS ISO and run:
 
 ```bash
 curl -fsSL https://beard.click/nixos-router > install.sh
@@ -43,84 +41,41 @@ chmod +x install.sh
 sudo ./install.sh
 ```
 
-The installer will guide you through:
-- **Simple mode**: Single network for most users
-- **Advanced mode**: Multiple isolated networks (HOMELAB + LAN)
+## Configuration
 
-## 🧩 Modular Architecture
+Edit `router-config.nix` to configure:
 
-This router is built with a clean modular design. All functionality is organized into focused modules:
+- Hostname and timezone
+- WAN interface and type (DHCP or PPPoE)
+- LAN networks (IP ranges, interfaces)
+- DHCP ranges
+- DNS settings
+- Web dashboard settings
 
-- **`router.nix`** - Core networking (WAN, LAN bridges, firewall, NAT)
-- **`dns.nix`** - DNS services (Unbound with ad-blocking)
-- **`dhcp.nix`** - DHCP server (ISC Kea)
-- **`webui.nix`** - **NEW!** Modern web dashboard (FastAPI + React)
-- **`dashboard.nix`** - Legacy monitoring (Grafana, Prometheus)
-- **`users.nix`** - User account management
-- **`secrets.nix`** - Encrypted secrets (sops-nix)
-- **`linode-dyndns.nix`** - Dynamic DNS updates
+## Web Dashboard
 
-See [`modules/README.md`](modules/README.md) for detailed information about each module.
+Access at `http://router-ip:8080`
 
-### Web Dashboard
+Shows:
+- System metrics (CPU, memory, load)
+- Network interface statistics
+- Device usage and bandwidth
+- Service status
 
-Access real-time router metrics via beautiful web interface:
+## Project Structure
 
-```
-http://router-ip:8080
-```
+- `router-config.nix` - Main configuration file
+- `configuration.nix` - NixOS system configuration
+- `modules/` - Router modules (router, dns, dhcp, webui, etc.)
+- `scripts/` - Installation and update scripts
+- `webui/` - Web dashboard (FastAPI backend, React frontend)
 
-Features:
-- Real-time system metrics (CPU, memory, load, uptime)
-- Live bandwidth monitoring per interface
-- Service status (Unbound, Kea DHCP, PPPoE)
-- DHCP client list with search
-- 30 days of historical data and charts
-- Mobile-responsive design with dark mode
+## Updating
 
-See [`webui/README.md`](webui/README.md) for full documentation.
-
-## 📚 Documentation
-
-Complete documentation is available in the [`docs/`](docs/) directory:
-
-- **[Installation Guide](docs/installation.md)** - Install and initial setup
-- **[Configuration Guide](docs/configuration.md)** - Configure networks, DHCP, and services
-- **[DNS Configuration](docs/configuration.md#dns-configuration)** - DNS, local domains, and ad-blocking
-- **[Network Isolation](docs/isolation.md)** - Multi-LAN setup and access control
-- **[Web Dashboard](docs/configuration.md#web-ui-dashboard)** - Modern React-based monitoring interface
-- **[Monitoring](docs/monitoring.md)** - Legacy Grafana dashboard and metrics
-- **[Optional Features](docs/optional-features.md)** - Dynamic DNS, VPN, and more
-- **[Performance](docs/performance.md)** - Optimization details and tuning
-- **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
-- **[Updating](docs/updating.md)** - Keep your router up to date
-- **[Testing in VM](docs/testing.md)** - Test in QEMU before deploying to hardware
-
-## 🏗️ Architecture
-
-```
-Internet ──▶ [WAN] ──▶ [Router/Firewall] ──┬──▶ [br0] HOMELAB (192.168.2.0/24)
-                                            └──▶ [br1] LAN (192.168.3.0/24)
+```bash
+sudo ./scripts/update-router.sh
 ```
 
-- **Isolated networks** with firewall protection between segments
-- **Dual DHCP servers** for automatic IP assignment
-- **Unbound DNS** - Recursive resolver with ad-blocking, DNSSEC, and DNS-over-TLS
-- **Local domain support** - Wildcard DNS for local services (*.homelab.local)
-- **NAT and port forwarding** for external access
-- **Real-time monitoring** via Grafana + Prometheus
+## License
 
-## 🔒 Security
-
-- Secrets encrypted at rest with Age public-key cryptography
-- SYN flood protection and connection rate limiting
-- Reverse path filtering (anti-spoofing)
-- Automated security updates via declarative configuration
-
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE) for details
-
-## 🤝 Contributing
-
-This is a personal router configuration, but feel free to fork and adapt for your needs!
+MIT

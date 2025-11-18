@@ -13,6 +13,7 @@ const DeviceUsage = lazy(() => import('./pages/DeviceUsage').then(m => ({ defaul
 const ConnectionDetails = lazy(() => import('./pages/ConnectionDetails').then(m => ({ default: m.ConnectionDetails })));
 const System = lazy(() => import('./pages/System').then(m => ({ default: m.System })));
 const SystemInfo = lazy(() => import('./pages/SystemInfo').then(m => ({ default: m.SystemInfo })));
+const Documentation = lazy(() => import('./pages/Documentation').then(m => ({ default: m.Documentation })));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -36,7 +37,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Suspense fallback={<PageLoader />}>
-                <Dashboard />
+              <Dashboard />
               </Suspense>
             </ProtectedRoute>
           }
@@ -46,7 +47,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Suspense fallback={<PageLoader />}>
-                <Network />
+              <Network />
               </Suspense>
             </ProtectedRoute>
           }
@@ -56,7 +57,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Suspense fallback={<PageLoader />}>
-                <Clients />
+              <Clients />
               </Suspense>
             </ProtectedRoute>
           }
@@ -96,7 +97,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Suspense fallback={<PageLoader />}>
-                <System />
+              <System />
               </Suspense>
             </ProtectedRoute>
           }
@@ -107,6 +108,16 @@ export default function App() {
             <ProtectedRoute>
               <Suspense fallback={<PageLoader />}>
                 <SystemInfo />
+              </Suspense>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/documentation"
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoader />}>
+                <Documentation />
               </Suspense>
             </ProtectedRoute>
           }

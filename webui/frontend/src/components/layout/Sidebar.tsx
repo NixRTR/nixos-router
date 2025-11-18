@@ -11,6 +11,7 @@ import {
   HiClock,
   HiLogout,
   HiInformationCircle,
+  HiBookOpen,
 } from 'react-icons/hi';
 import { FaGithub } from 'react-icons/fa';
 import { apiClient } from '../../api/client';
@@ -129,6 +130,15 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
                 onClick={handleItemClick}
               >
                 System Info
+              </FlowbiteSidebar.Item>
+              <FlowbiteSidebar.Item
+                as={Link}
+                to="/documentation"
+                icon={HiBookOpen}
+                active={location.pathname === '/documentation'}
+                onClick={handleItemClick}
+              >
+                Documentation
               </FlowbiteSidebar.Item>
               <FlowbiteSidebar.Item 
                 icon={HiLogout} 

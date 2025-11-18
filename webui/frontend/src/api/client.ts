@@ -194,6 +194,12 @@ class APIClient {
     const response = await this.client.get<{ stars: number; forks: number }>('/api/system/github-stats');
     return response.data;
   }
+
+  // Documentation
+  async getDocumentation(): Promise<{ content: string }> {
+    const response = await this.client.get<{ content: string }>('/api/system/documentation');
+    return response.data;
+  }
 }
 
 export const apiClient = new APIClient();
