@@ -297,6 +297,7 @@ in
         NFT_BIN = "${pkgs.nftables}/bin/nft";
         IP_BIN = "${pkgs.iproute2}/bin/ip";
         CONNTRACK_BIN = "${pkgs.conntrack-tools}/bin/conntrack";
+        PYHW_BIN = "${pythonEnv}/bin/pyhw";
       };
       
       serviceConfig = {

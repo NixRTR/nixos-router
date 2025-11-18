@@ -304,6 +304,44 @@ async def get_temperature_history(
         ]
 
 
+def _find_pyhw() -> str:
+    """Find pyhw binary path (Nix way)"""
+    # Check environment variable first (set by NixOS service)
+    env_path = os.environ.get("PYHW_BIN")
+    if env_path:
+        return env_path
+    
+    # Try common locations
+    candidates = [
+        "/run/current-system/sw/bin/pyhw",
+        "/usr/bin/pyhw",
+        "/usr/local/bin/pyhw",
+        "pyhw"
+    ]
+    for path in candidates:
+        try:
+            p = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=2)
+            if p.returncode == 0:
+                return path
+        except Exception:
+            continue
+    
+    # Try using python -m pyhw (most reliable for Nix environments)
+    try:
+        result = subprocess.run(
+            ["python3", "-m", "pyhw", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=2
+        )
+        if result.returncode == 0:
+            return "python3"  # Return python3, we'll use -m pyhw
+    except Exception:
+        pass
+    
+    raise RuntimeError("pyhw binary not found")
+
+
 def _get_pyhw_output() -> str:
     """Get pyhw output (system information)
     
@@ -314,10 +352,20 @@ def _get_pyhw_output() -> str:
     env['COLUMNS'] = '105'
     env['TERM'] = 'xterm-256color'  # Ensure color support
     
-    # Try running pyhw directly (should be in PATH if installed via pip/nix)
+    try:
+        pyhw_bin = _find_pyhw()
+    except RuntimeError as e:
+        raise RuntimeError(f"pyhw not found: {str(e)}")
+    
+    # If pyhw_bin is "python3", use module mode
+    if pyhw_bin == "python3":
+        cmd = ["python3", "-m", "pyhw"]
+    else:
+        cmd = [pyhw_bin]
+    
     try:
         result = subprocess.run(
-            ["pyhw"],
+            cmd,
             capture_output=True,
             text=True,
             timeout=10,
@@ -327,24 +375,6 @@ def _get_pyhw_output() -> str:
             return result.stdout
         else:
             raise RuntimeError(f"pyhw failed with return code {result.returncode}: {result.stderr}")
-    except FileNotFoundError:
-        # Try using python -m pyhw as fallback
-        try:
-            result = subprocess.run(
-                ["python3", "-m", "pyhw"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                env=env
-            )
-            if result.returncode == 0:
-                return result.stdout
-            else:
-                raise RuntimeError(f"pyhw failed with return code {result.returncode}: {result.stderr}")
-        except FileNotFoundError:
-            raise RuntimeError("pyhw not found. Please ensure pyhw is installed in the Python environment.")
-        except Exception as e:
-            raise RuntimeError(f"Error running pyhw: {str(e)}")
     except Exception as e:
         raise RuntimeError(f"Error running pyhw: {str(e)}")
 
