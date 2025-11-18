@@ -3,7 +3,7 @@ Database connection and ORM models using SQLAlchemy
 """
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, Integer, Float, String, Boolean, BigInteger, DateTime, Text, Index
+from sqlalchemy import Column, Integer, Float, String, Boolean, BigInteger, DateTime, Text, Index, text
 from sqlalchemy.dialects.postgresql import INET, MACADDR, JSONB
 from datetime import datetime
 from typing import AsyncGenerator
@@ -253,7 +253,175 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db():
-    """Initialize database schema"""
+    """Initialize database schema and apply migrations"""
     async with engine.begin() as conn:
+        # Create all tables (if they don't exist)
         await conn.run_sync(Base.metadata.create_all)
+        
+        # Apply schema updates for existing tables
+        await _apply_schema_updates(conn)
+
+
+async def _apply_schema_updates(conn):
+    """Apply schema updates to existing tables - covers all migrations"""
+    
+    # Migration 001: MAC-based DHCP lease tracking - ensure indexes exist
+    await conn.execute(
+        text("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_dhcp_network_mac 
+            ON dhcp_leases(network, mac_address)
+        """)
+    )
+    await conn.execute(
+        text("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_dhcp_network_ip 
+            ON dhcp_leases(network, ip_address)
+        """)
+    )
+    
+    # Migration 002: Disk I/O and temperature metrics - tables created by SQLAlchemy,
+    # but ensure indexes exist
+    await conn.execute(
+        text("""
+            CREATE INDEX IF NOT EXISTS idx_disk_io_device_time 
+            ON disk_io_metrics(device, timestamp DESC)
+        """)
+    )
+    await conn.execute(
+        text("""
+            CREATE INDEX IF NOT EXISTS idx_temperature_sensor_time 
+            ON temperature_metrics(sensor_name, timestamp DESC)
+        """)
+    )
+    
+    # Migration 003: Device overrides - ensure table and trigger exist
+    # Table is created by SQLAlchemy, but trigger needs to be created
+    result = await conn.execute(
+        text("""
+            SELECT 1 FROM pg_trigger WHERE tgname = 'device_overrides_updated_at'
+        """)
+    )
+    has_trigger = result.scalar() is not None
+    
+    if not has_trigger:
+        # Create trigger function
+        await conn.execute(
+            text("""
+                CREATE OR REPLACE FUNCTION set_updated_at()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                  NEW.updated_at = NOW();
+                  RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql
+            """)
+        )
+        # Create trigger
+        await conn.execute(
+            text("""
+                CREATE TRIGGER device_overrides_updated_at
+                BEFORE UPDATE ON device_overrides
+                FOR EACH ROW EXECUTE PROCEDURE set_updated_at()
+            """)
+        )
+        print("Created device_overrides trigger")
+    
+    # Migration: Add aggregation_level column to client_bandwidth_stats
+    result = await conn.execute(
+        text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'client_bandwidth_stats' 
+            AND column_name = 'aggregation_level'
+        """)
+    )
+    has_agg_level = result.scalar() is not None
+    
+    if not has_agg_level:
+        # Add aggregation_level column
+        await conn.execute(
+            text("""
+                ALTER TABLE client_bandwidth_stats 
+                ADD COLUMN aggregation_level VARCHAR(2) DEFAULT 'raw'
+            """)
+        )
+        # Update existing rows
+        await conn.execute(
+            text("""
+                UPDATE client_bandwidth_stats 
+                SET aggregation_level = 'raw' 
+                WHERE aggregation_level IS NULL
+            """)
+        )
+        # Make NOT NULL
+        await conn.execute(
+            text("""
+                ALTER TABLE client_bandwidth_stats 
+                ALTER COLUMN aggregation_level SET NOT NULL
+            """)
+        )
+        # Add index
+        await conn.execute(
+            text("""
+                CREATE INDEX IF NOT EXISTS idx_client_bandwidth_agg_level 
+                ON client_bandwidth_stats(aggregation_level, timestamp DESC)
+            """)
+        )
+        print("Added aggregation_level column to client_bandwidth_stats")
+    
+    # Migration: Create client_connection_stats table
+    result = await conn.execute(
+        text("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_name = 'client_connection_stats'
+        """)
+    )
+    has_connection_stats = result.scalar() is not None
+    
+    if not has_connection_stats:
+        # Create client_connection_stats table
+        await conn.execute(
+            text("""
+                CREATE TABLE client_connection_stats (
+                    id SERIAL PRIMARY KEY,
+                    timestamp TIMESTAMPTZ NOT NULL,
+                    client_ip INET NOT NULL,
+                    client_mac MACADDR NOT NULL,
+                    remote_ip INET NOT NULL,
+                    remote_port INTEGER NOT NULL,
+                    rx_bytes BIGINT NOT NULL,
+                    tx_bytes BIGINT NOT NULL,
+                    rx_bytes_total BIGINT NOT NULL,
+                    tx_bytes_total BIGINT NOT NULL,
+                    aggregation_level VARCHAR(2) DEFAULT 'raw' NOT NULL
+                )
+            """)
+        )
+        # Create indexes
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_client_connection_client_time 
+                ON client_connection_stats(client_ip, timestamp DESC)
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_client_connection_client_remote 
+                ON client_connection_stats(client_ip, remote_ip, remote_port, timestamp DESC)
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_client_connection_timestamp 
+                ON client_connection_stats(timestamp DESC)
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_client_connection_agg_level 
+                ON client_connection_stats(aggregation_level, timestamp DESC)
+            """)
+        )
+        print("Created client_connection_stats table")
 
