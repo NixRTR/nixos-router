@@ -65,6 +65,11 @@ export function DeviceUsage() {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   
+  // Determine if a column is numerical (should default to descending)
+  const isNumericalColumn = (column: string): boolean => {
+    return ['dl', 'ul'].includes(column);
+  };
+  
   const { connectionStatus } = useMetrics(token);
   
   const handleLogout = async () => {
@@ -325,9 +330,9 @@ export function DeviceUsage() {
       // Toggle direction
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
-      // New column, start with ascending
+      // New column - numerical columns start with descending, text/IP start with ascending
       setSortColumn(column);
-      setSortDirection('asc');
+      setSortDirection(isNumericalColumn(column) ? 'desc' : 'asc');
     }
   };
 

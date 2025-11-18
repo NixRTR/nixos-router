@@ -1,14 +1,24 @@
 /**
  * Main App component with routing
  */
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Login } from './components/auth/Login';
-import { Dashboard } from './pages/Dashboard';
-import { Network } from './pages/Network';
-import { Clients } from './pages/Clients';
-import { DeviceUsage } from './pages/DeviceUsage';
-import { ConnectionDetails } from './pages/ConnectionDetails';
-import { System } from './pages/System';
+
+// Lazy load pages for code splitting - reduces initial bundle size
+const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const Network = lazy(() => import('./pages/Network').then(m => ({ default: m.Network })));
+const Clients = lazy(() => import('./pages/Clients').then(m => ({ default: m.Clients })));
+const DeviceUsage = lazy(() => import('./pages/DeviceUsage').then(m => ({ default: m.DeviceUsage })));
+const ConnectionDetails = lazy(() => import('./pages/ConnectionDetails').then(m => ({ default: m.ConnectionDetails })));
+const System = lazy(() => import('./pages/System').then(m => ({ default: m.System })));
+
+// Loading fallback component
+const PageLoader = () => (
+  <div className="flex items-center justify-center h-screen">
+    <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+  </div>
+);
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('access_token');
@@ -24,7 +34,9 @@ export default function App() {
           path="/dashboard"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <Suspense fallback={<PageLoader />}>
+                <Dashboard />
+              </Suspense>
             </ProtectedRoute>
           }
         />
@@ -32,7 +44,9 @@ export default function App() {
           path="/network"
           element={
             <ProtectedRoute>
-              <Network />
+              <Suspense fallback={<PageLoader />}>
+                <Network />
+              </Suspense>
             </ProtectedRoute>
           }
         />
@@ -40,7 +54,9 @@ export default function App() {
           path="/devices"
           element={
             <ProtectedRoute>
-              <Clients />
+              <Suspense fallback={<PageLoader />}>
+                <Clients />
+              </Suspense>
             </ProtectedRoute>
           }
         />
@@ -48,7 +64,9 @@ export default function App() {
           path="/device-usage"
           element={
             <ProtectedRoute>
-              <DeviceUsage />
+              <Suspense fallback={<PageLoader />}>
+                <DeviceUsage />
+              </Suspense>
             </ProtectedRoute>
           }
         />
@@ -56,7 +74,9 @@ export default function App() {
           path="/device-usage/:ipAddress"
           element={
             <ProtectedRoute>
-              <ConnectionDetails sourcePage="device-usage" />
+              <Suspense fallback={<PageLoader />}>
+                <ConnectionDetails sourcePage="device-usage" />
+              </Suspense>
             </ProtectedRoute>
           }
         />
@@ -64,7 +84,9 @@ export default function App() {
           path="/devices/:ipAddress"
           element={
             <ProtectedRoute>
-              <ConnectionDetails sourcePage="devices" />
+              <Suspense fallback={<PageLoader />}>
+                <ConnectionDetails sourcePage="devices" />
+              </Suspense>
             </ProtectedRoute>
           }
         />
@@ -72,7 +94,9 @@ export default function App() {
           path="/system"
           element={
             <ProtectedRoute>
-              <System />
+              <Suspense fallback={<PageLoader />}>
+                <System />
+              </Suspense>
             </ProtectedRoute>
           }
         />
