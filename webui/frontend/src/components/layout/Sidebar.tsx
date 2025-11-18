@@ -143,8 +143,8 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
               </FlowbiteSidebar.Item>
             </FlowbiteSidebar.ItemGroup>
 
-            {/* Documentation */}
             <FlowbiteSidebar.ItemGroup>
+              {/* Documentation */}
               <FlowbiteSidebar.Item
                 href="/docs"
                 target="_blank"
@@ -155,10 +155,7 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
               >
                 Documentation
               </FlowbiteSidebar.Item>
-            </FlowbiteSidebar.ItemGroup>
-
-            {/* GitHub Links */}
-            <FlowbiteSidebar.ItemGroup>
+              {/* GitHub Links */}
               <FlowbiteSidebar.Item
                 href="https://github.com/BeardedTek/nixos-router"
                 target="_blank"

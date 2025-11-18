@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "postbuild": "node scripts/copy-404.js",
     "preview": "vite preview",
     "lint": "eslint ."
   },
