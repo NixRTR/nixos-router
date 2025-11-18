@@ -1,7 +1,7 @@
 /**
  * System Info Page - Displays system information with NixOS logo
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
@@ -16,12 +16,25 @@ export function SystemInfo() {
   const [textData, setTextData] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [logoHeight, setLogoHeight] = useState<number | null>(null);
+  const textRef = useRef<HTMLPreElement>(null);
   
   const { connectionStatus } = useMetrics(token);
 
   useEffect(() => {
     fetchFastfetch();
   }, []);
+
+  useEffect(() => {
+    const updateLogoHeight = () => {
+      if (textRef.current) {
+        setLogoHeight(textRef.current.offsetHeight);
+      }
+    };
+    updateLogoHeight();
+    window.addEventListener('resize', updateLogoHeight);
+    return () => window.removeEventListener('resize', updateLogoHeight);
+  }, [textData]);
 
   const fetchFastfetch = async () => {
     setLoading(true);
@@ -80,7 +93,8 @@ export function SystemInfo() {
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 128 128"
-                  className="w-32 h-full dark:opacity-90"
+                  className="w-32 dark:opacity-90"
+                  style={{ height: logoHeight ? `${logoHeight}px` : 'auto' }}
                   preserveAspectRatio="xMidYMid meet"
                 >
                   <path
@@ -100,7 +114,7 @@ export function SystemInfo() {
               
               {/* Fastfetch Text Output */}
               <div className="flex-1 flex">
-                <pre className="font-mono text-sm whitespace-pre-wrap text-white dark:text-gray-200 bg-transparent dark:bg-transparent p-0 overflow-auto">
+                <pre ref={textRef} className="font-mono text-sm whitespace-pre-wrap text-white dark:text-gray-200 bg-transparent dark:bg-transparent p-0 overflow-auto">
                   {textData}
                 </pre>
               </div>
