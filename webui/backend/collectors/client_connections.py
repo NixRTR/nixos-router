@@ -113,6 +113,9 @@ def _parse_conntrack_proc(proc_output: str) -> Dict[Tuple[str, str, int], Dict[s
         Dict[(client_ip, remote_ip, remote_port), {rx_bytes_total, tx_bytes_total}]
     """
     connections = {}
+    lines_with_bytes = 0
+    lines_without_bytes = 0
+    sample_line_shown = False
     
     for line in proc_output.splitlines():
         if not line.strip():
@@ -150,13 +153,21 @@ def _parse_conntrack_proc(proc_output: str) -> Dict[Tuple[str, str, int], Dict[s
             if combined_match:
                 bytes_sent = int(combined_match.group(1))  # TX (src->dst)
                 bytes_recv = int(combined_match.group(2))    # RX (dst->src)
+                lines_with_bytes += 1
             else:
+                # Debug: show sample line without bytes
+                if not sample_line_shown and lines_without_bytes < 3:
+                    print(f"Debug: Line without bytes field (sample): {line[:200]}")
+                    lines_without_bytes += 1
+                    if lines_without_bytes >= 3:
+                        sample_line_shown = True
                 continue
         else:
             # First bytes= is original direction (src->dst) = upload
             # Second bytes= is reply direction (dst->src) = download
             bytes_sent = int(bytes_matches[0])  # Original direction (client -> remote)
             bytes_recv = int(bytes_matches[1])  # Reply direction (remote -> client)
+            lines_with_bytes += 1
         
         # For client at src_ip:
         # - tx_bytes_total = bytes_sent (client -> remote) = original direction
@@ -167,6 +178,14 @@ def _parse_conntrack_proc(proc_output: str) -> Dict[Tuple[str, str, int], Dict[s
             'rx_bytes_total': bytes_recv,
             'tx_bytes_total': bytes_sent
         }
+    
+    if lines_with_bytes == 0 and connections:
+        # Debug: show a sample line that matched but had no bytes
+        print(f"Debug: _parse_conntrack_proc: Found {len(connections)} connections but 0 had bytes fields")
+        if proc_output:
+            sample_lines = [l[:200] for l in proc_output.splitlines()[:2] if l.strip() and ('192.168.2.' in l or '192.168.3.' in l)]
+            if sample_lines:
+                print(f"Debug: Sample lines from /proc: {sample_lines}")
     
     return connections
 
