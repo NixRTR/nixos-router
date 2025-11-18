@@ -422,15 +422,17 @@ async def get_github_stats(
 async def get_documentation(
     _: str = Depends(get_current_user)
 ) -> dict:
-    """Get project documentation (README.md)
+    """Get project documentation (docs/documentation.md)
     
     Returns:
-        dict: Contains 'content' field with README.md content
+        dict: Contains 'content' field with documentation content
     """
     import pathlib
     
+    # Calculate path: webui/backend/api/system.py -> project root
     current_file = pathlib.Path(__file__)
-    project_root = current_file.parent.parent.parent
+    # Go up 4 levels: api -> backend -> webui -> project root
+    project_root = current_file.parent.parent.parent.parent
     doc_path = project_root / "docs" / "documentation.md"
     
     try:
@@ -440,7 +442,7 @@ async def get_documentation(
     except FileNotFoundError:
         raise HTTPException(
             status_code=404,
-            detail="Documentation file not found"
+            detail=f"Documentation file not found at {doc_path}"
         )
     except Exception as e:
         raise HTTPException(
