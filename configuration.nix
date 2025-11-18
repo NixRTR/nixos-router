@@ -131,6 +131,7 @@ in
     curl           # Used by DynDNS timer (every 5 min) and health checks
     jq             # Used by DynDNS timer for JSON parsing
     cacert         # CA certificates for SSL/TLS (required for Unbound DNS-over-TLS)
+    fastfetch      # System information display tool (used by WebUI System Info)
   ];
 
   # DNS is configured via modules/dns.nix (reads from routerConfig.dns)
