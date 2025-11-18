@@ -32,6 +32,10 @@ let
   frontendSrc = ../webui/frontend;
   frontendBuild = frontendSrc + "/dist";
   
+  # Documentation source and build (pre-built, committed to repository)
+  docsSrc = ../docs;
+  docsBuild = docsSrc + "/dist";
+  
 in
 
 {
@@ -219,10 +223,6 @@ in
         fi
       '';
     };
-    
-    # Documentation source and build (pre-built, committed to repository)
-    docsSrc = ../docs;
-    docsBuild = docsSrc + "/dist";
     
     # Documentation install service (copies pre-built docs)
     systemd.services.router-webui-docs-init = {
