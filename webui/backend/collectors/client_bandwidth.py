@@ -69,8 +69,27 @@ def _check_cpu_threshold() -> bool:
     return cpu_usage < settings.bandwidth_max_cpu_percent
 
 
+def _is_ipv4(ip: str) -> bool:
+    """Check if an IP address is IPv4"""
+    try:
+        parts = ip.split('.')
+        if len(parts) != 4:
+            return False
+        for part in parts:
+            num = int(part)
+            if num < 0 or num > 255:
+                return False
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
 def _add_ip_to_nftables(ip: str) -> bool:
-    """Add IP address to nftables set and create per-IP counter rules"""
+    """Add IP address to nftables set and create per-IP counter rules (IPv4 only)"""
+    # Only process IPv4 addresses
+    if not _is_ipv4(ip):
+        return False
+    
     if ip in _known_ips:
         return True
     
@@ -83,32 +102,56 @@ def _add_ip_to_nftables(ip: str) -> bool:
         if result_set.returncode != 0:
             # Set add might fail if IP already exists, that's okay
             if "File exists" not in result_set.stderr and "already exists" not in result_set.stderr.lower():
-                print(f"Warning: Failed to add IP {ip} to set: {result_set.stderr}")
+                # Only warn if it's not an IPv6 address (which we intentionally skip)
+                if "Address family" not in result_set.stderr:
+                    print(f"Warning: Failed to add IP {ip} to set: {result_set.stderr}")
+            else:
+                # IP already in set, mark as known
+                _known_ips.add(ip)
+                return True
         
         # Add per-IP counter rules for rx (download)
-        # Insert at position 0 (before the aggregate counter rules)
+        # Try insert without position first (adds to beginning by default)
         counter_name_rx = f"rx_{ip.replace('.', '_')}"
         result_rx = _run_nft([
-            "insert", "rule", "inet", "router_bandwidth", "forward", "position", "0",
+            "insert", "rule", "inet", "router_bandwidth", "forward",
             "ip", "daddr", ip, "counter", "name", counter_name_rx
         ])
         
         if result_rx.returncode != 0:
-            # Rule might already exist, try to add it anyway
+            # Rule might already exist, check error
             if "File exists" not in result_rx.stderr and "already exists" not in result_rx.stderr.lower():
-                print(f"Warning: Failed to add RX rule for IP {ip}: {result_rx.stderr}")
+                # If "No such file" error, try using "add" instead of "insert"
+                if "No such file" in result_rx.stderr:
+                    result_rx = _run_nft([
+                        "add", "rule", "inet", "router_bandwidth", "forward",
+                        "ip", "daddr", ip, "counter", "name", counter_name_rx
+                    ])
+                    if result_rx.returncode != 0 and "File exists" not in result_rx.stderr and "already exists" not in result_rx.stderr.lower():
+                        print(f"Warning: Failed to add RX rule for IP {ip}: {result_rx.stderr}")
+                else:
+                    print(f"Warning: Failed to add RX rule for IP {ip}: {result_rx.stderr}")
         
         # Add per-IP counter rules for tx (upload)
         counter_name_tx = f"tx_{ip.replace('.', '_')}"
         result_tx = _run_nft([
-            "insert", "rule", "inet", "router_bandwidth", "forward", "position", "0",
+            "insert", "rule", "inet", "router_bandwidth", "forward",
             "ip", "saddr", ip, "counter", "name", counter_name_tx
         ])
         
         if result_tx.returncode != 0:
             # Rule might already exist
             if "File exists" not in result_tx.stderr and "already exists" not in result_tx.stderr.lower():
-                print(f"Warning: Failed to add TX rule for IP {ip}: {result_tx.stderr}")
+                # If "No such file" error, try using "add" instead of "insert"
+                if "No such file" in result_tx.stderr:
+                    result_tx = _run_nft([
+                        "add", "rule", "inet", "router_bandwidth", "forward",
+                        "ip", "saddr", ip, "counter", "name", counter_name_tx
+                    ])
+                    if result_tx.returncode != 0 and "File exists" not in result_tx.stderr and "already exists" not in result_tx.stderr.lower():
+                        print(f"Warning: Failed to add TX rule for IP {ip}: {result_tx.stderr}")
+                else:
+                    print(f"Warning: Failed to add TX rule for IP {ip}: {result_tx.stderr}")
         
         # Consider it successful if set was added (rules might already exist)
         if result_set.returncode == 0 or "File exists" in result_set.stderr or "already exists" in result_set.stderr.lower():
@@ -366,9 +409,14 @@ def collect_client_bandwidth() -> List[Dict]:
         
         # Proactively add all known client IPs to nftables (from ARP and DHCP)
         # This ensures counters are created even before traffic flows
-        all_known_ips = set(arp_table.keys())
+        # Filter to IPv4 only
+        all_known_ips = set()
+        for ip in arp_table.keys():
+            if _is_ipv4(ip):
+                all_known_ips.add(ip)
         for lease in dhcp_leases:
-            all_known_ips.add(lease.ip_address)
+            if _is_ipv4(lease.ip_address):
+                all_known_ips.add(lease.ip_address)
         
         for ip in all_known_ips:
             if ip not in _known_ips:
