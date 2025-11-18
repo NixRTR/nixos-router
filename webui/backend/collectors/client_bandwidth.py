@@ -117,34 +117,61 @@ def _read_nftables_counters() -> Dict[str, Dict[str, int]]:
         ])
         
         if result.returncode != 0:
+            print(f"Warning: nft list counters failed: {result.stderr}")
             return counters
         
         # Parse counter output
         # Format: counter rx_192_168_1_1 { packets 1234 bytes 567890 }
-        rx_pattern = r'counter\s+rx_(\d+)_(\d+)_(\d+)_(\d+)\s+\{\s+packets\s+\d+\s+bytes\s+(\d+)'
-        tx_pattern = r'counter\s+tx_(\d+)_(\d+)_(\d+)_(\d+)\s+\{\s+packets\s+\d+\s+bytes\s+(\d+)'
+        # Or multi-line format:
+        # counter rx_192_168_1_1 {
+        #   packets 1234
+        #   bytes 567890
+        # }
+        rx_pattern = r'counter\s+rx_(\d+)_(\d+)_(\d+)_(\d+)'
+        tx_pattern = r'counter\s+tx_(\d+)_(\d+)_(\d+)_(\d+)'
+        bytes_pattern = r'bytes\s+(\d+)'
+        
+        current_counter = None
+        current_type = None
         
         for line in result.stdout.splitlines():
-            # Match RX counters
+            line = line.strip()
+            
+            # Check for RX counter declaration
             rx_match = re.search(rx_pattern, line)
             if rx_match:
                 ip = f"{rx_match.group(1)}.{rx_match.group(2)}.{rx_match.group(3)}.{rx_match.group(4)}"
-                bytes_val = int(rx_match.group(5))
+                current_counter = ip
+                current_type = 'rx'
                 if ip not in counters:
                     counters[ip] = {'rx_bytes_total': 0, 'tx_bytes_total': 0}
-                counters[ip]['rx_bytes_total'] = bytes_val
+                continue
             
-            # Match TX counters
+            # Check for TX counter declaration
             tx_match = re.search(tx_pattern, line)
             if tx_match:
                 ip = f"{tx_match.group(1)}.{tx_match.group(2)}.{tx_match.group(3)}.{tx_match.group(4)}"
-                bytes_val = int(tx_match.group(5))
+                current_counter = ip
+                current_type = 'tx'
                 if ip not in counters:
                     counters[ip] = {'rx_bytes_total': 0, 'tx_bytes_total': 0}
-                counters[ip]['tx_bytes_total'] = bytes_val
+                continue
+            
+            # Check for bytes value (could be on same line or next line)
+            bytes_match = re.search(bytes_pattern, line)
+            if bytes_match and current_counter:
+                bytes_val = int(bytes_match.group(1))
+                if current_type == 'rx':
+                    counters[current_counter]['rx_bytes_total'] = bytes_val
+                elif current_type == 'tx':
+                    counters[current_counter]['tx_bytes_total'] = bytes_val
+                current_counter = None
+                current_type = None
     
     except Exception as e:
         print(f"Error reading nftables counters: {e}")
+        import traceback
+        traceback.print_exc()
     
     return counters
 
@@ -211,6 +238,11 @@ def collect_client_bandwidth() -> List[Dict]:
         
         # Read current counter values from nftables
         current_counters = _read_nftables_counters()
+        
+        if not current_counters:
+            # No counters found - this might be normal if no traffic yet
+            # But log it for debugging
+            print(f"Debug: No nftables counters found. Known IPs: {len(_known_ips)}")
         
         # Process clients (limit to max_clients_per_cycle for CPU governance)
         processed = 0

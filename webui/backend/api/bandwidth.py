@@ -203,6 +203,103 @@ async def get_available_interfaces(
     return sorted(interfaces)
 
 
+@router.get("/clients/debug")
+async def get_client_bandwidth_debug(
+    _: str = Depends(get_current_user)
+) -> dict:
+    """Debug endpoint to check bandwidth collection status
+    
+    Returns:
+        dict: Debug information about bandwidth collection
+    """
+    import subprocess
+    import os
+    
+    debug_info = {
+        "collector_enabled": settings.bandwidth_collection_enabled,
+        "nftables_table_exists": False,
+        "nftables_counters": [],
+        "nftables_set": [],
+        "collector_test": None,
+        "error": None
+    }
+    
+    try:
+        # Check if nftables table exists
+        nft = os.environ.get("NFT_BIN", "nft")
+        result = subprocess.run(
+            [nft, "list", "table", "inet", "router_bandwidth"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        debug_info["nftables_table_exists"] = result.returncode == 0
+        debug_info["nftables_output"] = result.stdout if result.returncode == 0 else result.stderr
+        
+        # List counters
+        result = subprocess.run(
+            [nft, "list", "counters", "inet", "router_bandwidth"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            debug_info["nftables_counters"] = result.stdout.splitlines()
+        
+        # List set
+        result = subprocess.run(
+            [nft, "list", "set", "inet", "router_bandwidth", "client_ips"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            debug_info["nftables_set"] = result.stdout.splitlines()
+        
+        # Test collector
+        try:
+            from ..collectors.client_bandwidth import collect_client_bandwidth, _read_nftables_counters
+            counters = _read_nftables_counters()
+            test_data = collect_client_bandwidth()
+            debug_info["collector_test"] = {
+                "counters_found": len(counters),
+                "clients_collected": len(test_data),
+                "sample_data": test_data[:3] if test_data else []
+            }
+        except Exception as e:
+            debug_info["collector_test_error"] = str(e)
+        
+        # Check database
+        async with AsyncSessionLocal() as session:
+            from sqlalchemy import func
+            result = await session.execute(
+                select(func.count(ClientBandwidthStatsDB.id))
+            )
+            count = result.scalar()
+            debug_info["database_records"] = count
+            
+            # Get latest record
+            result = await session.execute(
+                select(ClientBandwidthStatsDB)
+                .order_by(ClientBandwidthStatsDB.timestamp.desc())
+                .limit(1)
+            )
+            latest = result.scalar_one_or_none()
+            if latest:
+                debug_info["latest_record"] = {
+                    "timestamp": str(latest.timestamp),
+                    "mac_address": str(latest.mac_address),
+                    "ip_address": str(latest.ip_address),
+                    "rx_bytes": latest.rx_bytes,
+                    "tx_bytes": latest.tx_bytes
+                }
+    
+    except Exception as e:
+        debug_info["error"] = str(e)
+    
+    return debug_info
+
+
 @router.get("/clients/current")
 async def get_current_client_bandwidth(
     _: str = Depends(get_current_user)
