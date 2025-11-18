@@ -45,7 +45,13 @@ in
     port = mkOption {
       type = types.port;
       default = 8080;
-      description = "Port for the WebUI backend server";
+      description = "Port for nginx (public-facing)";
+    };
+    
+    backendPort = mkOption {
+      type = types.port;
+      default = 8081;
+      description = "Port for the FastAPI backend (internal)";
     };
     
     database = {
@@ -145,6 +151,9 @@ in
         rm -rf /var/lib/router-webui/frontend/*
         cp -r ${frontendBuild}/* /var/lib/router-webui/frontend/
         chown -R router-webui:router-webui /var/lib/router-webui/frontend
+        chmod -R 755 /var/lib/router-webui/frontend
+        # Ensure nginx (in router-webui group) can read files
+        chmod -R g+r /var/lib/router-webui/frontend
         echo "Frontend installed successfully"
       '';
     };
@@ -243,11 +252,13 @@ in
         cp -r ${docsBuild}/* /var/lib/router-webui/docs/
         chown -R router-webui:router-webui /var/lib/router-webui/docs
         chmod -R 755 /var/lib/router-webui/docs
+        # Ensure nginx (in router-webui group) can read files
+        chmod -R g+r /var/lib/router-webui/docs
         echo "Documentation installed successfully"
       '';
     };
     
-    # Backend service
+    # Backend service (internal, only accessible via nginx)
     systemd.services.router-webui-backend = {
       description = "Router WebUI Backend (FastAPI)";
       after = [ "network.target" "postgresql.service" "router-webui-initdb.service" "router-webui-jwt-init.service" "router-webui-frontend-install.service" "router-webui-docs-init.service" ];
@@ -259,7 +270,7 @@ in
         DATABASE_URL = "postgresql+asyncpg://${cfg.database.user}@${cfg.database.host}:${toString cfg.database.port}/${cfg.database.name}";
         PYTHONPATH = "${../webui}";
         COLLECTION_INTERVAL = toString cfg.collectionInterval;
-        PORT = toString cfg.port;
+        PORT = toString cfg.backendPort;
         KEA_LEASE_FILE = "/var/lib/kea/dhcp4.leases";
         ROUTER_CONFIG_FILE = "/etc/nixos/router-config.nix";
         JWT_SECRET_FILE = "/var/lib/router-webui/jwt-secret";
@@ -276,7 +287,7 @@ in
         User = "router-webui";
         Group = "router-webui";
         WorkingDirectory = "${../webui}";
-        ExecStart = "${pythonEnv}/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port ${toString cfg.port}";
+        ExecStart = "${pythonEnv}/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port ${toString cfg.backendPort}";
         Restart = "always";
         RestartSec = "10s";
         
@@ -300,6 +311,79 @@ in
       };
     };
     
+    # Nginx reverse proxy
+    services.nginx = {
+      enable = true;
+      
+      virtualHosts."router-webui" = {
+        listen = [{
+          addr = "0.0.0.0";
+          port = cfg.port;
+        }];
+        
+        root = "/var/lib/router-webui/frontend";
+        
+        locations = {
+          # Proxy API requests to FastAPI backend (must come before /)
+          "/api" = {
+            proxyPass = "http://127.0.0.1:${toString cfg.backendPort}";
+            proxyWebsockets = true;
+            extraConfig = ''
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+            '';
+          };
+          
+          # Proxy WebSocket connections (must come before /)
+          "/ws" = {
+            proxyPass = "http://127.0.0.1:${toString cfg.backendPort}";
+            proxyWebsockets = true;
+            extraConfig = ''
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection "upgrade";
+            '';
+          };
+          
+          # Serve documentation assets (must come before /docs)
+          "/docs/assets" = {
+            root = "/var/lib/router-webui";
+            extraConfig = ''
+              expires 1y;
+              add_header Cache-Control "public, immutable";
+            '';
+          };
+          
+          # Serve documentation site (must come before /)
+          "/docs" = {
+            root = "/var/lib/router-webui";
+            tryFiles = "$uri $uri/ /docs/index.html";
+          };
+          
+          # Serve frontend assets (must come before /)
+          "/assets" = {
+            root = "/var/lib/router-webui/frontend";
+            extraConfig = ''
+              expires 1y;
+              add_header Cache-Control "public, immutable";
+            '';
+          };
+          
+          # Serve frontend (SPA fallback to index.html) - catch-all
+          "/" = {
+            root = "/var/lib/router-webui/frontend";
+            tryFiles = "$uri $uri/ /index.html";
+          };
+        };
+      };
+    };
+    
     # JWT secret management via sops
     sops.secrets."webui-jwt-secret" = mkIf (cfg.jwtSecretFile != null) {
       sopsFile = cfg.jwtSecretFile;
@@ -307,8 +391,11 @@ in
       mode = "0400";
     };
     
-    # Firewall configuration
+    # Firewall configuration (nginx port, not backend port)
     networking.firewall.allowedTCPPorts = [ cfg.port ];
+    
+    # Ensure nginx can read static files
+    users.users.nginx.extraGroups = [ "router-webui" ];
     
     # Add router-webui service to monitored services
     # This allows the WebUI to monitor itself
