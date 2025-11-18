@@ -1059,6 +1059,20 @@ async def get_connection_history(
     # Process data points
     data_points = []
     
+    # Determine the effective interval for rate calculations
+    # For aggregated data, use the aggregation period. For raw data, use actual time difference.
+    if agg_level == 'raw':
+        # Raw data: use actual time difference between consecutive points
+        effective_interval_seconds = None  # Will use actual time_diff
+    else:
+        # Aggregated data: use the aggregation period
+        effective_interval_seconds = {
+            '1m': 60,      # 1 minute
+            '5m': 300,     # 5 minutes
+            '1h': 3600,    # 1 hour
+            '1d': 86400    # 1 day
+        }.get(agg_level, 60)  # Default to 60 seconds if unknown
+    
     if interval == "raw" or agg_level != 'raw':
         # Return data as-is (already aggregated if agg_level != 'raw')
         for i, stat in enumerate(stats):
@@ -1074,7 +1088,19 @@ async def get_connection_history(
             else:
                 # Calculate rate from previous point
                 prev = stats[i - 1]
-                time_diff = (stat.timestamp - prev.timestamp).total_seconds()
+                actual_time_diff = (stat.timestamp - prev.timestamp).total_seconds()
+                
+                # Use effective interval for aggregated data, actual time diff for raw
+                if effective_interval_seconds is not None:
+                    # Aggregated data: use aggregation period
+                    time_diff = effective_interval_seconds
+                else:
+                    # Raw data: use actual time difference, but ensure it's reasonable
+                    if 0.5 <= actual_time_diff <= 60:  # Between 0.5s and 60s is reasonable
+                        time_diff = max(actual_time_diff, settings.collection_interval)
+                    else:
+                        # Skip if time difference is unreasonable (likely data gap)
+                        time_diff = 0
                 
                 if time_diff > 0:
                     rx_mbps = (stat.rx_bytes * 8) / (time_diff * 1_000_000)
