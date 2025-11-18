@@ -6,6 +6,33 @@ let
   cfg = config.services.router-webui;
   routerConfig = import ../router-config.nix;
   
+  # pypci-ng package (dependency of pyhw, not in nixpkgs)
+  # Try to use from nixpkgs first, otherwise build manually
+  pypci-ng = pkgs.python311Packages.pypci-ng or (pkgs.python311Packages.buildPythonPackage rec {
+    pname = "pypci-ng";
+    version = "0.1.0";
+    format = "pyproject";
+    
+    src = pkgs.python311Packages.fetchPypi {
+      inherit pname version;
+      sha256 = lib.fakeSha256;  # Nix will show the correct hash on first build
+    };
+    
+    nativeBuildInputs = with pkgs.python311Packages; [
+      setuptools
+    ];
+    
+    propagatedBuildInputs = with pkgs.python311Packages; [];
+    
+    doCheck = false;
+    
+    meta = with lib; {
+      description = "PCI utility library for pyhw";
+      homepage = "https://pypi.org/project/pypci-ng/";
+      license = licenses.bsd3;
+    };
+  });
+  
   # pyhw package (not in nixpkgs, build it manually)
   pyhw = pkgs.python311Packages.buildPythonPackage rec {
     pname = "pyhw";
@@ -21,9 +48,8 @@ let
       setuptools  # Required for pyproject builds
     ];
     
-    propagatedBuildInputs = with pkgs.python311Packages; [
-      # pyhw only depends on Python standard library according to PyPI
-      # But it may have optional dependencies, check if needed
+    propagatedBuildInputs = [
+      pypci-ng  # Required dependency
     ];
     
     # No tests in the package
