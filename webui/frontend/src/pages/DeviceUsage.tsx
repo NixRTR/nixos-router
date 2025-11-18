@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Table, Badge, Button, Modal, Select, Label, TextInput, Tooltip as FlowbiteTooltip } from 'flowbite-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { HiSearch } from 'react-icons/hi';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
 import { useMetrics } from '../hooks/useMetrics';
@@ -64,6 +65,10 @@ export function DeviceUsage() {
   const [interfaceStats, setInterfaceStats] = useState<Record<string, { rx_mb: number; tx_mb: number }>>({});
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all'); // all, online, offline
+  const [filterType, setFilterType] = useState('all'); // all, dhcp, static
+  const [filterNetwork, setFilterNetwork] = useState('all'); // all, homelab, lan
   
   // Determine if a column is numerical (should default to descending)
   const isNumericalColumn = (column: string): boolean => {
@@ -372,8 +377,34 @@ export function DeviceUsage() {
     }
   };
 
+  // Filter devices
+  const filteredDevices = devices.filter((device) => {
+    // Search filter
+    const matchesSearch = !search || (
+      device.hostname?.toLowerCase().includes(search.toLowerCase()) ||
+      device.ip_address.includes(search) ||
+      device.mac_address.includes(search) ||
+      (device.nickname?.toLowerCase().includes(search.toLowerCase()))
+    );
+    
+    // Status filter
+    const matchesStatus = filterStatus === 'all' || 
+      (filterStatus === 'online' && device.is_online) ||
+      (filterStatus === 'offline' && !device.is_online);
+    
+    // Type filter
+    const matchesType = filterType === 'all' ||
+      (filterType === 'dhcp' && device.is_dhcp) ||
+      (filterType === 'static' && !device.is_dhcp);
+    
+    // Network filter
+    const matchesNetwork = filterNetwork === 'all' || device.network === filterNetwork;
+    
+    return matchesSearch && matchesStatus && matchesType && matchesNetwork;
+  });
+
   // Sort devices based on selected column
-  const sortedDevices = [...devices].sort((a, b) => {
+  const sortedDevices = [...filteredDevices].sort((a, b) => {
     if (!sortColumn) {
       // Default: sort by IP address
       const ipA = getSortableIP(a.ip_address);
@@ -472,6 +503,51 @@ export function DeviceUsage() {
               </div>
             </div>
 
+            {/* Search and Filter Bar - Same as Devices page */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <div>
+                <TextInput
+                  icon={HiSearch}
+                  placeholder="Search..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <Select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                >
+                  <option value="all">All Status</option>
+                  <option value="online">Online Only</option>
+                  <option value="offline">Offline Only</option>
+                </Select>
+              </div>
+              
+              <div>
+                <Select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                >
+                  <option value="all">All Types</option>
+                  <option value="dhcp">DHCP Only</option>
+                  <option value="static">Static Only</option>
+                </Select>
+              </div>
+              
+              <div>
+                <Select
+                  value={filterNetwork}
+                  onChange={(e) => setFilterNetwork(e.target.value)}
+                >
+                  <option value="all">All Networks</option>
+                  <option value="homelab">HOMELAB</option>
+                  <option value="lan">LAN</option>
+                </Select>
+              </div>
+            </div>
+
             {/* Time Range Selector for Table */}
             <div className="mb-4 flex flex-wrap gap-4 items-end">
               <div className="min-w-[150px]">
@@ -517,8 +593,8 @@ export function DeviceUsage() {
               )}
             </div>
 
-            {/* Legend for color indicators */}
-            <div className="mb-4 flex flex-wrap gap-4 text-xs text-gray-600 dark:text-gray-400">
+            {/* Legend for color indicators - only show below 1650px */}
+            <div className="xl-custom:hidden mb-4 flex flex-wrap gap-4 text-xs text-gray-600 dark:text-gray-400">
               <div className="flex items-center gap-2">
                 <span className="font-semibold">Network:</span>
                 <div className="flex items-center gap-1">
@@ -528,6 +604,17 @@ export function DeviceUsage() {
                 <div className="flex items-center gap-1">
                   <div className="w-3 h-3 rounded-full bg-purple-500"></div>
                   <span>LAN</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Type:</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+                  <span>Static</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                  <span>DHCP</span>
                 </div>
               </div>
             </div>
@@ -591,9 +678,17 @@ export function DeviceUsage() {
                         </Table.Cell>
                         <Table.Cell className="font-mono text-sm">{device.ip_address}</Table.Cell>
                         <Table.Cell>
-                          <FlowbiteTooltip content={device.is_online ? 'Online' : 'Offline'} placement="top">
-                            <div className={`w-3 h-3 rounded-full ${device.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                          </FlowbiteTooltip>
+                          {/* Show text above 1650px, circle below */}
+                          <div className="hidden xl-custom:block">
+                            <Badge color={device.is_online ? 'success' : 'gray'} size="sm">
+                              {device.is_online ? 'ONLINE' : 'OFFLINE'}
+                            </Badge>
+                          </div>
+                          <div className="xl-custom:hidden">
+                            <FlowbiteTooltip content={device.is_online ? 'Online' : 'Offline'} placement="top">
+                              <div className={`w-3 h-3 rounded-full ${device.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                            </FlowbiteTooltip>
+                          </div>
                         </Table.Cell>
                         <Table.Cell className="text-sm">
                           {formatBytes(averages.dl_1h)}

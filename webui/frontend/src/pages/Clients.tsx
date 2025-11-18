@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Table, Badge, TextInput, Select, Button, Tooltip } from 'flowbite-react';
-import { HiSearch } from 'react-icons/hi';
+import { HiSearch, HiPencil } from 'react-icons/hi';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
 import { useMetrics } from '../hooks/useMetrics';
@@ -300,8 +300,8 @@ export function Clients() {
               </div>
             </div>
 
-            {/* Legend for color indicators */}
-            <div className="mb-4 flex flex-wrap gap-4 text-xs text-gray-600 dark:text-gray-400">
+            {/* Legend for color indicators - only show below 1650px */}
+            <div className="xl-custom:hidden mb-4 flex flex-wrap gap-4 text-xs text-gray-600 dark:text-gray-400">
               <div className="flex items-center gap-2">
                 <span className="font-semibold">Network:</span>
                 <div className="flex items-center gap-1">
@@ -316,16 +316,12 @@ export function Clients() {
               <div className="flex items-center gap-2">
                 <span className="font-semibold">Type:</span>
                 <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                  <span>Static DHCP</span>
+                  <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+                  <span>Static</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                  <span>Dynamic DHCP</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded-full bg-gray-500"></div>
-                  <span>Static IP</span>
+                  <span>DHCP</span>
                 </div>
               </div>
             </div>
@@ -348,9 +344,17 @@ export function Clients() {
                   {filteredDevices.map((device) => (
                     <Table.Row key={device.mac_address} className={!device.is_online ? 'opacity-50' : ''}>
                       <Table.Cell>
-                        <Tooltip content={device.is_online ? 'Online' : 'Offline'} placement="top">
-                          <div className={`w-3 h-3 rounded-full ${device.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                        </Tooltip>
+                        {/* Show text above 1650px, circle below */}
+                        <div className="hidden xl-custom:block">
+                          <Badge color={device.is_online ? 'success' : 'gray'} size="sm">
+                            {device.is_online ? 'ONLINE' : 'OFFLINE'}
+                          </Badge>
+                        </div>
+                        <div className="xl-custom:hidden">
+                          <Tooltip content={device.is_online ? 'Online' : 'Offline'} placement="top">
+                            <div className={`w-3 h-3 rounded-full ${device.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                          </Tooltip>
+                        </div>
                       </Table.Cell>
                       <Table.Cell className="font-medium max-w-[200px]">
                         <div className="flex items-center gap-2">
@@ -361,8 +365,14 @@ export function Clients() {
                           >
                             {device.favorite ? '★' : '☆'}
                           </button>
+                          <button
+                            className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 flex-shrink-0"
+                            title="Edit nickname"
+                            onClick={() => editNickname(device)}
+                          >
+                            <HiPencil className="w-4 h-4" />
+                          </button>
                           <TruncatedText text={device.nickname || device.hostname || 'Unknown'} maxLength={20} />
-                          <Button size="xs" color="light" onClick={() => editNickname(device)} className="flex-shrink-0">Edit</Button>
                         </div>
                       </Table.Cell>
                       <Table.Cell className="font-mono text-sm">{device.ip_address}</Table.Cell>
@@ -373,20 +383,35 @@ export function Clients() {
                         {device.vendor || '—'}
                       </Table.Cell>
                       <Table.Cell>
-                        <Tooltip content={device.network.toUpperCase()} placement="top">
-                          <div className={`w-3 h-3 rounded-full ${device.network === 'homelab' ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
-                        </Tooltip>
+                        {/* Show text above 1650px, circle below */}
+                        <div className="hidden xl-custom:block">
+                          <Badge color={device.network === 'homelab' ? 'info' : 'purple'} size="sm">
+                            {device.network.toUpperCase()}
+                          </Badge>
+                        </div>
+                        <div className="xl-custom:hidden">
+                          <Tooltip content={device.network.toUpperCase()} placement="top">
+                            <div className={`w-3 h-3 rounded-full ${device.network === 'homelab' ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
+                          </Tooltip>
+                        </div>
                       </Table.Cell>
                       <Table.Cell>
-                        <Tooltip 
-                          content={device.is_static ? 'Static DHCP' : (device.is_dhcp ? 'Dynamic DHCP' : 'Static IP')} 
-                          placement="top"
-                        >
-                          <div className={`w-3 h-3 rounded-full ${
-                            device.is_static ? 'bg-green-500' : 
-                            (device.is_dhcp ? 'bg-yellow-500' : 'bg-gray-500')
-                          }`}></div>
-                        </Tooltip>
+                        {/* Show text above 1650px, circle below */}
+                        <div className="hidden xl-custom:block">
+                          <Badge color={device.is_dhcp ? 'warning' : 'gray'} size="sm">
+                            {device.is_dhcp ? 'DHCP' : 'Static'}
+                          </Badge>
+                        </div>
+                        <div className="xl-custom:hidden">
+                          <Tooltip 
+                            content={device.is_dhcp ? 'DHCP' : 'Static'} 
+                            placement="top"
+                          >
+                            <div className={`w-3 h-3 rounded-full ${
+                              device.is_dhcp ? 'bg-yellow-500' : 'bg-gray-500'
+                            }`}></div>
+                          </Tooltip>
+                        </div>
                       </Table.Cell>
                       <Table.Cell className="text-sm whitespace-nowrap">
                         {formatLastSeen(device.last_seen)}
