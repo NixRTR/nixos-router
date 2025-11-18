@@ -696,11 +696,11 @@ async def get_bulk_client_bandwidth_history(
             # Group stats by time buckets
             buckets = {}
             for stat in stats:
-                # Round timestamp to interval
-                bucket_time = stat.timestamp.replace(
-                    second=(stat.timestamp.second // interval_seconds) * interval_seconds,
-                    microsecond=0
-                )
+                # Round timestamp to interval boundary
+                # Convert to total seconds since epoch, round down, then convert back
+                timestamp_seconds = int(stat.timestamp.timestamp())
+                rounded_seconds = (timestamp_seconds // interval_seconds) * interval_seconds
+                bucket_time = datetime.fromtimestamp(rounded_seconds, tz=timezone.utc).replace(microsecond=0)
                 
                 if bucket_time not in buckets:
                     buckets[bucket_time] = {
