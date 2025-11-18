@@ -74,12 +74,17 @@ in
         routerConfig.homelab.ipAddress
         routerConfig.lan.ipAddress
       ])}
+      ${lib.optionalString ((routerConfig.domain or "") != "") "search ${routerConfig.domain}"}
     '';
     mode = "0644";
   };
   
   # Add search domain so we can use short hostnames (e.g., "ssh hera" instead of "ssh hera.jeandr.net")
-  networking.search = lib.optional (primaryDomain != null) primaryDomain;
+  # Use explicit domain from router-config.nix, fallback to extracted domain from DNS records
+  networking.search = if (routerConfig.domain or "") != "" then
+    [ routerConfig.domain ]
+  else
+    lib.optional (primaryDomain != null) primaryDomain;
 
   # Allow unfree packages (if needed for hardware drivers, etc.)
   nixpkgs.config.allowUnfree = true;

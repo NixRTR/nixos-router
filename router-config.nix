@@ -4,6 +4,7 @@
 {
   # System settings
   hostname = "nixos-router";
+  domain = "example.com";  # Domain for DNS search (used in /etc/resolv.conf)
   timezone = "America/Anchorage";
   username = "routeradmin";
 
