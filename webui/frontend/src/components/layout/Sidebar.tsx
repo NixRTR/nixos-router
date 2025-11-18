@@ -1,6 +1,7 @@
 /**
  * Sidebar navigation with Flowbite - Mobile responsive with hamburger menu
  */
+import { useState } from 'react';
 import { Sidebar as FlowbiteSidebar } from 'flowbite-react';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -9,7 +10,9 @@ import {
   HiUsers,
   HiClock,
   HiLogout,
+  HiInformationCircle,
 } from 'react-icons/hi';
+import { SystemInfoModal } from '../SystemInfoModal';
 
 interface SidebarProps {
   onLogout: () => void;
@@ -19,6 +22,7 @@ interface SidebarProps {
 
 export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
   const location = useLocation();
+  const [systemInfoModalOpen, setSystemInfoModalOpen] = useState(false);
 
   const handleItemClick = () => {
     // Close sidebar when screen is below 1650px when item is clicked
@@ -102,6 +106,15 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
 
             <FlowbiteSidebar.ItemGroup>
               <FlowbiteSidebar.Item 
+                icon={HiInformationCircle} 
+                onClick={() => {
+                  handleItemClick();
+                  setSystemInfoModalOpen(true);
+                }}
+              >
+                System Info
+              </FlowbiteSidebar.Item>
+              <FlowbiteSidebar.Item 
                 icon={HiLogout} 
                 onClick={() => {
                   handleItemClick();
@@ -114,6 +127,12 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
           </FlowbiteSidebar.Items>
         </FlowbiteSidebar>
       </div>
+      
+      {/* System Info Modal */}
+      <SystemInfoModal 
+        show={systemInfoModalOpen} 
+        onClose={() => setSystemInfoModalOpen(false)} 
+      />
     </>
   );
 }

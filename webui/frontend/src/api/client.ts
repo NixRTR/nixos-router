@@ -182,6 +182,12 @@ class APIClient {
     });
     return response.data;
   }
+
+  // System info
+  async getFastfetch(): Promise<{ output: string }> {
+    const response = await this.client.get<{ output: string }>('/api/system/fastfetch');
+    return response.data;
+  }
 }
 
 export const apiClient = new APIClient();

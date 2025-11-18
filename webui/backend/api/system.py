@@ -1,11 +1,13 @@
 """
 System metrics API endpoints
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from pydantic import BaseModel
+import subprocess
+import os
 
 from ..auth import get_current_user
 from ..models import (
@@ -300,4 +302,61 @@ async def get_temperature_history(
             TemperatureHistory(sensor_name=sensor, data=data)
             for sensor, data in sensors.items()
         ]
+
+
+def _find_fastfetch() -> str:
+    """Find fastfetch binary path (Nix way)"""
+    env_path = os.environ.get("FASTFETCH_BIN")
+    if env_path:
+        return env_path
+    candidates = [
+        "/run/current-system/sw/bin/fastfetch",
+        "/usr/bin/fastfetch",
+        "/usr/local/bin/fastfetch",
+        "fastfetch"
+    ]
+    for path in candidates:
+        try:
+            p = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=2)
+            if p.returncode == 0:
+                return path
+        except Exception:
+            continue
+    raise RuntimeError("fastfetch binary not found")
+
+
+@router.get("/fastfetch")
+async def get_fastfetch(
+    _: str = Depends(get_current_user)
+) -> dict:
+    """Run fastfetch and return the output
+    
+    Returns:
+        dict: Contains 'output' field with fastfetch output as string
+    """
+    try:
+        fastfetch_bin = _find_fastfetch()
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    try:
+        result = subprocess.run(
+            [fastfetch_bin],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=os.environ.copy()  # Preserve environment for proper colors/formatting
+        )
+        
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=500,
+                detail=f"fastfetch failed: {result.stderr or 'Unknown error'}"
+            )
+        
+        return {"output": result.stdout}
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="fastfetch timed out")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error running fastfetch: {str(e)}")
 
