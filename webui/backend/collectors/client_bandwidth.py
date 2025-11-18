@@ -118,14 +118,26 @@ def _add_ip_to_nftables(ip: str) -> bool:
                 _known_ips.add(ip)
                 return True
         
-        # Add per-IP counter rules using a here-document approach via stdin
-        # This is more reliable than passing arguments
+        # Create named counters first, then add rules that reference them
         counter_name_rx = f"rx_{ip.replace('.', '_')}"
         counter_name_tx = f"tx_{ip.replace('.', '_')}"
         
         nft = _find_nft()
         
-        # Try to add RX rule using stdin (nft requires newline)
+        # Create RX counter (ignore if it already exists)
+        result_counter_rx = _run_nft([
+            "add", "counter", "inet", "router_bandwidth", counter_name_rx
+        ])
+        # Ignore "File exists" errors - counter might already exist
+        
+        # Create TX counter (ignore if it already exists)
+        result_counter_tx = _run_nft([
+            "add", "counter", "inet", "router_bandwidth", counter_name_tx
+        ])
+        # Ignore "File exists" errors - counter might already exist
+        
+        # Now add rules that reference the counters
+        # Use stdin approach for better reliability
         rx_rule_cmd = f"insert rule inet router_bandwidth forward ip daddr {ip} counter name {counter_name_rx}\n"
         result_rx = subprocess.run(
             [nft, "-f", "-"],
