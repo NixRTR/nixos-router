@@ -1,5 +1,5 @@
 /**
- * System Info Modal - Displays fastfetch output as WebP image
+ * System Info Modal - Displays pyhw output as PNG image
  */
 import { useState, useEffect } from 'react';
 import { Modal } from 'flowbite-react';
@@ -57,7 +57,7 @@ export function SystemInfoModal({ show, onClose }: SystemInfoModalProps) {
           {!loading && !error && imageData && (
             <div className="overflow-auto max-h-[70vh] w-full flex justify-center">
               <img 
-                src={`data:image/webp;base64,${imageData}`}
+                src={`data:image/png;base64,${imageData}`}
                 alt="System Information"
                 className="max-w-full h-auto rounded-lg"
               />

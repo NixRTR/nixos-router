@@ -304,32 +304,51 @@ async def get_temperature_history(
         ]
 
 
-def _find_fastfetch() -> str:
-    """Find fastfetch binary path (Nix way)"""
-    env_path = os.environ.get("FASTFETCH_BIN")
-    if env_path:
-        return env_path
-    candidates = [
-        "/run/current-system/sw/bin/fastfetch",
-        "/usr/bin/fastfetch",
-        "/usr/local/bin/fastfetch",
-        "fastfetch"
-    ]
-    for path in candidates:
+def _get_pyhw_output() -> str:
+    """Get pyhw output (system information)
+    
+    Uses subprocess to run pyhw command.
+    """
+    # Try running pyhw directly (should be in PATH if installed via pip/nix)
+    try:
+        result = subprocess.run(
+            ["pyhw"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=os.environ.copy()
+        )
+        if result.returncode == 0:
+            return result.stdout
+        else:
+            raise RuntimeError(f"pyhw failed with return code {result.returncode}: {result.stderr}")
+    except FileNotFoundError:
+        # Try using python -m pyhw as fallback
         try:
-            p = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=2)
-            if p.returncode == 0:
-                return path
-        except Exception:
-            continue
-    raise RuntimeError("fastfetch binary not found")
+            result = subprocess.run(
+                ["python3", "-m", "pyhw"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env=os.environ.copy()
+            )
+            if result.returncode == 0:
+                return result.stdout
+            else:
+                raise RuntimeError(f"pyhw failed with return code {result.returncode}: {result.stderr}")
+        except FileNotFoundError:
+            raise RuntimeError("pyhw not found. Please ensure pyhw is installed in the Python environment.")
+        except Exception as e:
+            raise RuntimeError(f"Error running pyhw: {str(e)}")
+    except Exception as e:
+        raise RuntimeError(f"Error running pyhw: {str(e)}")
 
 
 def _ansi_to_image(ansi_text: str) -> bytes:
-    """Convert ANSI escape codes to WebP image using Pillow
+    """Convert ANSI escape codes to PNG image using Pillow
     
     Simplified approach: parse ANSI codes, then render line by line with colors.
-    Returns WebP image bytes.
+    Returns PNG image bytes.
     """
     from PIL import Image, ImageDraw, ImageFont
     import io
@@ -530,9 +549,9 @@ def _ansi_to_image(ansi_text: str) -> bytes:
         
         y_offset += line_height
     
-    # Convert to WebP
+    # Convert to PNG
     output = io.BytesIO()
-    img.save(output, format='WEBP', quality=90)
+    img.save(output, format='PNG')
     return output.getvalue()
 
 
@@ -540,42 +559,26 @@ def _ansi_to_image(ansi_text: str) -> bytes:
 async def get_fastfetch(
     _: str = Depends(get_current_user)
 ) -> dict:
-    """Run fastfetch and return the output as WebP image
+    """Run pyhw and return the output as PNG image
     
     Returns:
-        dict: Contains 'image' field with base64-encoded WebP image data
+        dict: Contains 'image' field with base64-encoded PNG image data
     """
     import base64
     
     try:
-        fastfetch_bin = _find_fastfetch()
+        pyhw_output = _get_pyhw_output()
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
     
     try:
-        result = subprocess.run(
-            [fastfetch_bin],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            env=os.environ.copy()  # Preserve environment for proper colors/formatting
-        )
-        
-        if result.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=f"fastfetch failed: {result.stderr or 'Unknown error'}"
-            )
-        
-        # Convert ANSI output to WebP image
-        image_bytes = _ansi_to_image(result.stdout)
+        # Convert ANSI output to PNG image
+        image_bytes = _ansi_to_image(pyhw_output)
         
         # Return as base64-encoded string
         image_base64 = base64.b64encode(image_bytes).decode('utf-8')
         
         return {"image": image_base64}
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="fastfetch timed out")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error running fastfetch: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error rendering system info: {str(e)}")
 

@@ -23,6 +23,7 @@ let
     pamela  # PAM authentication support
     manuf  # MAC address OUI vendor lookup
     pillow  # Image processing for ANSI to image conversion
+    pyhw  # System information tool (neofetch/fastfetch alternative)
   ]);
   
   # Backend source
@@ -239,7 +240,6 @@ in
         NFT_BIN = "${pkgs.nftables}/bin/nft";
         IP_BIN = "${pkgs.iproute2}/bin/ip";
         CONNTRACK_BIN = "${pkgs.conntrack-tools}/bin/conntrack";
-        FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
       };
       
       serviceConfig = {
