@@ -427,16 +427,14 @@ async def get_documentation(
     Returns:
         dict: Contains 'content' field with README.md content
     """
-    # README.md is at the project root, which is ../../ from webui/backend/api/
     import pathlib
     
-    # Get the project root (webui/backend/api/ -> webui/backend/ -> webui/ -> root)
     current_file = pathlib.Path(__file__)
     project_root = current_file.parent.parent.parent
-    readme_path = project_root / "README.md"
+    doc_path = project_root / "docs" / "documentation.md"
     
     try:
-        with open(readme_path, 'r', encoding='utf-8') as f:
+        with open(doc_path, 'r', encoding='utf-8') as f:
             content = f.read()
         return {"content": content}
     except FileNotFoundError:

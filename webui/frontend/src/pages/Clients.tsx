@@ -346,9 +346,9 @@ export function Clients() {
                       <Table.Cell>
                         {/* Show text above 1650px, circle below */}
                         <div className="hidden xl-custom:block">
-                          <Badge color={device.is_online ? 'success' : 'gray'} size="sm">
+                        <Badge color={device.is_online ? 'success' : 'gray'} size="sm">
                             {device.is_online ? 'ONLINE' : 'OFFLINE'}
-                          </Badge>
+                        </Badge>
                         </div>
                         <div className="xl-custom:hidden">
                           <Tooltip content={device.is_online ? 'Online' : 'Offline'} placement="top">
@@ -386,8 +386,8 @@ export function Clients() {
                         {/* Show text above 1650px, circle below */}
                         <div className="hidden xl-custom:block">
                           <Badge color={device.network === 'homelab' ? 'info' : 'purple'} size="sm">
-                            {device.network.toUpperCase()}
-                          </Badge>
+                          {device.network.toUpperCase()}
+                        </Badge>
                         </div>
                         <div className="xl-custom:hidden">
                           <Tooltip content={device.network.toUpperCase()} placement="top">
@@ -400,7 +400,7 @@ export function Clients() {
                         <div className="hidden xl-custom:block">
                           <Badge color={device.is_dhcp ? 'warning' : 'gray'} size="sm">
                             {device.is_dhcp ? 'DHCP' : 'Static'}
-                          </Badge>
+                        </Badge>
                         </div>
                         <div className="xl-custom:hidden">
                           <Tooltip 
@@ -425,13 +425,13 @@ export function Clients() {
                           >
                             Details
                           </Button>
-                          <Button
-                            size="xs"
-                            color={isDeviceBlocked(device) ? 'success' : 'failure'}
-                            onClick={() => handleBlockToggle(device)}
-                          >
-                            {isDeviceBlocked(device) ? 'Enable' : 'Disable'}
-                          </Button>
+                        <Button
+                          size="xs"
+                          color={isDeviceBlocked(device) ? 'success' : 'failure'}
+                          onClick={() => handleBlockToggle(device)}
+                        >
+                          {isDeviceBlocked(device) ? 'Enable' : 'Disable'}
+                        </Button>
                         </div>
                       </Table.Cell>
                     </Table.Row>
@@ -513,14 +513,14 @@ export function Clients() {
                         >
                           Details
                         </Button>
-                        <Button
-                          size="xs"
-                          color={isDeviceBlocked(device) ? 'success' : 'failure'}
-                          onClick={() => handleBlockToggle(device)}
+                      <Button
+                        size="xs"
+                        color={isDeviceBlocked(device) ? 'success' : 'failure'}
+                        onClick={() => handleBlockToggle(device)}
                           className="flex-1"
-                        >
-                          {isDeviceBlocked(device) ? 'Enable' : 'Disable'}
-                        </Button>
+                      >
+                        {isDeviceBlocked(device) ? 'Enable' : 'Disable'}
+                      </Button>
                       </div>
                       <div className="mt-2 flex gap-2">
                         <Button size="xs" color="light" className="flex-1" onClick={() => editNickname(device)}>Edit Nickname</Button>
