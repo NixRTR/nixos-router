@@ -43,8 +43,10 @@ class Settings(BaseSettings):
     # Historical Data Retention
     metrics_retention_days: int = 30
     
-    # CORS (for development - production serves from same origin)
-    cors_origins: list = ["http://localhost:3000", "http://localhost:5173"]
+    # CORS (for development - production serves from same origin via nginx)
+    # In production, nginx serves everything from the same origin, so CORS is not needed
+    # For development, allow localhost origins
+    cors_origins: list = ["http://localhost:3000", "http://localhost:5173", "http://localhost:8080"]
     
     class Config:
         env_file = "/etc/router-webui/config.env"

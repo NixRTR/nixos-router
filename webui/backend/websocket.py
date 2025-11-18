@@ -76,11 +76,11 @@ class ConnectionManager:
         """Background task that collects and broadcasts metrics"""
         while True:
             try:
-                # Only collect if we have connected clients
+                # Always collect metrics and store in database (regardless of connections)
+                metrics = await self._collect_all_metrics()
+                
+                # Only broadcast if we have connected clients
                 if self.active_connections:
-                    metrics = await self._collect_all_metrics()
-                    
-                    # Broadcast to all clients
                     await self.broadcast({
                         "type": "metrics",
                         "data": metrics
@@ -207,25 +207,62 @@ class ConnectionManager:
                     )
                     session.add(service_db)
                 
-                # Update DHCP leases (upsert based on MAC+network)
+                # Update DHCP leases (upsert based on MAC+network or IP+network)
                 for lease in dhcp_leases:
-                    # Check if device (MAC) exists in this network
-                    result = await session.execute(
+                    # First check if device (MAC) exists in this network
+                    result_mac = await session.execute(
                         select(DHCPLeaseDB).where(
                             DHCPLeaseDB.network == lease.network,
                             DHCPLeaseDB.mac_address == lease.mac_address
                         )
                     )
-                    existing = result.scalar_one_or_none()
+                    existing_by_mac = result_mac.scalar_one_or_none()
                     
-                    if existing:
+                    # Also check if IP address exists in this network (IP may have been reassigned)
+                    result_ip = await session.execute(
+                        select(DHCPLeaseDB).where(
+                            DHCPLeaseDB.network == lease.network,
+                            DHCPLeaseDB.ip_address == lease.ip_address
+                        )
+                    )
+                    existing_by_ip = result_ip.scalar_one_or_none()
+                    
+                    if existing_by_mac:
                         # Update existing device lease (IP may have changed)
-                        existing.ip_address = lease.ip_address
-                        existing.hostname = lease.hostname
-                        existing.lease_start = lease.lease_start
-                        existing.lease_end = lease.lease_end
-                        existing.last_seen = lease.last_seen
-                        existing.is_static = lease.is_static
+                        existing_by_mac.ip_address = lease.ip_address
+                        existing_by_mac.hostname = lease.hostname
+                        existing_by_mac.lease_start = lease.lease_start
+                        existing_by_mac.lease_end = lease.lease_end
+                        existing_by_mac.last_seen = lease.last_seen
+                        existing_by_mac.is_static = lease.is_static
+                    elif existing_by_ip:
+                        # IP was reassigned to a different MAC
+                        # Check if the new MAC already has a lease (to avoid MAC constraint violation)
+                        result_new_mac = await session.execute(
+                            select(DHCPLeaseDB).where(
+                                DHCPLeaseDB.network == lease.network,
+                                DHCPLeaseDB.mac_address == lease.mac_address
+                            )
+                        )
+                        existing_new_mac = result_new_mac.scalar_one_or_none()
+                        
+                        if existing_new_mac:
+                            # New MAC already has a lease - delete the old IP lease and update the MAC's lease
+                            await session.delete(existing_by_ip)
+                            existing_new_mac.ip_address = lease.ip_address
+                            existing_new_mac.hostname = lease.hostname
+                            existing_new_mac.lease_start = lease.lease_start
+                            existing_new_mac.lease_end = lease.lease_end
+                            existing_new_mac.last_seen = lease.last_seen
+                            existing_new_mac.is_static = lease.is_static
+                        else:
+                            # Update the IP lease with the new MAC
+                            existing_by_ip.mac_address = lease.mac_address
+                            existing_by_ip.hostname = lease.hostname
+                            existing_by_ip.lease_start = lease.lease_start
+                            existing_by_ip.lease_end = lease.lease_end
+                            existing_by_ip.last_seen = lease.last_seen
+                            existing_by_ip.is_static = lease.is_static
                     else:
                         # Insert new device
                         lease_db = DHCPLeaseDB(
