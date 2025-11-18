@@ -559,27 +559,20 @@ in {
               flags timeout
             }
             
-            # Counter maps for per-IP traffic tracking (IPv4 only)
-            # IPs are added to these maps dynamically via 'nft add element'
-            # Each IP gets its own counter automatically when added
-            map client_rx_counters {
-              type ipv4_addr : counter
-            }
-            map client_tx_counters {
-              type ipv4_addr : counter
-            }
-            
             chain forward {
               type filter hook forward priority 10; policy accept;
               # Count download (rx) - traffic destined to client IPs
-              # Update counter in map for matching destination IP
-              ip daddr @client_ips update @client_rx_counters { ip daddr counter }
+              # Match destination IP in set and count bytes
+              ip daddr @client_ips counter
               # Count upload (tx) - traffic sourced from client IPs
-              # Update counter in map for matching source IP
-              ip saddr @client_ips update @client_tx_counters { ip saddr counter }
+              # Match source IP in set and count bytes
+              ip saddr @client_ips counter
             }
           }
           EOF
+          
+          # Note: Per-IP counters will be tracked by adding individual rules per IP
+          # The collector will dynamically add/remove rules as clients appear/disappear
         '';
       };
 

@@ -69,35 +69,41 @@ def _check_cpu_threshold() -> bool:
     return cpu_usage < settings.bandwidth_max_cpu_percent
 
 
-def _add_ip_to_nftables_maps(ip: str) -> bool:
-    """Add IP address to nftables counter maps if not already present"""
+def _add_ip_to_nftables(ip: str) -> bool:
+    """Add IP address to nftables set and create per-IP counter rules"""
     if ip in _known_ips:
         return True
     
     try:
-        # Add to rx counter map
-        result_rx = _run_nft([
-            "add", "element", "inet", "router_bandwidth", "client_rx_counters",
-            "{", ip, ":", "counter", "}"
+        # Add IP to set
+        result_set = _run_nft([
+            "add", "element", "inet", "router_bandwidth", "client_ips", "{", ip, "}"
         ])
         
-        # Add to tx counter map
-        result_tx = _run_nft([
-            "add", "element", "inet", "router_bandwidth", "client_tx_counters",
-            "{", ip, ":", "counter", "}"
-        ])
-        
-        if result_rx.returncode == 0 and result_tx.returncode == 0:
-            _known_ips.add(ip)
-            return True
+        if result_set.returncode == 0:
+            # Add per-IP counter rules for rx (download)
+            result_rx = _run_nft([
+                "insert", "rule", "inet", "router_bandwidth", "forward",
+                "ip", "daddr", ip, "counter", "name", f"rx_{ip.replace('.', '_')}"
+            ])
+            
+            # Add per-IP counter rules for tx (upload)
+            result_tx = _run_nft([
+                "insert", "rule", "inet", "router_bandwidth", "forward",
+                "ip", "saddr", ip, "counter", "name", f"tx_{ip.replace('.', '_')}"
+            ])
+            
+            if result_rx.returncode == 0 and result_tx.returncode == 0:
+                _known_ips.add(ip)
+                return True
     except Exception as e:
-        print(f"Error adding IP {ip} to nftables maps: {e}")
+        print(f"Error adding IP {ip} to nftables: {e}")
     
     return False
 
 
 def _read_nftables_counters() -> Dict[str, Dict[str, int]]:
-    """Read nftables counter values for all IPs in the maps
+    """Read nftables counter values for all IPs with named counters
     
     Returns:
         Dict[ip_address, {rx_bytes_total, tx_bytes_total}]
@@ -105,37 +111,37 @@ def _read_nftables_counters() -> Dict[str, Dict[str, int]]:
     counters = {}
     
     try:
-        # List counters with numeric output
+        # List all counters in the table
         result = _run_nft([
-            "list", "map", "inet", "router_bandwidth", "client_rx_counters"
+            "list", "counters", "inet", "router_bandwidth"
         ])
         
         if result.returncode != 0:
             return counters
         
-        # Parse counter map output
-        # Format: elements = { 192.168.1.1 : counter packets 1234 bytes 567890 }
-        rx_pattern = r'(\d+\.\d+\.\d+\.\d+)\s*:\s*counter\s+packets\s+\d+\s+bytes\s+(\d+)'
+        # Parse counter output
+        # Format: counter rx_192_168_1_1 { packets 1234 bytes 567890 }
+        rx_pattern = r'counter\s+rx_(\d+)_(\d+)_(\d+)_(\d+)\s+\{\s+packets\s+\d+\s+bytes\s+(\d+)'
+        tx_pattern = r'counter\s+tx_(\d+)_(\d+)_(\d+)_(\d+)\s+\{\s+packets\s+\d+\s+bytes\s+(\d+)'
+        
         for line in result.stdout.splitlines():
-            matches = re.findall(rx_pattern, line)
-            for ip, bytes_str in matches:
+            # Match RX counters
+            rx_match = re.search(rx_pattern, line)
+            if rx_match:
+                ip = f"{rx_match.group(1)}.{rx_match.group(2)}.{rx_match.group(3)}.{rx_match.group(4)}"
+                bytes_val = int(rx_match.group(5))
                 if ip not in counters:
                     counters[ip] = {'rx_bytes_total': 0, 'tx_bytes_total': 0}
-                counters[ip]['rx_bytes_total'] = int(bytes_str)
-        
-        # Read tx counters
-        result = _run_nft([
-            "list", "map", "inet", "router_bandwidth", "client_tx_counters"
-        ])
-        
-        if result.returncode == 0:
-            tx_pattern = r'(\d+\.\d+\.\d+\.\d+)\s*:\s*counter\s+packets\s+\d+\s+bytes\s+(\d+)'
-            for line in result.stdout.splitlines():
-                matches = re.findall(tx_pattern, line)
-                for ip, bytes_str in matches:
-                    if ip not in counters:
-                        counters[ip] = {'rx_bytes_total': 0, 'tx_bytes_total': 0}
-                    counters[ip]['tx_bytes_total'] = int(bytes_str)
+                counters[ip]['rx_bytes_total'] = bytes_val
+            
+            # Match TX counters
+            tx_match = re.search(tx_pattern, line)
+            if tx_match:
+                ip = f"{tx_match.group(1)}.{tx_match.group(2)}.{tx_match.group(3)}.{tx_match.group(4)}"
+                bytes_val = int(tx_match.group(5))
+                if ip not in counters:
+                    counters[ip] = {'rx_bytes_total': 0, 'tx_bytes_total': 0}
+                counters[ip]['tx_bytes_total'] = bytes_val
     
     except Exception as e:
         print(f"Error reading nftables counters: {e}")
@@ -219,8 +225,8 @@ def collect_client_bandwidth() -> List[Dict]:
             
             mac_address, network = mac_network
             
-            # Ensure IP is in nftables maps
-            _add_ip_to_nftables_maps(ip)
+            # Ensure IP is in nftables (set + counter rules)
+            _add_ip_to_nftables(ip)
             
             # Get previous counter values
             prev = _previous_counters.get(ip, {'rx_bytes_total': 0, 'tx_bytes_total': 0})
