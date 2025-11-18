@@ -15,7 +15,7 @@ let
     
     src = pkgs.python311Packages.fetchPypi {
       inherit pname version;
-      sha256 = lib.fakeSha256;  # Nix will show the correct hash on first build
+      sha256 = "36a1ceb3965c1fbcd98a0e3aedec3ac7dc221f81c9aa5094a9408df3d0cd514e";
     };
     
     nativeBuildInputs = with pkgs.python311Packages; [
