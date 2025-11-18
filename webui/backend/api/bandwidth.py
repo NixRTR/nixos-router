@@ -911,6 +911,10 @@ async def get_client_connections_current(
         connection_stats[key].append(stat)
     
     # Calculate peak rates for each connection
+    # For raw data, use collection interval (2 seconds). For aggregated data, use actual time difference
+    collection_interval = settings.collection_interval  # seconds
+    max_valid_rate = 1000  # 1 Gbps - filter out any rates above this as outliers
+    
     for key, conn_stats in connection_stats.items():
         # Sort by timestamp
         conn_stats_sorted = sorted(conn_stats, key=lambda s: s.timestamp)
@@ -919,18 +923,47 @@ async def get_client_connections_current(
         peak_upload_mbps = 0.0
         
         # Calculate rate between consecutive points and track peak
+        # Filter out outliers over 1 Gbps
         for i in range(1, len(conn_stats_sorted)):
             prev = conn_stats_sorted[i - 1]
             curr = conn_stats_sorted[i]
-            time_diff = (curr.timestamp - prev.timestamp).total_seconds()
+            actual_time_diff = (curr.timestamp - prev.timestamp).total_seconds()
+            
+            # Determine effective time difference based on aggregation level
+            if agg_level == 'raw':
+                # For raw data, use collection interval to avoid timing jitter issues
+                # But ensure time_diff is reasonable (not too small or too large)
+                if 0.5 <= actual_time_diff <= 60:  # Between 0.5s and 60s is reasonable
+                    time_diff = max(actual_time_diff, collection_interval)
+                else:
+                    # Skip if time difference is unreasonable (likely data gap or error)
+                    continue
+            else:
+                # For aggregated data, use actual time difference
+                # But ensure it's reasonable (at least 30 seconds for 1m, 4 minutes for 5m, etc.)
+                min_time_diff = {
+                    '1m': 30,   # At least 30 seconds
+                    '5m': 240,  # At least 4 minutes
+                    '1h': 3300, # At least 55 minutes
+                    '1d': 82800 # At least 23 hours
+                }.get(agg_level, 30)
+                
+                if actual_time_diff < min_time_diff:
+                    # Skip if time difference is too small (likely data issue)
+                    continue
+                time_diff = actual_time_diff
             
             if time_diff > 0:
                 # Calculate rate for this interval
                 rx_mbps = (curr.rx_bytes * 8) / (time_diff * 1_000_000)
                 tx_mbps = (curr.tx_bytes * 8) / (time_diff * 1_000_000)
                 
-                peak_download_mbps = max(peak_download_mbps, rx_mbps)
-                peak_upload_mbps = max(peak_upload_mbps, tx_mbps)
+                # Filter out outliers over 1 Gbps instead of capping them
+                # This ensures peak rates reflect actual valid data, not measurement errors
+                if rx_mbps <= max_valid_rate:
+                    peak_download_mbps = max(peak_download_mbps, rx_mbps)
+                if tx_mbps <= max_valid_rate:
+                    peak_upload_mbps = max(peak_upload_mbps, tx_mbps)
         
         connection_rates[key] = {
             'download_mbps': peak_download_mbps,
