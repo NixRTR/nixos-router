@@ -391,6 +391,50 @@ async def _apply_schema_updates(conn):
     )
     has_connection_stats = result.scalar() is not None
     
+    if has_connection_stats:
+        # Check if aggregation_level column exists and has correct size
+        result = await conn.execute(
+            text("""
+                SELECT column_name, character_maximum_length
+                FROM information_schema.columns 
+                WHERE table_name = 'client_connection_stats' 
+                AND column_name = 'aggregation_level'
+            """)
+        )
+        agg_level_info = result.fetchone()
+        if agg_level_info and agg_level_info[1] == 2:
+            # Column exists but is wrong size (VARCHAR(2) instead of VARCHAR(3))
+            # Alter the column type
+            await conn.execute(
+                text("""
+                    ALTER TABLE client_connection_stats 
+                    ALTER COLUMN aggregation_level TYPE VARCHAR(3)
+                """)
+            )
+            print("Updated client_connection_stats.aggregation_level column size from VARCHAR(2) to VARCHAR(3)")
+        elif not agg_level_info:
+            # Column doesn't exist, add it
+            await conn.execute(
+                text("""
+                    ALTER TABLE client_connection_stats 
+                    ADD COLUMN aggregation_level VARCHAR(3) DEFAULT 'raw'
+                """)
+            )
+            await conn.execute(
+                text("""
+                    UPDATE client_connection_stats 
+                    SET aggregation_level = 'raw' 
+                    WHERE aggregation_level IS NULL
+                """)
+            )
+            await conn.execute(
+                text("""
+                    ALTER TABLE client_connection_stats 
+                    ALTER COLUMN aggregation_level SET NOT NULL
+                """)
+            )
+            print("Added aggregation_level column to client_connection_stats")
+    
     if not has_connection_stats:
         # Create client_connection_stats table
         await conn.execute(
