@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS client_bandwidth_stats (
     tx_bytes BIGINT NOT NULL,  -- upload bytes in this interval
     rx_bytes_total BIGINT NOT NULL,  -- cumulative download
     tx_bytes_total BIGINT NOT NULL,  -- cumulative upload
-    aggregation_level VARCHAR(2) DEFAULT 'raw'  -- 'raw', '1m', '5m', '1h', '1d'
+    aggregation_level VARCHAR(3) DEFAULT 'raw'  -- 'raw', '1m', '5m', '1h', '1d'
 );
 
 CREATE INDEX IF NOT EXISTS idx_client_bandwidth_mac_time ON client_bandwidth_stats(mac_address, timestamp DESC);
@@ -164,7 +164,7 @@ CREATE TABLE IF NOT EXISTS client_connection_stats (
     tx_bytes BIGINT NOT NULL,  -- upload bytes in this interval
     rx_bytes_total BIGINT NOT NULL,  -- cumulative download
     tx_bytes_total BIGINT NOT NULL,  -- cumulative upload
-    aggregation_level VARCHAR(2) DEFAULT 'raw'  -- 'raw', '1m', '5m', '1h', '1d'
+    aggregation_level VARCHAR(3) DEFAULT 'raw'  -- 'raw', '1m', '5m', '1h', '1d'
 );
 
 CREATE INDEX IF NOT EXISTS idx_client_connection_client_time ON client_connection_stats(client_ip, timestamp DESC);

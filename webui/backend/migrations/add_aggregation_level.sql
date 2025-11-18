@@ -4,7 +4,7 @@
 
 -- Add aggregation_level column to client_bandwidth_stats
 ALTER TABLE client_bandwidth_stats 
-ADD COLUMN IF NOT EXISTS aggregation_level VARCHAR(2) DEFAULT 'raw';
+ADD COLUMN IF NOT EXISTS aggregation_level VARCHAR(3) DEFAULT 'raw';
 
 -- Update existing rows to have 'raw' aggregation level
 UPDATE client_bandwidth_stats 
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS client_connection_stats (
     tx_bytes BIGINT NOT NULL,
     rx_bytes_total BIGINT NOT NULL,
     tx_bytes_total BIGINT NOT NULL,
-    aggregation_level VARCHAR(2) DEFAULT 'raw' NOT NULL
+    aggregation_level VARCHAR(3) DEFAULT 'raw' NOT NULL
 );
 
 -- Create indexes for client_connection_stats

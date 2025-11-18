@@ -207,7 +207,7 @@ class ClientBandwidthStatsDB(Base):
     tx_bytes = Column(BigInteger, nullable=False)  # upload bytes in this interval
     rx_bytes_total = Column(BigInteger, nullable=False)  # cumulative download
     tx_bytes_total = Column(BigInteger, nullable=False)  # cumulative upload
-    aggregation_level = Column(String(2), default='raw', nullable=False)  # 'raw', '1m', '5m', '1h', '1d'
+    aggregation_level = Column(String(3), default='raw', nullable=False)  # 'raw', '1m', '5m', '1h', '1d'
     
     __table_args__ = (
         Index('idx_client_bandwidth_mac_time', 'mac_address', 'timestamp', postgresql_using='btree'),
@@ -230,7 +230,7 @@ class ClientConnectionStatsDB(Base):
     tx_bytes = Column(BigInteger, nullable=False)  # upload bytes in this interval
     rx_bytes_total = Column(BigInteger, nullable=False)  # cumulative download
     tx_bytes_total = Column(BigInteger, nullable=False)  # cumulative upload
-    aggregation_level = Column(String(2), default='raw', nullable=False)  # 'raw', '1m', '5m', '1h', '1d'
+    aggregation_level = Column(String(3), default='raw', nullable=False)  # 'raw', '1m', '5m', '1h', '1d'
     
     __table_args__ = (
         Index('idx_client_connection_client_time', 'client_ip', 'timestamp', postgresql_using='btree'),
@@ -329,20 +329,21 @@ async def _apply_schema_updates(conn):
     # Migration: Add aggregation_level column to client_bandwidth_stats
     result = await conn.execute(
         text("""
-            SELECT column_name 
+            SELECT column_name, character_maximum_length
             FROM information_schema.columns 
             WHERE table_name = 'client_bandwidth_stats' 
             AND column_name = 'aggregation_level'
         """)
     )
-    has_agg_level = result.scalar() is not None
+    agg_level_info = result.fetchone()
+    has_agg_level = agg_level_info is not None
     
     if not has_agg_level:
         # Add aggregation_level column
         await conn.execute(
             text("""
                 ALTER TABLE client_bandwidth_stats 
-                ADD COLUMN aggregation_level VARCHAR(2) DEFAULT 'raw'
+                ADD COLUMN aggregation_level VARCHAR(3) DEFAULT 'raw'
             """)
         )
         # Update existing rows
@@ -360,14 +361,25 @@ async def _apply_schema_updates(conn):
                 ALTER COLUMN aggregation_level SET NOT NULL
             """)
         )
-        # Add index
+        print("Added aggregation_level column to client_bandwidth_stats")
+    elif agg_level_info[1] == 2:
+        # Column exists but is wrong size (VARCHAR(2) instead of VARCHAR(3))
+        # Alter the column type
         await conn.execute(
             text("""
-                CREATE INDEX IF NOT EXISTS idx_client_bandwidth_agg_level 
-                ON client_bandwidth_stats(aggregation_level, timestamp DESC)
+                ALTER TABLE client_bandwidth_stats 
+                ALTER COLUMN aggregation_level TYPE VARCHAR(3)
             """)
         )
-        print("Added aggregation_level column to client_bandwidth_stats")
+        print("Updated aggregation_level column size from VARCHAR(2) to VARCHAR(3)")
+    
+    # Ensure index exists (regardless of whether column was just added)
+    await conn.execute(
+        text("""
+            CREATE INDEX IF NOT EXISTS idx_client_bandwidth_agg_level 
+            ON client_bandwidth_stats(aggregation_level, timestamp DESC)
+        """)
+    )
     
     # Migration: Create client_connection_stats table
     result = await conn.execute(
@@ -394,7 +406,7 @@ async def _apply_schema_updates(conn):
                     tx_bytes BIGINT NOT NULL,
                     rx_bytes_total BIGINT NOT NULL,
                     tx_bytes_total BIGINT NOT NULL,
-                    aggregation_level VARCHAR(2) DEFAULT 'raw' NOT NULL
+                    aggregation_level VARCHAR(3) DEFAULT 'raw' NOT NULL
                 )
             """)
         )
