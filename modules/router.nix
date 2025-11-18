@@ -552,6 +552,13 @@ in {
         script = ''
           ${pkgs.nftables}/bin/nft -f - <<'EOF'
           table inet router_bandwidth {
+            # Sets to track client IPs (IPv4 only)
+            # IPs will be added dynamically by the bandwidth collector
+            set client_ips {
+              type ipv4_addr
+              flags timeout
+            }
+            
             # Counter maps for per-IP traffic tracking (IPv4 only)
             # IPs are added to these maps dynamically via 'nft add element'
             # Each IP gets its own counter automatically when added
@@ -565,10 +572,11 @@ in {
             chain forward {
               type filter hook forward priority 10; policy accept;
               # Count download (rx) - traffic destined to client IPs
-              # Counter maps are automatically updated when IP matches
-              ip daddr vmap @client_rx_counters
+              # Update counter in map for matching destination IP
+              ip daddr @client_ips update @client_rx_counters { ip daddr counter }
               # Count upload (tx) - traffic sourced from client IPs
-              ip saddr vmap @client_tx_counters
+              # Update counter in map for matching source IP
+              ip saddr @client_ips update @client_tx_counters { ip saddr counter }
             }
           }
           EOF
