@@ -325,6 +325,20 @@ in
         
         locations = {
           # Proxy API requests to FastAPI backend (must come before /)
+          "/api/" = {
+            proxyPass = "http://127.0.0.1:${toString cfg.backendPort}/api/";
+            proxyWebsockets = true;
+            extraConfig = ''
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+              proxy_set_header X-Forwarded-Host $host;
+              proxy_set_header X-Forwarded-Port $server_port;
+            '';
+          };
+          
+          # Proxy API requests without trailing slash (redirects to /api/)
           "/api" = {
             proxyPass = "http://127.0.0.1:${toString cfg.backendPort}";
             proxyWebsockets = true;
@@ -333,6 +347,8 @@ in
               proxy_set_header X-Real-IP $remote_addr;
               proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
               proxy_set_header X-Forwarded-Proto $scheme;
+              proxy_set_header X-Forwarded-Host $host;
+              proxy_set_header X-Forwarded-Port $server_port;
             '';
           };
           
@@ -345,8 +361,8 @@ in
               proxy_set_header X-Real-IP $remote_addr;
               proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
               proxy_set_header X-Forwarded-Proto $scheme;
-              proxy_set_header Upgrade $http_upgrade;
-              proxy_set_header Connection "upgrade";
+              proxy_set_header X-Forwarded-Host $host;
+              proxy_set_header X-Forwarded-Port $server_port;
             '';
           };
           
