@@ -219,12 +219,34 @@ in
       '';
     };
     
+    # Documentation installation service
+    systemd.services.router-webui-docs-init = {
+      description = "Install Router WebUI documentation";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "router-webui-backend.service" ];
+      
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+      };
+      
+      script = ''
+        mkdir -p /var/lib/router-webui/docs
+        # Copy documentation file from source
+        if [ -f ${../docs}/documentation.md ]; then
+          cp ${../docs}/documentation.md /var/lib/router-webui/docs/documentation.md
+          chmod 644 /var/lib/router-webui/docs/documentation.md
+          chown router-webui:router-webui /var/lib/router-webui/docs/documentation.md
+        fi
+      '';
+    };
+    
     # Backend service
     systemd.services.router-webui-backend = {
       description = "Router WebUI Backend (FastAPI)";
-      after = [ "network.target" "postgresql.service" "router-webui-initdb.service" "router-webui-jwt-init.service" "router-webui-frontend-install.service" ];
+      after = [ "network.target" "postgresql.service" "router-webui-initdb.service" "router-webui-jwt-init.service" "router-webui-frontend-install.service" "router-webui-docs-init.service" ];
       wants = [ "postgresql.service" ];
-      requires = [ "router-webui-jwt-init.service" "router-webui-frontend-install.service" ];
+      requires = [ "router-webui-jwt-init.service" "router-webui-frontend-install.service" "router-webui-docs-init.service" ];
       wantedBy = [ "multi-user.target" ];
       
       environment = {
@@ -235,6 +257,7 @@ in
         KEA_LEASE_FILE = "/var/lib/kea/dhcp4.leases";
         ROUTER_CONFIG_FILE = "/etc/nixos/router-config.nix";
         JWT_SECRET_FILE = "/var/lib/router-webui/jwt-secret";
+        DOCUMENTATION_FILE = "/var/lib/router-webui/docs/documentation.md";
         # Provide absolute binary paths for commands used by backend
         NFT_BIN = "${pkgs.nftables}/bin/nft";
         IP_BIN = "${pkgs.iproute2}/bin/ip";

@@ -427,13 +427,8 @@ async def get_documentation(
     Returns:
         dict: Contains 'content' field with documentation content
     """
-    import pathlib
-    
-    # Calculate path: webui/backend/api/system.py -> project root
-    current_file = pathlib.Path(__file__)
-    # Go up 4 levels: api -> backend -> webui -> project root
-    project_root = current_file.parent.parent.parent.parent
-    doc_path = project_root / "docs" / "documentation.md"
+    # Use environment variable set by NixOS service (points to installed location)
+    doc_path = os.environ.get("DOCUMENTATION_FILE", "/var/lib/router-webui/docs/documentation.md")
     
     try:
         with open(doc_path, 'r', encoding='utf-8') as f:

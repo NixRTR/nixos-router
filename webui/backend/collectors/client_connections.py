@@ -155,12 +155,6 @@ def _parse_conntrack_proc(proc_output: str) -> Dict[Tuple[str, str, int], Dict[s
                 bytes_recv = int(combined_match.group(2))    # RX (dst->src)
                 lines_with_bytes += 1
             else:
-                # Debug: show sample line without bytes
-                if not sample_line_shown and lines_without_bytes < 3:
-                    print(f"Debug: Line without bytes field (sample): {line[:200]}")
-                    lines_without_bytes += 1
-                    if lines_without_bytes >= 3:
-                        sample_line_shown = True
                 continue
         else:
             # First bytes= is original direction (src->dst) = upload
@@ -178,14 +172,6 @@ def _parse_conntrack_proc(proc_output: str) -> Dict[Tuple[str, str, int], Dict[s
             'rx_bytes_total': bytes_recv,
             'tx_bytes_total': bytes_sent
         }
-    
-    if lines_with_bytes == 0 and connections:
-        # Debug: show a sample line that matched but had no bytes
-        print(f"Debug: _parse_conntrack_proc: Found {len(connections)} connections but 0 had bytes fields")
-        if proc_output:
-            sample_lines = [l[:200] for l in proc_output.splitlines()[:2] if l.strip() and ('192.168.2.' in l or '192.168.3.' in l)]
-            if sample_lines:
-                print(f"Debug: Sample lines from /proc: {sample_lines}")
     
     return connections
 
@@ -360,10 +346,6 @@ def _parse_conntrack_output(output: str) -> Dict[Tuple[str, str, int], Dict[str,
             'tx_bytes_total': bytes_sent
         }
     
-    if lines_processed > 0 and lines_matched == 0:
-        # Debug: print first few lines if no matches
-        print(f"Debug: conntrack parser processed {lines_processed} lines, matched 0. First line: {output.splitlines()[0] if output.splitlines() else 'empty'}")
-    
     return connections
 
 
@@ -422,7 +404,6 @@ def collect_client_connections() -> List[Dict]:
             try:
                 with open(proc_path, 'r') as f:
                     proc_output = f.read()
-                print(f"Debug: Successfully read conntrack data from {proc_path}")
                 break
             except FileNotFoundError:
                 continue
@@ -461,7 +442,6 @@ def collect_client_connections() -> List[Dict]:
             if result.stdout and '<?xml' in result.stdout:
                 # XML format - parse it
                 current_connections = _parse_conntrack_xml(result.stdout)
-                print(f"Debug: Using XML parser, found {len(current_connections)} connections")
             elif result.stdout and 'stats' in result.stdout.lower() or 'bytes' in result.stdout.lower():
                 # Stats format or output with bytes - try to parse it
                 # Stats format might be different, try parsing as extended first
@@ -469,11 +449,9 @@ def collect_client_connections() -> List[Dict]:
                 if not current_connections:
                     # Try parsing stats format
                     current_connections = _parse_conntrack_stats(result.stdout)
-                print(f"Debug: Using stats/extended parser, found {len(current_connections)} connections")
             else:
                 # Try parsing as extended format (though it might not have bytes)
                 current_connections = _parse_conntrack_output(result.stdout)
-                print(f"Debug: Using extended parser, found {len(current_connections)} connections")
                 
                 # If no connections found, try /proc fallback
                 if not current_connections:
@@ -486,7 +464,6 @@ def collect_client_connections() -> List[Dict]:
                         try:
                             with open(proc_path, 'r') as f:
                                 proc_output = f.read()
-                            print(f"Debug: Fallback: Successfully read conntrack data from {proc_path}")
                             break
                         except FileNotFoundError:
                             continue
@@ -501,16 +478,6 @@ def collect_client_connections() -> List[Dict]:
         
         if not current_connections:
             return results
-        
-        # Debug: Check if we have byte counts
-        total_bytes = sum(c.get('rx_bytes_total', 0) + c.get('tx_bytes_total', 0) for c in current_connections.values())
-        print(f"Debug: Parsed {len(current_connections)} connections from conntrack, total bytes: {total_bytes}")
-        
-        # Debug: Show sample connection with bytes
-        if current_connections:
-            sample_key = list(current_connections.keys())[0]
-            sample_data = current_connections[sample_key]
-            print(f"Debug: Sample connection {sample_key}: rx={sample_data.get('rx_bytes_total', 0)}, tx={sample_data.get('tx_bytes_total', 0)}")
         
         # Get ARP table and DHCP leases for IP-to-MAC mapping
         arp_table = parse_arp_table()

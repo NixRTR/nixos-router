@@ -467,11 +467,6 @@ def collect_client_bandwidth() -> List[Dict]:
         # Read current counter values from nftables
         current_counters = _read_nftables_counters()
         
-        if not current_counters:
-            # No counters found - this might be normal if no traffic yet
-            # But log it for debugging
-            print(f"Debug: No nftables counters found. Known IPs: {len(_known_ips)}, All client IPs: {len(all_known_ips)}")
-        
         # Process clients (limit to max_clients_per_cycle for CPU governance)
         # Process both counters and known IPs (even if no counters yet)
         processed = 0
