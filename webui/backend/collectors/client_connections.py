@@ -110,20 +110,55 @@ def _parse_conntrack_output(output: str) -> Dict[Tuple[str, str, int], Dict[str,
     connections = {}
     
     # Pattern to match conntrack extended output
-    # Example: src=192.168.2.10 dst=8.8.8.8 sport=54321 dport=53 packets=5 bytes=320 [UNREPLIED] ...
-    pattern = r'src=(\S+)\s+dst=(\S+)\s+sport=(\d+)\s+dport=(\d+).*?bytes=(\d+):(\d+)'
+    # Extended output format can vary, try multiple patterns
+    # Pattern 1: bytes=TX:RX (most common format)
+    pattern1 = r'src=(\S+)\s+dst=(\S+)\s+sport=(\d+)\s+dport=(\d+).*?bytes=(\d+):(\d+)'
+    # Pattern 2: bytes_from_src=XXX bytes_to_src=YYY (alternative format)
+    pattern2 = r'src=(\S+)\s+dst=(\S+)\s+sport=(\d+)\s+dport=(\d+).*?bytes_from_src=(\d+).*?bytes_to_src=(\d+)'
+    
+    lines_processed = 0
+    lines_matched = 0
     
     for line in output.splitlines():
-        match = re.search(pattern, line)
+        if not line.strip():
+            continue
+        
+        lines_processed += 1
+        match = None
+        bytes_sent = 0
+        bytes_recv = 0
+        
+        # Try pattern 1 first (most common)
+        match = re.search(pattern1, line)
+        if match:
+            bytes_sent = int(match.group(5))  # bytes from src to dst
+            bytes_recv = int(match.group(6))  # bytes from dst to src
+        else:
+            # Try pattern 2
+            match = re.search(pattern2, line)
+            if match:
+                bytes_sent = int(match.group(5))  # bytes from src
+                bytes_recv = int(match.group(6))  # bytes to src
+            else:
+                # Try more flexible pattern - extract src/dst/ports, then find bytes separately
+                base_match = re.search(r'src=(\S+)\s+dst=(\S+)\s+sport=(\d+)\s+dport=(\d+)', line)
+                if base_match:
+                    # Look for bytes field anywhere in the line
+                    bytes_match = re.search(r'bytes=(\d+):(\d+)', line)
+                    if bytes_match:
+                        match = base_match
+                        bytes_sent = int(bytes_match.group(1))  # TX (src->dst)
+                        bytes_recv = int(bytes_match.group(2))  # RX (dst->src)
+        
         if not match:
             continue
+        
+        lines_matched += 1
         
         src_ip = match.group(1)
         dst_ip = match.group(2)
         src_port = int(match.group(3))
         dst_port = int(match.group(4))
-        bytes_sent = int(match.group(5))  # bytes from src to dst
-        bytes_recv = int(match.group(6))  # bytes from dst to src
         
         # Only process IPv4 addresses
         if not _is_ipv4(src_ip) or not _is_ipv4(dst_ip):
@@ -136,13 +171,10 @@ def _parse_conntrack_output(output: str) -> Dict[Tuple[str, str, int], Dict[str,
         # For client connections:
         # - client_ip is the source (local side)
         # - remote_ip:remote_port is the destination (remote side)
-        # - rx_bytes (download) = bytes received by client = bytes_sent from remote
-        # - tx_bytes (upload) = bytes sent by client = bytes_sent from client
-        # But conntrack shows bytes from src->dst, so:
-        # - bytes_sent = bytes from src to dst (upload from client perspective)
-        # - bytes_recv = bytes from dst to src (download from client perspective)
+        # - rx_bytes (download) = bytes received by client = bytes_recv (from dst to src)
+        # - tx_bytes (upload) = bytes sent by client = bytes_sent (from src to dst)
         
-        # Actually, conntrack format is: bytes=TX:RX where TX is from src->dst, RX is from dst->src
+        # Conntrack format is: bytes=TX:RX where TX is from src->dst, RX is from dst->src
         # So for client at src_ip:
         # - tx_bytes_total = bytes_sent (client -> remote)
         # - rx_bytes_total = bytes_recv (remote -> client)
@@ -152,6 +184,10 @@ def _parse_conntrack_output(output: str) -> Dict[Tuple[str, str, int], Dict[str,
             'rx_bytes_total': bytes_recv,
             'tx_bytes_total': bytes_sent
         }
+    
+    if lines_processed > 0 and lines_matched == 0:
+        # Debug: print first few lines if no matches
+        print(f"Debug: conntrack parser processed {lines_processed} lines, matched 0. First line: {output.splitlines()[0] if output.splitlines() else 'empty'}")
     
     return connections
 
@@ -209,11 +245,27 @@ def collect_client_connections() -> List[Dict]:
             print(f"Warning: conntrack query failed: {result.stderr}")
             return results
         
+        # Debug: log first few lines of output to understand format
+        if result.stdout:
+            lines = result.stdout.splitlines()
+            if lines:
+                print(f"Debug: conntrack returned {len(lines)} lines. First line sample: {lines[0][:200]}")
+        
         # Parse conntrack output
         current_connections = _parse_conntrack_output(result.stdout)
         
         if not current_connections:
+            # Debug: check if we got any output at all
+            if result.stdout:
+                lines = result.stdout.splitlines()
+                print(f"Debug: conntrack returned {len(lines)} lines but parsed 0 connections")
+                if lines:
+                    # Show first few non-empty lines for debugging
+                    sample_lines = [l[:150] for l in lines[:3] if l.strip()]
+                    print(f"Debug: Sample lines: {sample_lines}")
             return results
+        
+        print(f"Debug: Parsed {len(current_connections)} connections from conntrack")
         
         # Get ARP table and DHCP leases for IP-to-MAC mapping
         arp_table = parse_arp_table()
