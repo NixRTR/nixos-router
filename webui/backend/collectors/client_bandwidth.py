@@ -265,7 +265,10 @@ def collect_client_bandwidth() -> List[Dict]:
         
         # Clean up old IPs from previous_counters that are no longer active
         active_ips = set(current_counters.keys())
-        _previous_counters = {ip: data for ip, data in _previous_counters.items() if ip in active_ips}
+        # Update _previous_counters in place to avoid scoping issues
+        for ip in list(_previous_counters.keys()):
+            if ip not in active_ips:
+                del _previous_counters[ip]
         _known_ips.intersection_update(active_ips)
     
     except Exception as e:
