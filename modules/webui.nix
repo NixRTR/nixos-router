@@ -13,8 +13,9 @@ let
     version = "0.3.0";
     format = "pyproject";
     
-    src = pkgs.python311Packages.fetchPypi {
-      inherit pname version;
+    # Use fetchurl directly since fetchPypi might have issues with hyphenated names
+    src = pkgs.fetchurl {
+      url = "https://files.pythonhosted.org/packages/source/p/pypci-ng/pypci_ng-${version}.tar.gz";
       sha256 = "36a1ceb3965c1fbcd98a0e3aedec3ac7dc221f81c9aa5094a9408df3d0cd514e";
     };
     
