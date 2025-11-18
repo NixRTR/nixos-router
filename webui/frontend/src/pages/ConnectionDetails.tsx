@@ -200,11 +200,33 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
     upload: point.tx_mbps || 0,
   }));
 
-  const formatMB = (mb: number): string => {
-    if (mb < 0.01) return '0.00';
-    if (mb < 1) return mb.toFixed(2);
-    if (mb < 1000) return mb.toFixed(1);
-    return (mb / 1024).toFixed(2) + ' GB';
+  // Format bytes (input in MB) to best unit (TB, GB, MB, KB)
+  const formatBytes = (mb: number): string => {
+    if (mb === 0 || !mb || isNaN(mb)) return '0.00 MB';
+    
+    // Convert MB to bytes for calculation
+    const bytes = mb * 1024 * 1024;
+    
+    // Determine best unit
+    if (bytes >= 1024 * 1024 * 1024 * 1024) {
+      // TB
+      const tb = bytes / (1024 * 1024 * 1024 * 1024);
+      return tb.toFixed(2) + ' TB';
+    } else if (bytes >= 1024 * 1024 * 1024) {
+      // GB
+      const gb = bytes / (1024 * 1024 * 1024);
+      return gb.toFixed(2) + ' GB';
+    } else if (bytes >= 1024 * 1024) {
+      // MB
+      return mb.toFixed(2) + ' MB';
+    } else if (bytes >= 1024) {
+      // KB
+      const kb = bytes / 1024;
+      return kb.toFixed(2) + ' KB';
+    } else {
+      // Bytes (shouldn't happen with MB input, but handle it)
+      return bytes.toFixed(0) + ' B';
+    }
   };
 
   const breadcrumbLabel = sourcePage === 'device-usage' ? 'Device Usage' : 'Devices';
@@ -334,13 +356,13 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
                         {conn.hostname || '—'}
                       </Table.Cell>
                       <Table.Cell className="text-sm">
-                        {formatMB(conn.download_mb)}
+                        {formatBytes(conn.download_mb)}
                       </Table.Cell>
                       <Table.Cell className="text-sm">
                         {conn.download_mbps.toFixed(2)} Mbit/s
                       </Table.Cell>
                       <Table.Cell className="text-sm">
-                        {formatMB(conn.upload_mb)}
+                        {formatBytes(conn.upload_mb)}
                       </Table.Cell>
                       <Table.Cell className="text-sm">
                         {conn.upload_mbps.toFixed(2)} Mbit/s
@@ -357,8 +379,46 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
             </div>
 
             {/* Mobile Card View */}
-            <div className="md:hidden space-y-3">
-              {sortedConnections.map((conn) => (
+            <div className="md:hidden">
+              {/* Sort Controls for Mobile */}
+              <div className="mb-4 flex gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="mobile-sort-field" value="Sort By" className="text-xs mb-1" />
+                  <Select 
+                    id="mobile-sort-field" 
+                    sizing="sm" 
+                    value={sortColumn || 'ip'} 
+                    onChange={(e) => {
+                      const newColumn = e.target.value;
+                      setSortColumn(newColumn);
+                      // Set default direction based on column type
+                      setSortDirection(isNumericalColumn(newColumn) ? 'desc' : 'asc');
+                    }}
+                  >
+                    <option value="ip">IP Address : Port</option>
+                    <option value="hostname">Hostname</option>
+                    <option value="download_mb">Download</option>
+                    <option value="download_mbps">Peak Download Mbit/s</option>
+                    <option value="upload_mb">Upload</option>
+                    <option value="upload_mbps">Peak Upload Mbit/s</option>
+                  </Select>
+                </div>
+                <div className="flex-1">
+                  <Label htmlFor="mobile-sort-direction" value="Direction" className="text-xs mb-1" />
+                  <Select 
+                    id="mobile-sort-direction" 
+                    sizing="sm" 
+                    value={sortDirection} 
+                    onChange={(e) => setSortDirection(e.target.value as 'asc' | 'desc')}
+                  >
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                  </Select>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                {sortedConnections.map((conn) => (
                 <div
                   key={`${conn.remote_ip}:${conn.remote_port}`}
                   className="p-4 rounded-lg border bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700"
@@ -374,12 +434,12 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
                   <div className="grid grid-cols-2 gap-2 text-sm mb-3">
                     <div>
                       <div className="font-semibold">Download</div>
-                      <div>{formatMB(conn.download_mb)}</div>
+                      <div>{formatBytes(conn.download_mb)}</div>
                       <div className="text-xs text-gray-500">{conn.download_mbps.toFixed(2)} Mbit/s</div>
                     </div>
                     <div>
                       <div className="font-semibold">Upload</div>
-                      <div>{formatMB(conn.upload_mb)}</div>
+                      <div>{formatBytes(conn.upload_mb)}</div>
                       <div className="text-xs text-gray-500">{conn.upload_mbps.toFixed(2)} Mbit/s</div>
                     </div>
                   </div>
@@ -388,6 +448,7 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
                   </Button>
                 </div>
               ))}
+              </div>
             </div>
 
             {sortedConnections.length === 0 && (

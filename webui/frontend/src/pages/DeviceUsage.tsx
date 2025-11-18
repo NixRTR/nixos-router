@@ -304,9 +304,33 @@ export function DeviceUsage() {
     }
   }, [timeRange, customRange, chartInterval, refreshInterval, chartModalOpen, selectedDevice, token]);
 
-  const formatMB = (value: number): string => {
-    if (value === 0 || !value) return '0.00';
-    return value.toFixed(2);
+  // Format bytes (input in MB) to best unit (TB, GB, MB, KB)
+  const formatBytes = (mb: number): string => {
+    if (mb === 0 || !mb || isNaN(mb)) return '0.00 MB';
+    
+    // Convert MB to bytes for calculation
+    const bytes = mb * 1024 * 1024;
+    
+    // Determine best unit
+    if (bytes >= 1024 * 1024 * 1024 * 1024) {
+      // TB
+      const tb = bytes / (1024 * 1024 * 1024 * 1024);
+      return tb.toFixed(2) + ' TB';
+    } else if (bytes >= 1024 * 1024 * 1024) {
+      // GB
+      const gb = bytes / (1024 * 1024 * 1024);
+      return gb.toFixed(2) + ' GB';
+    } else if (bytes >= 1024 * 1024) {
+      // MB
+      return mb.toFixed(2) + ' MB';
+    } else if (bytes >= 1024) {
+      // KB
+      const kb = bytes / 1024;
+      return kb.toFixed(2) + ' KB';
+    } else {
+      // Bytes (shouldn't happen with MB input, but handle it)
+      return bytes.toFixed(0) + ' B';
+    }
   };
 
   const getDisplayName = (device: NetworkDevice): string => {
@@ -424,8 +448,8 @@ export function DeviceUsage() {
                       <div className="font-medium text-gray-900 dark:text-gray-100">{iface}</div>
                       {stats ? (
                         <div className="text-gray-600 dark:text-gray-400 space-y-1 mt-1">
-                          <div>DL: {formatMB(stats.rx_mb)} MB</div>
-                          <div>UL: {formatMB(stats.tx_mb)} MB</div>
+                          <div>DL: {formatBytes(stats.rx_mb)}</div>
+                          <div>UL: {formatBytes(stats.tx_mb)}</div>
                         </div>
                       ) : (
                         <div className="text-gray-400 dark:text-gray-500 mt-1">No data</div>
@@ -512,13 +536,13 @@ export function DeviceUsage() {
                     className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                     onClick={() => handleSort('dl')}
                   >
-                    DL (MB){getSortIndicator('dl')}
+                    DOWNLOAD{getSortIndicator('dl')}
                   </Table.HeadCell>
                   <Table.HeadCell 
                     className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                     onClick={() => handleSort('ul')}
                   >
-                    UL (MB){getSortIndicator('ul')}
+                    UPLOAD{getSortIndicator('ul')}
                   </Table.HeadCell>
                   <Table.HeadCell>Chart</Table.HeadCell>
                   <Table.HeadCell>Details</Table.HeadCell>
@@ -547,10 +571,10 @@ export function DeviceUsage() {
                           </Badge>
                         </Table.Cell>
                         <Table.Cell className="text-sm">
-                          {formatMB(averages.dl_1h)} MB
+                          {formatBytes(averages.dl_1h)}
                         </Table.Cell>
                         <Table.Cell className="text-sm">
-                          {formatMB(averages.ul_1h)} MB
+                          {formatBytes(averages.ul_1h)}
                         </Table.Cell>
                         <Table.Cell>
                           <Button size="xs" color="blue" onClick={() => openChart(device)}>
@@ -579,8 +603,46 @@ export function DeviceUsage() {
             </div>
 
             {/* Mobile Card View */}
-            <div className="md:hidden space-y-3">
-              {sortedDevices.map((device) => {
+            <div className="md:hidden">
+              {/* Sort Controls for Mobile */}
+              <div className="mb-4 flex gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="mobile-sort-field" value="Sort By" className="text-xs mb-1" />
+                  <Select 
+                    id="mobile-sort-field" 
+                    sizing="sm" 
+                    value={sortColumn || 'ip'} 
+                    onChange={(e) => {
+                      const newColumn = e.target.value;
+                      setSortColumn(newColumn);
+                      // Set default direction based on column type
+                      setSortDirection(isNumericalColumn(newColumn) ? 'desc' : 'asc');
+                    }}
+                  >
+                    <option value="hostname">Hostname</option>
+                    <option value="mac">MAC</option>
+                    <option value="ip">IP</option>
+                    <option value="status">Status</option>
+                    <option value="dl">Download</option>
+                    <option value="ul">Upload</option>
+                  </Select>
+                </div>
+                <div className="flex-1">
+                  <Label htmlFor="mobile-sort-direction" value="Direction" className="text-xs mb-1" />
+                  <Select 
+                    id="mobile-sort-direction" 
+                    sizing="sm" 
+                    value={sortDirection} 
+                    onChange={(e) => setSortDirection(e.target.value as 'asc' | 'desc')}
+                  >
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                  </Select>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                {sortedDevices.map((device) => {
                 const mac = device.mac_address.toLowerCase();
                 const averages = bandwidthAverages[mac] || {
                   dl_5m: 0, dl_30m: 0, dl_1h: 0, dl_1d: 0,
@@ -607,11 +669,11 @@ export function DeviceUsage() {
                     <div className="grid grid-cols-2 gap-2 text-sm mb-3">
                       <div>
                         <div className="font-semibold">Download</div>
-                        <div>{formatMB(averages.dl_1h)} MB</div>
+                        <div>{formatBytes(averages.dl_1h)}</div>
                       </div>
                       <div>
                         <div className="font-semibold">Upload</div>
-                        <div>{formatMB(averages.ul_1h)} MB</div>
+                        <div>{formatBytes(averages.ul_1h)}</div>
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -633,6 +695,7 @@ export function DeviceUsage() {
                   </div>
                 );
               })}
+              </div>
             </div>
           </Card>
 
