@@ -1,0 +1,668 @@
+import{j as e,N as v,T as P}from"./ui-vendor-3qiPuRRk.js";import{d as D,R as h,L as w,u as A,a as b,B as O,e as I,f as l}from"./react-vendor-kuoUOs-Q.js";import{M as L,r as H}from"./markdown-vendor-CsZn0B6K.js";(function(){const r=document.createElement("link").relList;if(r&&r.supports&&r.supports("modulepreload"))return;for(const i of document.querySelectorAll('link[rel="modulepreload"]'))o(i);new MutationObserver(i=>{for(const s of i)if(s.type==="childList")for(const u of s.addedNodes)u.tagName==="LINK"&&u.rel==="modulepreload"&&o(u)}).observe(document,{childList:!0,subtree:!0});function n(i){const s={};return i.integrity&&(s.integrity=i.integrity),i.referrerPolicy&&(s.referrerPolicy=i.referrerPolicy),i.crossOrigin==="use-credentials"?s.credentials="include":i.crossOrigin==="anonymous"?s.credentials="omit":s.credentials="same-origin",s}function o(i){if(i.ep)return;i.ep=!0;const s=n(i);fetch(i.href,s)}})();var p={},k;function E(){if(k)return p;k=1;var t=D();return p.createRoot=t.createRoot,p.hydrateRoot=t.hydrateRoot,p}var B=E(),C={color:void 0,size:void 0,className:void 0,style:void 0,attr:void 0},N=h.createContext&&h.createContext(C),W=["attr","size","title"];function T(t,r){if(t==null)return{};var n=z(t,r),o,i;if(Object.getOwnPropertySymbols){var s=Object.getOwnPropertySymbols(t);for(i=0;i<s.length;i++)o=s[i],!(r.indexOf(o)>=0)&&Object.prototype.propertyIsEnumerable.call(t,o)&&(n[o]=t[o])}return n}function z(t,r){if(t==null)return{};var n={};for(var o in t)if(Object.prototype.hasOwnProperty.call(t,o)){if(r.indexOf(o)>=0)continue;n[o]=t[o]}return n}function x(){return x=Object.assign?Object.assign.bind():function(t){for(var r=1;r<arguments.length;r++){var n=arguments[r];for(var o in n)Object.prototype.hasOwnProperty.call(n,o)&&(t[o]=n[o])}return t},x.apply(this,arguments)}function j(t,r){var n=Object.keys(t);if(Object.getOwnPropertySymbols){var o=Object.getOwnPropertySymbols(t);r&&(o=o.filter(function(i){return Object.getOwnPropertyDescriptor(t,i).enumerable})),n.push.apply(n,o)}return n}function y(t){for(var r=1;r<arguments.length;r++){var n=arguments[r]!=null?arguments[r]:{};r%2?j(Object(n),!0).forEach(function(o){R(t,o,n[o])}):Object.getOwnPropertyDescriptors?Object.defineProperties(t,Object.getOwnPropertyDescriptors(n)):j(Object(n)).forEach(function(o){Object.defineProperty(t,o,Object.getOwnPropertyDescriptor(n,o))})}return t}function R(t,r,n){return r=U(r),r in t?Object.defineProperty(t,r,{value:n,enumerable:!0,configurable:!0,writable:!0}):t[r]=n,t}function U(t){var r=M(t,"string");return typeof r=="symbol"?r:r+""}function M(t,r){if(typeof t!="object"||!t)return t;var n=t[Symbol.toPrimitive];if(n!==void 0){var o=n.call(t,r);if(typeof o!="object")return o;throw new TypeError("@@toPrimitive must return a primitive value.")}return(r==="string"?String:Number)(t)}function S(t){return t&&t.map((r,n)=>h.createElement(r.tag,y({key:n},r.attr),S(r.child)))}function m(t){return r=>h.createElement(G,x({attr:y({},t.attr)},r),S(t.child))}function G(t){var r=n=>{var{attr:o,size:i,title:s}=t,u=T(t,W),g=i||n.size||"1em",a;return n.className&&(a=n.className),t.className&&(a=(a?a+" ":"")+t.className),h.createElement("svg",x({stroke:"currentColor",fill:"currentColor",strokeWidth:"0"},n.attr,o,u,{className:a,style:y(y({color:t.color||n.color},n.style),t.style),height:g,width:g,xmlns:"http://www.w3.org/2000/svg"}),s&&h.createElement("title",null,s),t.children)};return N!==void 0?h.createElement(N.Consumer,null,n=>r(n)):r(C)}function V(t){return m({attr:{viewBox:"0 0 20 20",fill:"currentColor","aria-hidden":"true"},child:[{tag:"path",attr:{fillRule:"evenodd",d:"M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z",clipRule:"evenodd"},child:[]}]})(t)}function F(t){return m({attr:{viewBox:"0 0 20 20",fill:"currentColor","aria-hidden":"true"},child:[{tag:"path",attr:{fillRule:"evenodd",d:"M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z",clipRule:"evenodd"},child:[]}]})(t)}function _(t){return m({attr:{viewBox:"0 0 20 20",fill:"currentColor","aria-hidden":"true"},child:[{tag:"path",attr:{d:"M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"},child:[]}]})(t)}function q(t){return m({attr:{viewBox:"0 0 20 20",fill:"currentColor","aria-hidden":"true"},child:[{tag:"path",attr:{fillRule:"evenodd",d:"M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z",clipRule:"evenodd"},child:[]}]})(t)}function K({onMenuClick:t}){const r=()=>{const n=document.documentElement;if(n.classList.contains("dark")){n.classList.remove("dark");try{localStorage.setItem("theme","light")}catch{}}else{n.classList.add("dark");try{localStorage.setItem("theme","dark")}catch{}}};return e.jsxs(v,{fluid:!0,className:"border-b",children:[e.jsxs("div",{className:"flex items-center gap-3",children:[e.jsx("button",{onClick:t,className:"p-2 text-gray-500 rounded-lg lg:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600","aria-label":"Toggle menu",children:e.jsx(F,{className:"w-6 h-6"})}),e.jsx(v.Brand,{children:e.jsx(w,{to:"/",className:"self-center whitespace-nowrap text-xl font-semibold text-gray-900 dark:text-white",children:"NixOS Router Documentation"})})]}),e.jsx("div",{className:"flex items-center gap-2 md:gap-4",children:e.jsx(P,{content:"Toggle theme",placement:"bottom",children:e.jsxs("button",{type:"button",onClick:r,className:"p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600","aria-label":"Toggle theme",title:"Toggle theme",children:[e.jsx("span",{className:"hidden dark:inline-block",children:e.jsx(q,{className:"w-5 h-5"})}),e.jsx("span",{className:"inline-block dark:hidden",children:e.jsx(_,{className:"w-5 h-5"})})]})})})]})}function $(t){return m({attr:{viewBox:"0 0 496 512"},child:[{tag:"path",attr:{d:"M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"},child:[]}]})(t)}function Q({isOpen:t,onClose:r}){const n=A(),[o,i]=b.useState(null);b.useEffect(()=>{(async()=>{try{const d=await fetch("https://api.github.com/repos/BeardedTek/nixos-router");if(d.ok){const f=await d.json();i({stars:f.stargazers_count||0,forks:f.forks_count||0})}else i({stars:0,forks:0})}catch(d){console.error("Failed to fetch GitHub stats:",d),i({stars:0,forks:0})}})()},[]);const s=[{path:"/",label:"Home"},{path:"/installation",label:"Installation"},{path:"/upgrading",label:"Upgrading"},{path:"/verification",label:"Verification"},{path:"/configuration",label:"Configuration",children:[{path:"/configuration/system",label:"System"},{path:"/configuration/wan",label:"WAN"},{path:"/configuration/lan-bridges",label:"LAN Bridges"},{path:"/configuration/homelab",label:"Homelab"},{path:"/configuration/lan",label:"LAN"},{path:"/configuration/port-forwarding",label:"Port Forwarding"},{path:"/configuration/dyndns",label:"Dynamic DNS"},{path:"/configuration/global-dns",label:"Global DNS"},{path:"/configuration/webui",label:"WebUI"}]}],u=a=>n.pathname===a,g=(a,d)=>u(a)?!0:d?d.some(f=>n.pathname.startsWith(f.path)):!1;return e.jsxs(e.Fragment,{children:[t&&e.jsx("div",{className:"fixed inset-0 bg-gray-900 bg-opacity-50 z-20 lg:hidden",onClick:r}),e.jsx("aside",{className:`fixed top-0 left-0 z-30 w-64 h-screen pt-16 transition-transform bg-white border-r border-gray-200 dark:bg-gray-800 dark:border-gray-700 lg:translate-x-0 ${t?"translate-x-0":"-translate-x-full"} lg:static lg:z-auto`,children:e.jsxs("div",{className:"h-full px-3 py-4 overflow-y-auto",children:[e.jsx("ul",{className:"space-y-2 font-medium",children:s.map(a=>e.jsxs("li",{children:[e.jsx(w,{to:a.path,onClick:()=>{window.innerWidth<1024&&r()},className:`flex items-center p-2 rounded-lg ${g(a.path,a.children)?"text-blue-600 bg-blue-50 dark:text-blue-500 dark:bg-gray-700":"text-gray-900 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700"}`,children:e.jsx("span",{className:"ml-3",children:a.label})}),a.children&&g(a.path,a.children)&&e.jsx("ul",{className:"ml-6 mt-2 space-y-1",children:a.children.map(d=>e.jsx("li",{children:e.jsx(w,{to:d.path,onClick:()=>{window.innerWidth<1024&&r()},className:`flex items-center p-2 rounded-lg text-sm ${u(d.path)?"text-blue-600 bg-blue-50 dark:text-blue-500 dark:bg-gray-700":"text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"}`,children:d.label})},d.path))})]},a.path))}),e.jsx("div",{className:"pt-4 mt-4 border-t border-gray-200 dark:border-gray-700",children:e.jsxs("ul",{className:"space-y-2 font-medium",children:[e.jsx("li",{children:e.jsxs("a",{href:"https://github.com/BeardedTek/nixos-router",target:"_blank",rel:"noopener noreferrer",onClick:()=>{window.innerWidth<1024&&r()},className:"flex items-center justify-between p-2 rounded-lg text-gray-900 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700",children:[e.jsxs("div",{className:"flex items-center",children:[e.jsx($,{className:"w-5 h-5 mr-3"}),e.jsx("span",{children:"GitHub"})]}),o!==null&&e.jsxs("span",{className:"ml-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap",children:["⭐ ",o.stars," 🍴 ",o.forks]})]})}),e.jsx("li",{children:e.jsxs("a",{href:"https://github.com/BeardedTek/nixos-router/issues",target:"_blank",rel:"noopener noreferrer",onClick:()=>{window.innerWidth<1024&&r()},className:"flex items-center p-2 rounded-lg text-gray-900 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700",children:[e.jsx(V,{className:"w-5 h-5 mr-3"}),e.jsx("span",{children:"Issues"})]})})]})})]})})]})}function J({children:t}){const[r,n]=b.useState(!1);return e.jsxs("div",{className:"flex h-screen bg-gray-50 dark:bg-gray-900",children:[e.jsx(Q,{isOpen:r,onClose:()=>n(!1)}),e.jsxs("div",{className:"flex-1 flex flex-col overflow-hidden",children:[e.jsx(K,{onMenuClick:()=>n(!r)}),e.jsx("main",{className:"flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900",children:t})]})]})}function c({content:t}){return e.jsx("article",{className:"format format-blue dark:format-invert max-w-none",children:e.jsx(L,{remarkPlugins:[H],children:t})})}const Y=`# NixOS Router Documentation
+
+Welcome to the NixOS Router documentation. This guide will help you install, configure, and maintain your NixOS-based router.
+
+## Quick Links
+
+- [Installation Guide](/installation) - Get started with installing the router
+- [Upgrading Guide](/upgrading) - Learn how to upgrade your router
+- [Verification](/verification) - Verify your router is working correctly
+- [Configuration](/configuration) - Configure all aspects of your router
+
+## Features
+
+- Multi-network support (isolated LAN segments)
+- DHCP server (Kea)
+- DNS server (Unbound with ad-blocking)
+- Web dashboard for monitoring
+- Dynamic DNS updates (Linode)
+- Firewall and NAT
+- Secrets management via sops-nix
+
+## Getting Started
+
+1. Follow the [Installation Guide](/installation) to set up your router
+2. Verify your installation using the [Verification Guide](/verification)
+3. Customize your configuration using the [Configuration Guide](/configuration)
+
+## Need Help?
+
+- Check the [GitHub Issues](https://github.com/BeardedTek/nixos-router/issues)
+- Review the [GitHub Repository](https://github.com/BeardedTek/nixos-router)
+`;function Z(){return e.jsx("div",{className:"p-6 max-w-4xl mx-auto",children:e.jsx("div",{className:"bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6",children:e.jsx(c,{content:Y})})})}const X=`# Installation
+
+This guide covers installing the NixOS Router on your hardware.
+
+## Using the Install Script (Recommended)
+
+Run from a vanilla NixOS installer shell:
+
+**Important:** Please take time to inspect this installer script. It is **never** recommended to blindly run scripts from the internet.
+
+\`\`\`bash
+curl -fsSL https://beard.click/nixos-router > install.sh
+chmod +x install.sh
+sudo ./install.sh
+\`\`\`
+
+### What does it do?
+
+- Downloads, makes executable and runs [\`/scripts/install-router.sh\`](https://github.com/BeardedTek/nixos-router/blob/main/scripts/install-router.sh)
+  - Clones this repository
+  - Asks for user input with sane defaults to generate your \`router-config.nix\`
+  - Builds the system
+
+## Using the Custom ISO
+
+**Note:** This script fetches everything via Nix; expect a large download on the first run.
+
+1. Build the ISO:
+
+   \`\`\`bash
+   cd iso
+   ./build-iso.sh
+   \`\`\`
+
+2. Write \`result/iso/*.iso\` to a USB drive.
+
+3. (Optional) Place your \`router-config.nix\` inside the USB \`config/\` folder for unattended installs.
+
+4. Boot the router from USB and follow the menu. Pick install or upgrade.
+
+5. After completion, reboot and remove the USB stick.
+`;function ee(){return e.jsx("div",{className:"p-6 max-w-4xl mx-auto",children:e.jsx("div",{className:"bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6",children:e.jsx(c,{content:X})})})}const te=`# Upgrading
+
+## With the Script
+
+1. Boot any Linux shell with internet access on the router (local console or SSH).
+
+2. Re-run the script:
+
+   \`\`\`bash
+   curl -fsSL https://beard.click/nixos-router > install.sh
+   chmod +x install.sh
+   sudo ./install.sh
+   \`\`\`
+
+   Choose the upgrade option when prompted. The script pulls the latest commits and rebuilds the system.
+
+## With the ISO
+
+1. Build or download the latest ISO (same steps as installation).
+
+2. Boot from the USB.
+
+3. Select the upgrade entry in the menu; it reuses your existing \`router-config.nix\`.
+
+4. Reboot when finished.
+
+## Verify Upgrade
+
+After upgrading, verify the system is working correctly:
+
+\`\`\`bash
+# Check NixOS version
+sudo nixos-version
+
+# Verify system configuration is valid
+sudo nixos-rebuild dry-run --flake /etc/nixos#router
+
+# Check for failed systemd services
+sudo systemctl --failed
+
+# Check WebUI is running
+sudo systemctl status router-webui-backend.service
+\`\`\`
+`;function re(){return e.jsx("div",{className:"p-6 max-w-4xl mx-auto",children:e.jsx("div",{className:"bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6",children:e.jsx(c,{content:te})})})}const ne=`# Verify System Operation
+
+## Basic System Verification
+
+\`\`\`bash
+# Check NixOS version
+sudo nixos-version
+
+# Verify system configuration is valid
+sudo nixos-rebuild dry-run --flake /etc/nixos#router
+
+# Check for failed systemd services
+sudo systemctl --failed
+
+# Check system health
+sudo systemctl status
+\`\`\`
+
+## Router-Specific Services
+
+\`\`\`bash
+# WebUI Backend (main service)
+sudo systemctl status router-webui-backend.service
+
+# PostgreSQL (required for WebUI)
+sudo systemctl status postgresql.service
+
+# Kea DHCP servers (check both networks if configured)
+sudo systemctl status kea-dhcp4-homelab.service
+sudo systemctl status kea-dhcp4-lan.service
+
+# Unbound DNS servers (check both networks if configured)
+sudo systemctl status unbound-homelab.service
+sudo systemctl status unbound-lan.service
+
+# Dynamic DNS (if enabled)
+sudo systemctl status linode-dyndns.service
+sudo systemctl status linode-dyndns-on-wan-up.service
+
+# Speedtest monitoring (if enabled)
+sudo systemctl status speedtest.service
+sudo systemctl status speedtest-on-wan-up.service
+\`\`\`
+
+## Verify Network Connectivity
+
+\`\`\`bash
+# Check WAN interface is up
+ip addr show eno1  # or your WAN interface
+ip link show eno1
+
+# Check PPPoE connection (if using PPPoE)
+ip addr show ppp0
+sudo systemctl status pppoe-connection.service
+
+# Check bridge interfaces
+ip addr show br0
+ip addr show br1  # if using multi-bridge mode
+
+# Verify routing table
+ip route show
+
+# Check NAT is working
+sudo nft list ruleset | grep -A 10 "nat"
+
+# Test internet connectivity
+ping -c 3 8.8.8.8
+ping -c 3 google.com
+\`\`\`
+
+## Verify DNS
+
+\`\`\`bash
+# Test DNS resolution
+dig @192.168.2.1 router.jeandr.net  # HOMELAB DNS
+dig @192.168.3.1 router.jeandr.net  # LAN DNS
+
+# Check DNS is listening
+sudo ss -tlnp | grep :53
+
+# Test DNS from a client
+# (from a device on the network)
+nslookup router.jeandr.net 192.168.2.1
+\`\`\`
+
+## Verify DHCP
+
+\`\`\`bash
+# Check DHCP leases file exists and has entries
+sudo cat /var/lib/kea/dhcp4.leases | tail -20
+
+# Verify DHCP is listening
+sudo ss -ulnp | grep :67
+
+# Test DHCP from a client
+# (release and renew on a client device)
+\`\`\`
+
+## Verify WebUI
+
+\`\`\`bash
+# Check WebUI is accessible
+curl -I http://localhost:8080
+# or from a client:
+curl -I http://192.168.2.1:8080  # or your router IP
+
+# Check WebUI logs for errors
+sudo journalctl -u router-webui-backend.service -n 50 --no-pager
+
+# Verify database connection
+sudo -u router-webui psql -h localhost -U router_webui -d router_webui -c "SELECT COUNT(*) FROM system_metrics;"
+\`\`\`
+
+## Verify Firewall and Port Forwarding
+
+\`\`\`bash
+# Verify nftables rules are loaded
+sudo nft list ruleset
+
+# Check port forwarding rules
+sudo nft list chain inet router port_forward
+
+# Test port forwarding (from external network)
+# telnet your-public-ip 443
+\`\`\`
+`;function oe(){return e.jsx("div",{className:"p-6 max-w-4xl mx-auto",children:e.jsx("div",{className:"bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6",children:e.jsx(c,{content:ne})})})}const ie=`# Configuration
+
+This section covers all configuration options for the NixOS Router.
+
+## Configuration Sections
+
+- [System Configuration](/configuration/system) - Basic system settings
+- [WAN Configuration](/configuration/wan) - WAN interface and connection settings
+- [LAN Bridges](/configuration/lan-bridges) - LAN bridge configuration
+- [Homelab Network](/configuration/homelab) - Homelab network settings
+- [LAN Network](/configuration/lan) - LAN network settings
+- [Port Forwarding](/configuration/port-forwarding) - Port forwarding rules
+- [Dynamic DNS](/configuration/dyndns) - Dynamic DNS configuration
+- [Global DNS](/configuration/global-dns) - Global DNS settings
+- [WebUI](/configuration/webui) - Web dashboard configuration
+`;function ae(){return e.jsx("div",{className:"p-6 max-w-4xl mx-auto",children:e.jsx("div",{className:"bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6",children:e.jsx(c,{content:ie})})})}const se=`# System Configuration
+
+System configuration covers basic settings for your router.
+
+## Hostname
+
+Set the hostname of your router:
+
+\`\`\`nix
+hostname = "nixos-router";
+\`\`\`
+
+## Domain
+
+Set the domain for DNS search:
+
+\`\`\`nix
+domain = "example.com";
+\`\`\`
+
+## Timezone
+
+Configure the timezone:
+
+\`\`\`nix
+timezone = "America/Anchorage";
+\`\`\`
+
+## Username
+
+Set the admin username:
+
+\`\`\`nix
+username = "routeradmin";
+\`\`\`
+
+## Nameservers
+
+Configure nameservers for the router itself (used in /etc/resolv.conf):
+
+\`\`\`nix
+nameservers = [ "1.1.1.1" "9.9.9.9" "192.168.3.33" ];
+\`\`\`
+
+## SSH Keys
+
+Add SSH authorized keys for the router admin user:
+
+\`\`\`nix
+sshKeys = [
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJbG... user@hostname"
+];
+\`\`\`
+`;function le(){return e.jsx("div",{className:"p-6 max-w-4xl mx-auto",children:e.jsx("div",{className:"bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6",children:e.jsx(c,{content:se})})})}const ce=`# WAN Configuration
+
+Configure your WAN (Wide Area Network) interface and connection type.
+
+## Connection Type
+
+The router supports two WAN connection types:
+
+### DHCP
+
+For most home internet connections:
+
+\`\`\`nix
+wan = {
+  type = "dhcp";
+  interface = "eno1";
+};
+\`\`\`
+
+### PPPoE
+
+For DSL or fiber connections that require PPPoE authentication:
+
+\`\`\`nix
+wan = {
+  type = "pppoe";
+  interface = "eno1";
+};
+\`\`\`
+
+When using PPPoE, you'll also need to configure credentials in your secrets file (see secrets management).
+
+## Interface Selection
+
+Choose the network interface connected to your internet connection. Common interface names:
+
+- \`eno1\`, \`eno2\` - Onboard Ethernet
+- \`enp4s0\`, \`enp5s0\` - PCIe Ethernet cards
+- \`eth0\`, \`eth1\` - Legacy naming
+
+Use \`ip link show\` to list available interfaces.
+`;function de(){return e.jsx("div",{className:"p-6 max-w-4xl mx-auto",children:e.jsx("div",{className:"bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6",children:e.jsx(c,{content:ce})})})}const ue=`# LAN Bridges Configuration
+
+Configure LAN (Local Area Network) bridges for your internal networks.
+
+## Bridge Configuration
+
+Bridges allow you to combine multiple physical interfaces into a single logical network:
+
+\`\`\`nix
+lan = {
+  bridges = [
+    {
+      name = "br0";
+      interfaces = [ "enp4s0" "enp5s0" ];
+      ipv4 = {
+        address = "192.168.2.1";
+        prefixLength = 24;
+      };
+      ipv6.enable = false;
+    }
+    {
+      name = "br1";
+      interfaces = [ "enp6s0" "enp7s0" ];
+      ipv4 = {
+        address = "192.168.3.1";
+        prefixLength = 24;
+      };
+      ipv6.enable = false;
+    }
+  ];
+};
+\`\`\`
+
+## Network Isolation
+
+Enable isolation to block traffic between bridges:
+
+\`\`\`nix
+lan = {
+  isolation = true;
+};
+\`\`\`
+
+## Isolation Exceptions
+
+Allow specific devices to access other networks:
+
+\`\`\`nix
+isolationExceptions = [
+  {
+    source = "192.168.3.10";
+    sourceBridge = "br1";
+    destBridge = "br0";
+  }
+];
+\`\`\`
+`;function he(){return e.jsx("div",{className:"p-6 max-w-4xl mx-auto",children:e.jsx("div",{className:"bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6",children:e.jsx(c,{content:ue})})})}const ge=`# Homelab Network Configuration
+
+Configure the homelab network (typically br0, 192.168.2.x).
+
+## DHCP Configuration
+
+Configure DHCP for the homelab network:
+
+\`\`\`nix
+homelab = {
+  dhcp = {
+    enable = true;
+    rangeStart = "192.168.2.100";
+    rangeEnd = "192.168.2.200";
+    leaseTime = 86400;  # 24 hours
+  };
+};
+\`\`\`
+
+## DNS Configuration
+
+Configure DNS for the homelab network:
+
+\`\`\`nix
+homelab = {
+  dns = {
+    enable = true;
+    domain = "homelab.local";
+    blockAds = true;
+  };
+};
+\`\`\`
+
+## IP Address
+
+Set the router's IP address on this network:
+
+\`\`\`nix
+homelab = {
+  ipAddress = "192.168.2.1";
+};
+\`\`\`
+`;function me(){return e.jsx("div",{className:"p-6 max-w-4xl mx-auto",children:e.jsx("div",{className:"bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6",children:e.jsx(c,{content:ge})})})}const fe=`# LAN Network Configuration
+
+Configure the LAN network (typically br1, 192.168.3.x).
+
+## DHCP Configuration
+
+Configure DHCP for the LAN network:
+
+\`\`\`nix
+lan = {
+  dhcp = {
+    enable = true;
+    rangeStart = "192.168.3.100";
+    rangeEnd = "192.168.3.200";
+    leaseTime = 86400;  # 24 hours
+  };
+};
+\`\`\`
+
+## DNS Configuration
+
+Configure DNS for the LAN network:
+
+\`\`\`nix
+lan = {
+  dns = {
+    enable = true;
+    domain = "lan.local";
+    blockAds = true;
+  };
+};
+\`\`\`
+
+## IP Address
+
+Set the router's IP address on this network:
+
+\`\`\`nix
+lan = {
+  ipAddress = "192.168.3.1";
+};
+\`\`\`
+`;function pe(){return e.jsx("div",{className:"p-6 max-w-4xl mx-auto",children:e.jsx("div",{className:"bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6",children:e.jsx(c,{content:fe})})})}const be=`# Port Forwarding Configuration
+
+Configure port forwarding rules to expose internal services to the internet.
+
+## Port Forward Rules
+
+Add port forwarding rules:
+
+\`\`\`nix
+portForwards = [
+  {
+    name = "web-server";
+    protocol = "tcp";
+    externalPort = 443;
+    internalIP = "192.168.2.10";
+    internalPort = 443;
+  }
+  {
+    name = "ssh-server";
+    protocol = "tcp";
+    externalPort = 2222;
+    internalIP = "192.168.2.20";
+    internalPort = 22;
+  }
+];
+\`\`\`
+
+## Rule Format
+
+Each port forward rule requires:
+
+- \`name\` - Descriptive name for the rule
+- \`protocol\` - "tcp" or "udp"
+- \`externalPort\` - Port on the WAN interface
+- \`internalIP\` - IP address of the internal service
+- \`internalPort\` - Port of the internal service
+
+## Security Considerations
+
+- Only forward ports that are necessary
+- Use non-standard external ports when possible
+- Ensure internal services are properly secured
+- Consider using a VPN instead of port forwarding for remote access
+`;function xe(){return e.jsx("div",{className:"p-6 max-w-4xl mx-auto",children:e.jsx("div",{className:"bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6",children:e.jsx(c,{content:be})})})}const ye=`# Dynamic DNS Configuration
+
+Configure dynamic DNS updates to keep your domain pointing to your router's public IP.
+
+## Linode Dynamic DNS
+
+The router supports Linode's Dynamic DNS service:
+
+\`\`\`nix
+dyndns = {
+  enable = true;
+  provider = "linode";
+  domain = "example.com";
+  subdomain = "router";
+  updateInterval = 300;  # 5 minutes
+};
+\`\`\`
+
+## Configuration Options
+
+- \`enable\` - Enable/disable dynamic DNS updates
+- \`provider\` - DNS provider (currently "linode")
+- \`domain\` - Your domain name
+- \`subdomain\` - Subdomain to update (optional)
+- \`updateInterval\` - How often to check and update (in seconds)
+
+## Secrets
+
+Dynamic DNS credentials should be stored in your secrets file:
+
+\`\`\`yaml
+linode-api-key: "your-api-key-here"
+\`\`\`
+
+## Verification
+
+Check if dynamic DNS is working:
+
+\`\`\`bash
+# Check service status
+sudo systemctl status linode-dyndns.service
+
+# Check logs
+sudo journalctl -u linode-dyndns.service -n 50
+\`\`\`
+`;function we(){return e.jsx("div",{className:"p-6 max-w-4xl mx-auto",children:e.jsx("div",{className:"bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6",children:e.jsx(c,{content:ye})})})}const ve=`# Global DNS Configuration
+
+Configure global DNS settings that apply to all networks.
+
+## DNS Blocklists
+
+Enable ad-blocking and malware protection:
+
+\`\`\`nix
+dns = {
+  blockAds = true;
+  blockMalware = true;
+};
+\`\`\`
+
+## Upstream DNS Servers
+
+Configure upstream DNS servers for recursive resolution:
+
+\`\`\`nix
+dns = {
+  upstreamServers = [
+    "1.1.1.1"
+    "9.9.9.9"
+  ];
+};
+\`\`\`
+
+## DNS-over-TLS
+
+Enable DNS-over-TLS for encrypted DNS queries:
+
+\`\`\`nix
+dns = {
+  dnsOverTls = true;
+};
+\`\`\`
+
+## DNSSEC
+
+Enable DNSSEC validation:
+
+\`\`\`nix
+dns = {
+  dnssec = true;
+};
+\`\`\`
+`;function ke(){return e.jsx("div",{className:"p-6 max-w-4xl mx-auto",children:e.jsx("div",{className:"bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6",children:e.jsx(c,{content:ve})})})}const Ne=`# WebUI Configuration
+
+Configure the web dashboard for monitoring your router.
+
+## Basic Settings
+
+\`\`\`nix
+webui = {
+  enable = true;
+  port = 8080;
+  collectionInterval = 2;  # seconds
+  retentionDays = 30;
+};
+\`\`\`
+
+## Configuration Options
+
+- \`enable\` - Enable/disable the WebUI
+- \`port\` - Port to serve the WebUI on (default: 8080)
+- \`collectionInterval\` - How often to collect metrics (in seconds)
+- \`retentionDays\` - How many days of historical data to keep
+
+## Access
+
+Access the WebUI at:
+
+\`\`\`
+http://router-ip:8080
+\`\`\`
+
+## Features
+
+The WebUI provides:
+
+- Real-time system metrics (CPU, memory, load)
+- Network interface statistics
+- Device usage and bandwidth tracking
+- Service status monitoring
+- Historical data visualization
+
+## Authentication
+
+The WebUI uses system user authentication (PAM). Log in with your router admin credentials.
+`;function je(){return e.jsx("div",{className:"p-6 max-w-4xl mx-auto",children:e.jsx("div",{className:"bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6",children:e.jsx(c,{content:Ne})})})}function Ce(){return e.jsx(O,{basename:"/",children:e.jsx(J,{children:e.jsxs(I,{children:[e.jsx(l,{path:"/",element:e.jsx(Z,{})}),e.jsx(l,{path:"/installation",element:e.jsx(ee,{})}),e.jsx(l,{path:"/upgrading",element:e.jsx(re,{})}),e.jsx(l,{path:"/verification",element:e.jsx(oe,{})}),e.jsx(l,{path:"/configuration",element:e.jsx(ae,{})}),e.jsx(l,{path:"/configuration/system",element:e.jsx(le,{})}),e.jsx(l,{path:"/configuration/wan",element:e.jsx(de,{})}),e.jsx(l,{path:"/configuration/lan-bridges",element:e.jsx(he,{})}),e.jsx(l,{path:"/configuration/homelab",element:e.jsx(me,{})}),e.jsx(l,{path:"/configuration/lan",element:e.jsx(pe,{})}),e.jsx(l,{path:"/configuration/port-forwarding",element:e.jsx(xe,{})}),e.jsx(l,{path:"/configuration/dyndns",element:e.jsx(we,{})}),e.jsx(l,{path:"/configuration/global-dns",element:e.jsx(ke,{})}),e.jsx(l,{path:"/configuration/webui",element:e.jsx(je,{})})]})})})}(()=>{try{const t=localStorage.getItem("theme"),r=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches,n=t?t==="dark":r,o=document.documentElement;n?o.classList.add("dark"):o.classList.remove("dark")}catch{}})();B.createRoot(document.getElementById("root")).render(e.jsx(b.StrictMode,{children:e.jsx(Ce,{})}));
