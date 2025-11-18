@@ -236,16 +236,29 @@ def collect_client_bandwidth() -> List[Dict]:
         arp_table = parse_arp_table()
         dhcp_leases = parse_kea_leases()
         
+        # Proactively add all known client IPs to nftables (from ARP and DHCP)
+        # This ensures counters are created even before traffic flows
+        all_known_ips = set(arp_table.keys())
+        for lease in dhcp_leases:
+            all_known_ips.add(lease.ip_address)
+        
+        for ip in all_known_ips:
+            if ip not in _known_ips:
+                _add_ip_to_nftables(ip)
+        
         # Read current counter values from nftables
         current_counters = _read_nftables_counters()
         
         if not current_counters:
             # No counters found - this might be normal if no traffic yet
             # But log it for debugging
-            print(f"Debug: No nftables counters found. Known IPs: {len(_known_ips)}")
+            print(f"Debug: No nftables counters found. Known IPs: {len(_known_ips)}, All client IPs: {len(all_known_ips)}")
         
         # Process clients (limit to max_clients_per_cycle for CPU governance)
+        # Process both counters and known IPs (even if no counters yet)
         processed = 0
+        
+        # First process IPs with counters
         for ip, counter_data in current_counters.items():
             if processed >= settings.bandwidth_max_clients_per_cycle:
                 break
@@ -295,13 +308,45 @@ def collect_client_bandwidth() -> List[Dict]:
             
             processed += 1
         
+        # Also process IPs that are known but don't have counters yet (no traffic)
+        # This ensures we track them even if they haven't sent/received data
+        for ip in all_known_ips:
+            if processed >= settings.bandwidth_max_clients_per_cycle:
+                break
+            
+            # Skip if already processed (has counters)
+            if ip in current_counters:
+                continue
+            
+            # Map IP to MAC address
+            mac_network = _map_ip_to_mac(ip, arp_table, dhcp_leases)
+            if not mac_network:
+                continue
+            
+            mac_address, network = mac_network
+            
+            # Add entry with zero bytes (no traffic yet)
+            results.append({
+                'mac_address': mac_address,
+                'ip_address': ip,
+                'network': network,
+                'rx_bytes': 0,
+                'tx_bytes': 0,
+                'rx_bytes_total': 0,
+                'tx_bytes_total': 0,
+                'timestamp': current_time
+            })
+            
+            processed += 1
+        
         # Clean up old IPs from previous_counters that are no longer active
         active_ips = set(current_counters.keys())
         # Update _previous_counters in place to avoid scoping issues
         for ip in list(_previous_counters.keys()):
             if ip not in active_ips:
                 del _previous_counters[ip]
-        _known_ips.intersection_update(active_ips)
+        # Keep known IPs that are still in ARP/DHCP
+        _known_ips.intersection_update(all_known_ips)
     
     except Exception as e:
         print(f"Error collecting client bandwidth: {e}")

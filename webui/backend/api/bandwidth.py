@@ -15,6 +15,7 @@ from ..models import (
 from ..collectors.client_bandwidth import collect_client_bandwidth
 from ..collectors.network_devices import discover_network_devices
 from ..collectors.dhcp import parse_kea_leases
+from ..config import settings
 from sqlalchemy import func
 
 
