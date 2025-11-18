@@ -6,6 +6,32 @@ let
   cfg = config.services.router-webui;
   routerConfig = import ../router-config.nix;
   
+  # pyhw package (not in nixpkgs, build it manually)
+  pyhw = pkgs.python311Packages.buildPythonPackage rec {
+    pname = "pyhw";
+    version = "0.15.3";
+    format = "pyproject";
+    
+    src = pkgs.python311Packages.fetchPypi {
+      inherit pname version;
+      sha256 = "sha256-97c7cf2d16ece0decc51c898f2691c3894e6e5f1c60fc9f153c9361dce578c68";
+    };
+    
+    propagatedBuildInputs = with pkgs.python311Packages; [
+      # pyhw only depends on Python standard library according to PyPI
+      # But it may have optional dependencies, check if needed
+    ];
+    
+    # No tests in the package
+    doCheck = false;
+    
+    meta = with lib; {
+      description = "A neofetch-like command line tool for fetching system information";
+      homepage = "https://pypi.org/project/pyhw/";
+      license = licenses.bsd3;
+    };
+  };
+  
   # Python environment with all dependencies
   pythonEnv = pkgs.python311.withPackages (ps: with ps; [
     fastapi
