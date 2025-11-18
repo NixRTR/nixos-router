@@ -74,15 +74,14 @@ export function SystemInfo() {
           )}
           
           {!loading && !error && textData && (
-            <div className="flex gap-8 items-start">
+            <div className="flex gap-6 items-stretch">
               {/* NixOS Logo */}
-              <div className="flex-shrink-0 flex items-center justify-center">
+              <div className="flex-shrink-0 flex items-center">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 128 128"
-                  width="150"
-                  height="150"
-                  className="dark:opacity-90"
+                  className="h-full w-auto dark:opacity-90"
+                  preserveAspectRatio="xMidYMid meet"
                 >
                   <path
                     fill="#7EBAE4"
@@ -101,7 +100,7 @@ export function SystemInfo() {
               
               {/* Fastfetch Text Output */}
               <div className="flex-1">
-                <pre className="font-mono text-sm whitespace-pre-wrap text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-900 p-6 rounded-lg overflow-auto border border-gray-200 dark:border-gray-700 shadow-sm">
+                <pre className="font-mono text-sm whitespace-pre-wrap text-white dark:text-gray-200 bg-transparent dark:bg-transparent p-0 overflow-auto">
                   {textData}
                 </pre>
               </div>
