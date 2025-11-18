@@ -1,5 +1,5 @@
 /**
- * System Info Modal - Displays fastfetch output
+ * System Info Modal - Displays fastfetch output as HTML
  */
 import { useState, useEffect } from 'react';
 import { Modal } from 'flowbite-react';
@@ -11,7 +11,7 @@ interface SystemInfoModalProps {
 }
 
 export function SystemInfoModal({ show, onClose }: SystemInfoModalProps) {
-  const [output, setOutput] = useState<string>('');
+  const [htmlContent, setHtmlContent] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,7 +20,7 @@ export function SystemInfoModal({ show, onClose }: SystemInfoModalProps) {
       fetchFastfetch();
     } else {
       // Reset state when modal closes
-      setOutput('');
+      setHtmlContent('');
       setError(null);
     }
   }, [show]);
@@ -30,10 +30,10 @@ export function SystemInfoModal({ show, onClose }: SystemInfoModalProps) {
     setError(null);
     try {
       const data = await apiClient.getFastfetch();
-      setOutput(data.output);
+      setHtmlContent(data.html);
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'Failed to fetch system info');
-      setOutput('');
+      setHtmlContent('');
     } finally {
       setLoading(false);
     }
@@ -54,11 +54,18 @@ export function SystemInfoModal({ show, onClose }: SystemInfoModalProps) {
               Error: {error}
             </div>
           )}
-          {!loading && !error && output && (
+          {!loading && !error && htmlContent && (
             <div className="overflow-auto max-h-[70vh] w-full">
-              <pre className="text-[9px] sm:text-[10px] md:text-xs font-mono whitespace-pre-wrap break-words bg-gray-900 dark:bg-gray-800 text-green-400 p-3 sm:p-4 rounded-lg overflow-x-auto w-full">
-                {output}
-              </pre>
+              <div 
+                className="font-mono text-xs sm:text-sm bg-black text-white p-4 rounded-lg overflow-x-auto"
+                style={{
+                  fontFamily: "'Courier New', 'Monaco', 'Menlo', 'Consolas', monospace",
+                  lineHeight: '1.4',
+                  whiteSpace: 'pre-wrap',
+                  wordWrap: 'break-word'
+                }}
+                dangerouslySetInnerHTML={{ __html: htmlContent }}
+              />
             </div>
           )}
         </div>

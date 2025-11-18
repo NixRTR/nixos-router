@@ -325,14 +325,153 @@ def _find_fastfetch() -> str:
     raise RuntimeError("fastfetch binary not found")
 
 
+def _ansi_to_html(ansi_text: str) -> str:
+    """Convert ANSI escape codes to HTML with proper styling
+    
+    Converts ANSI escape sequences to HTML spans with CSS styling.
+    Handles colors, backgrounds, and text styles (bold, italic, underline).
+    """
+    import re
+    
+    # ANSI color codes mapping (standard 16 colors)
+    ansi_colors = {
+        '30': '#000000',  # Black
+        '31': '#cd0000',  # Red
+        '32': '#00cd00',  # Green
+        '33': '#cdcd00',  # Yellow
+        '34': '#0000ee',  # Blue
+        '35': '#cd00cd',  # Magenta
+        '36': '#00cdcd',  # Cyan
+        '37': '#e5e5e5',  # White
+        '90': '#7f7f7f',  # Bright Black
+        '91': '#ff0000',  # Bright Red
+        '92': '#00ff00',  # Bright Green
+        '93': '#ffff00',  # Bright Yellow
+        '94': '#5c5cff',  # Bright Blue
+        '95': '#ff00ff',  # Bright Magenta
+        '96': '#00ffff',  # Bright Cyan
+        '97': '#ffffff',  # Bright White
+    }
+    
+    # Background colors
+    bg_colors = {
+        '40': '#000000',
+        '41': '#cd0000',
+        '42': '#00cd00',
+        '43': '#cdcd00',
+        '44': '#0000ee',
+        '45': '#cd00cd',
+        '46': '#00cdcd',
+        '47': '#e5e5e5',
+        '100': '#7f7f7f',
+        '101': '#ff0000',
+        '102': '#00ff00',
+        '103': '#ffff00',
+        '104': '#5c5cff',
+        '105': '#ff00ff',
+        '106': '#00ffff',
+        '107': '#ffffff',
+    }
+    
+    html_parts = []
+    i = 0
+    open_spans = []  # Stack of open span tags
+    
+    def close_spans():
+        while open_spans:
+            html_parts.append('</span>')
+            open_spans.pop()
+    
+    while i < len(ansi_text):
+        if ansi_text[i] == '\x1b' or ansi_text[i] == '\033':
+            # Found escape sequence
+            if i + 1 < len(ansi_text) and ansi_text[i + 1] == '[':
+                # Find the end of the escape sequence
+                j = i + 2
+                while j < len(ansi_text) and ansi_text[j] not in 'mHfABCDJK':
+                    j += 1
+                
+                if j < len(ansi_text):
+                    seq = ansi_text[i + 2:j]
+                    code = ansi_text[j]
+                    
+                    if code == 'm':
+                        # SGR (Select Graphic Rendition) - colors and styles
+                        if seq == '' or seq == '0':
+                            # Reset - close all spans
+                            close_spans()
+                        else:
+                            codes = seq.split(';')
+                            styles = []
+                            
+                            for c in codes:
+                                if c == '':
+                                    continue
+                                elif c in ansi_colors:
+                                    styles.append(f'color: {ansi_colors[c]}')
+                                elif c in bg_colors:
+                                    styles.append(f'background-color: {bg_colors[c]}')
+                                elif c == '1':
+                                    styles.append('font-weight: bold')
+                                elif c == '3':
+                                    styles.append('font-style: italic')
+                                elif c == '4':
+                                    styles.append('text-decoration: underline')
+                                elif c == '22':
+                                    # Normal intensity (not bold)
+                                    styles.append('font-weight: normal')
+                                elif c == '23':
+                                    # Not italic
+                                    styles.append('font-style: normal')
+                                elif c == '24':
+                                    # Not underlined
+                                    styles.append('text-decoration: none')
+                            
+                            if styles:
+                                # Close previous spans and open new one
+                                close_spans()
+                                style_str = '; '.join(styles)
+                                html_parts.append(f'<span style="{style_str}">')
+                                open_spans.append(style_str)
+                    
+                    i = j + 1
+                    continue
+        
+        # Regular character - escape HTML
+        char = ansi_text[i]
+        if char == '<':
+            html_parts.append('&lt;')
+        elif char == '>':
+            html_parts.append('&gt;')
+        elif char == '&':
+            html_parts.append('&amp;')
+        elif char == '\n':
+            html_parts.append('<br>')
+        elif char == '\r':
+            pass  # Ignore carriage return
+        elif char == '\t':
+            html_parts.append('&nbsp;&nbsp;&nbsp;&nbsp;')  # Tab as 4 spaces
+        elif char == ' ':
+            html_parts.append('&nbsp;')
+        else:
+            html_parts.append(char)
+        
+        i += 1
+    
+    # Close any remaining open spans
+    close_spans()
+    
+    return ''.join(html_parts)
+
+
 @router.get("/fastfetch")
 async def get_fastfetch(
     _: str = Depends(get_current_user)
 ) -> dict:
-    """Run fastfetch and return the output
+    """Run fastfetch and return the output as HTML with ANSI colors rendered
     
     Returns:
-        dict: Contains 'output' field with fastfetch output as string
+        dict: Contains 'html' field with HTML-rendered fastfetch output
     """
     try:
         fastfetch_bin = _find_fastfetch()
@@ -354,7 +493,10 @@ async def get_fastfetch(
                 detail=f"fastfetch failed: {result.stderr or 'Unknown error'}"
             )
         
-        return {"output": result.stdout}
+        # Convert ANSI output to HTML
+        html_content = _ansi_to_html(result.stdout)
+        
+        return {"html": html_content}
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=500, detail="fastfetch timed out")
     except Exception as e:
