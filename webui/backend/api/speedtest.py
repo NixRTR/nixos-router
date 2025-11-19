@@ -13,7 +13,7 @@ import asyncio
 from ..database import get_db, SpeedtestResultDB
 from ..config import settings
 
-router = APIRouter(prefix="/speedtest", tags=["speedtest"])
+router = APIRouter(prefix="/api/speedtest", tags=["speedtest"])
 
 
 # Pydantic models for request/response
