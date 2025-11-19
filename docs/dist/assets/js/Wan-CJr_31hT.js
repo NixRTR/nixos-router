@@ -1,4 +1,4 @@
-import{j as e}from"./ui-vendor-CtbJYEGA.js";import{M as n}from"./MarkdownContent-CHjPgFnl.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const o=`# WAN Configuration
+import{j as e}from"./ui-vendor-CtbJYEGA.js";import{M as n}from"./MarkdownContent-D-Zi6kKK.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const o=`# WAN Configuration
 
 Configure your WAN (Wide Area Network) interface and connection type.
 

@@ -1,4 +1,4 @@
-import{j as e}from"./ui-vendor-CtbJYEGA.js";import{M as n}from"./MarkdownContent-CHjPgFnl.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const o=`# Dynamic DNS Configuration
+import{j as e}from"./ui-vendor-CtbJYEGA.js";import{M as n}from"./MarkdownContent-D-Zi6kKK.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const o=`# Dynamic DNS Configuration
 
 Configure dynamic DNS updates to keep your domain pointing to your router's public IP.
 

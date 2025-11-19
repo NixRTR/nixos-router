@@ -1,4 +1,4 @@
-import{j as n}from"./ui-vendor-CtbJYEGA.js";import{M as r}from"./MarkdownContent-CHjPgFnl.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const e=`# LAN Network Configuration
+import{j as n}from"./ui-vendor-CtbJYEGA.js";import{M as r}from"./MarkdownContent-D-Zi6kKK.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const e=`# LAN Network Configuration
 
 Configure the LAN network (typically br1, 192.168.3.x).
 

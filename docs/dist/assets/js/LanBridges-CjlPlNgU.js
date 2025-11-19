@@ -1,4 +1,4 @@
-import{j as e}from"./ui-vendor-CtbJYEGA.js";import{M as i}from"./MarkdownContent-CHjPgFnl.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const n=`# LAN Bridges Configuration
+import{j as e}from"./ui-vendor-CtbJYEGA.js";import{M as i}from"./MarkdownContent-D-Zi6kKK.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const n=`# LAN Bridges Configuration
 
 Configure LAN (Local Area Network) bridges for your internal networks.
 

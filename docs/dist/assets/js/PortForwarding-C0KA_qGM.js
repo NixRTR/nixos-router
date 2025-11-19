@@ -1,4 +1,4 @@
-import{j as r}from"./ui-vendor-CtbJYEGA.js";import{M as e}from"./MarkdownContent-CHjPgFnl.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const o=`# Port Forwarding Configuration
+import{j as r}from"./ui-vendor-CtbJYEGA.js";import{M as e}from"./MarkdownContent-D-Zi6kKK.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const o=`# Port Forwarding Configuration
 
 Configure port forwarding rules to expose internal services to the internet.
 

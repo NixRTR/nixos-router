@@ -1,4 +1,4 @@
-import{j as e}from"./ui-vendor-CtbJYEGA.js";import{M as o}from"./MarkdownContent-CHjPgFnl.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const r=`# Homelab Network Configuration
+import{j as e}from"./ui-vendor-CtbJYEGA.js";import{M as o}from"./MarkdownContent-D-Zi6kKK.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const r=`# Homelab Network Configuration
 
 Configure the homelab network (typically br0, 192.168.2.x).
 

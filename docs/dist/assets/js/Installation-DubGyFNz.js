@@ -1,4 +1,4 @@
-import{j as t}from"./ui-vendor-CtbJYEGA.js";import{M as e}from"./MarkdownContent-CHjPgFnl.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const s=`# Installation
+import{j as t}from"./ui-vendor-CtbJYEGA.js";import{M as e}from"./MarkdownContent-D-Zi6kKK.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const s=`# Installation
 
 This guide covers installing the NixOS Router on your hardware.
 

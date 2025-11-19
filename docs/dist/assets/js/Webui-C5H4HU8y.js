@@ -1,4 +1,4 @@
-import{j as e}from"./ui-vendor-CtbJYEGA.js";import{M as t}from"./MarkdownContent-CHjPgFnl.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const o=`# WebUI Configuration
+import{j as e}from"./ui-vendor-CtbJYEGA.js";import{M as t}from"./MarkdownContent-D-Zi6kKK.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const o=`# WebUI Configuration
 
 Configure the web dashboard for monitoring your router.
 

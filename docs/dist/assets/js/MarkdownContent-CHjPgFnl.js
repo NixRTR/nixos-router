@@ -1,1 +1,0 @@
-import{j as r}from"./ui-vendor-CtbJYEGA.js";import{M as n,r as o}from"./markdown-vendor-D8KYDTzx.js";function m({content:a}){return r.jsx("article",{className:"format format-blue dark:format-invert max-w-none",children:r.jsx(n,{remarkPlugins:[o],children:a})})}export{m as M};

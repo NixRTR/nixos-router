@@ -1,4 +1,4 @@
-import{j as o}from"./ui-vendor-CtbJYEGA.js";import{M as n}from"./MarkdownContent-CHjPgFnl.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const i=`# Configuration
+import{j as o}from"./ui-vendor-CtbJYEGA.js";import{M as n}from"./MarkdownContent-D-Zi6kKK.js";import"./react-vendor-ZjkKMkft.js";import"./markdown-vendor-D8KYDTzx.js";const i=`# Configuration
 
 This section covers all configuration options for the NixOS Router.
 
