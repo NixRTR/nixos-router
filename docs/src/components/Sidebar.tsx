@@ -38,6 +38,21 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const menuItems = [
     { path: '/', label: 'Home' },
     { path: '/installation', label: 'Installation' },
+    {
+      path: '/configuration',
+      label: 'Configuration',
+      children: [
+        { path: '/configuration/system', label: 'System' },
+        { path: '/configuration/wan', label: 'WAN' },
+        { path: '/configuration/lan-bridges', label: 'LAN Bridges' },
+        { path: '/configuration/homelab', label: 'Homelab' },
+        { path: '/configuration/lan', label: 'LAN' },
+        { path: '/configuration/port-forwarding', label: 'Port Forwarding' },
+        { path: '/configuration/dyndns', label: 'Dynamic DNS' },
+        { path: '/configuration/global-dns', label: 'Global DNS' },
+        { path: '/configuration/webui', label: 'WebUI' },
+      ],
+    },
     { path: '/upgrading', label: 'Upgrading' },
     { path: '/verification', label: 'Verification' },
     {
@@ -54,21 +69,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { path: '/webui/system', label: 'System' },
         { path: '/webui/speedtest', label: 'Speedtest' },
         { path: '/webui/system-info', label: 'System Info' },
-      ],
-    },
-    {
-      path: '/configuration',
-      label: 'Configuration',
-      children: [
-        { path: '/configuration/system', label: 'System' },
-        { path: '/configuration/wan', label: 'WAN' },
-        { path: '/configuration/lan-bridges', label: 'LAN Bridges' },
-        { path: '/configuration/homelab', label: 'Homelab' },
-        { path: '/configuration/lan', label: 'LAN' },
-        { path: '/configuration/port-forwarding', label: 'Port Forwarding' },
-        { path: '/configuration/dyndns', label: 'Dynamic DNS' },
-        { path: '/configuration/global-dns', label: 'Global DNS' },
-        { path: '/configuration/webui', label: 'WebUI' },
       ],
     },
   ];
