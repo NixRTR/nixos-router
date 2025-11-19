@@ -9,13 +9,25 @@ from ..models import ServiceStatus
 
 
 # Services to monitor
-MONITORED_SERVICES = [
-    "unbound-homelab",
-    "unbound-lan",
-    "kea-dhcp4-server",
-    "pppd-eno1",  # PPPoE service
-    "router-webui-backend",
+# Network Services
+NETWORK_SERVICES = [
+    "kea-dhcp4-server",  # DHCP Server (IPv4)
+    "unbound-homelab",   # Homelab DNS
+    "unbound-lan",       # LAN DNS
+    "pppd-eno1",         # PPPoE Server
+    "linode-dyndns",     # Linode Dynamic DNS
 ]
+
+# WebUI Services
+WEBUI_SERVICES = [
+    "nginx",                 # WebUI Frontend (serves static files and reverse proxy)
+    "router-webui-backend",  # WebUI Backend
+    "postgresql",            # WebUI Database
+    "speedtest",             # Speedtest monitoring
+]
+
+# All monitored services
+MONITORED_SERVICES = NETWORK_SERVICES + WEBUI_SERVICES
 
 
 def get_service_status(service_name: str) -> Optional[ServiceStatus]:
@@ -25,7 +37,7 @@ def get_service_status(service_name: str) -> Optional[ServiceStatus]:
         service_name: Name of the service
         
     Returns:
-        ServiceStatus or None if service doesn't exist
+        ServiceStatus or None if service doesn't exist (unit file not found)
     """
     try:
         # Get service active state
@@ -33,18 +45,30 @@ def get_service_status(service_name: str) -> Optional[ServiceStatus]:
             ['systemctl', 'is-active', service_name],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
+            check=False  # Don't raise on non-zero exit
         )
-        is_active = result.stdout.strip() == 'active'
+        # Exit code 0 = active/activating, 3 = inactive, 4 = does not exist
+        if result.returncode == 4:
+            return None  # Service doesn't exist
+        active_state = result.stdout.strip()
+        # For one-shot services, "activating" means it's currently running
+        # For regular services, "active" means it's running
+        is_active = active_state in ('active', 'activating')
         
         # Get service enabled state
         result = subprocess.run(
             ['systemctl', 'is-enabled', service_name],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
+            check=False  # Don't raise on non-zero exit
         )
-        is_enabled = result.stdout.strip() == 'enabled'
+        # Exit code 0 = enabled, 1 = disabled/static/indirect, 2+ = doesn't exist
+        if result.returncode >= 2:
+            return None  # Service doesn't exist
+        enabled_state = result.stdout.strip()
+        is_enabled = enabled_state == 'enabled'
         
         # Get service main PID
         result = subprocess.run(
@@ -71,6 +95,10 @@ def get_service_status(service_name: str) -> Optional[ServiceStatus]:
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
         
+        # Store service type for one-shot detection
+        # We'll add this to the model or use a workaround
+        # For now, we'll detect it in the frontend based on service name
+        
         return ServiceStatus(
             timestamp=datetime.now(timezone.utc),
             service_name=service_name,
@@ -89,7 +117,7 @@ def collect_service_statuses() -> List[ServiceStatus]:
     """Collect status for all monitored services
     
     Returns:
-        List[ServiceStatus]: Status of all services
+        List[ServiceStatus]: Status of all services (including non-existent ones)
     """
     statuses = []
     
@@ -97,6 +125,18 @@ def collect_service_statuses() -> List[ServiceStatus]:
         status = get_service_status(service)
         if status:
             statuses.append(status)
+        else:
+            # Service doesn't exist - create a status entry indicating it's not found
+            # This allows the frontend to display it as "Not Found" or "Disabled"
+            statuses.append(ServiceStatus(
+                timestamp=datetime.now(timezone.utc),
+                service_name=service,
+                is_active=False,
+                is_enabled=False,
+                pid=None,
+                memory_mb=None,
+                cpu_percent=None
+            ))
     
     return statuses
 
