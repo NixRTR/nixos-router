@@ -1,14 +1,14 @@
-import{j as t,M as I}from"./ui-vendor-CtbJYEGA.js";import{M as A}from"./MarkdownContent-D-Zi6kKK.js";import{a as o}from"./react-vendor-ZjkKMkft.js";import{H as V,a as O}from"./index-BqRaqwjv.js";import"./markdown-vendor-D8KYDTzx.js";const U=`# NixOS Router Documentation
+import{j as t,M as I}from"./ui-vendor-CtbJYEGA.js";import{M as A}from"./MarkdownContent-D-Zi6kKK.js";import{a as o}from"./react-vendor-ZjkKMkft.js";import{H as V,a as O}from"./index-MxVjoM_d.js";import"./markdown-vendor-D8KYDTzx.js";const U=`# NixOS Router Documentation
 
 Welcome to the NixOS Router documentation. This guide will help you install, configure, and maintain your NixOS-based router.
 
 ## Quick Links
 
-    - [Installation Guide](/installation) - Get started with installing the router
-    - [Upgrading Guide](/upgrading) - Learn how to upgrade your router
-    - [Verification](/verification) - Verify your router is working correctly
-    - [WebUI Documentation](/webui) - Learn about the web interface features
-    - [Configuration](/configuration) - Configure all aspects of your router
+- [Installation Guide](/installation) - Get started with installing the router
+- [Upgrading Guide](/upgrading) - Learn how to upgrade your router
+- [Verification](/verification) - Verify your router is working correctly
+- [WebUI Documentation](/webui) - Learn about the web interface features
+- [Configuration](/configuration) - Configure all aspects of your router
 
 ## Features
 
