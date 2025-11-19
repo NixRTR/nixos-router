@@ -172,6 +172,19 @@ CREATE INDEX IF NOT EXISTS idx_client_connection_client_remote ON client_connect
 CREATE INDEX IF NOT EXISTS idx_client_connection_timestamp ON client_connection_stats(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_client_connection_agg_level ON client_connection_stats(aggregation_level, timestamp DESC);
 
+-- Speedtest results time-series
+CREATE TABLE IF NOT EXISTS speedtest_results (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ NOT NULL,
+    download_mbps REAL NOT NULL,
+    upload_mbps REAL NOT NULL,
+    ping_ms REAL NOT NULL,
+    server_name VARCHAR(255),
+    server_location VARCHAR(255)
+);
+
+CREATE INDEX IF NOT EXISTS idx_speedtest_results_timestamp ON speedtest_results(timestamp DESC);
+
 -- Create hypertable for time-series data (if using TimescaleDB extension)
 -- Uncomment if TimescaleDB is available:
 -- SELECT create_hypertable('system_metrics', 'timestamp', if_not_exists => TRUE);

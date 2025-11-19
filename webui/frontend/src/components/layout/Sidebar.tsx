@@ -12,6 +12,7 @@ import {
   HiLogout,
   HiInformationCircle,
   HiBookOpen,
+  HiLightningBolt,
 } from 'react-icons/hi';
 import { FaGithub } from 'react-icons/fa';
 import { apiClient } from '../../api/client';
@@ -118,6 +119,16 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
                 onClick={handleItemClick}
               >
                 System
+              </FlowbiteSidebar.Item>
+
+              <FlowbiteSidebar.Item
+                as={Link}
+                to="/speedtest"
+                icon={HiLightningBolt}
+                active={location.pathname === '/speedtest'}
+                onClick={handleItemClick}
+              >
+                Speedtest
               </FlowbiteSidebar.Item>
             </FlowbiteSidebar.ItemGroup>
 

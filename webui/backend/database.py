@@ -239,6 +239,23 @@ class ClientConnectionStatsDB(Base):
         Index('idx_client_connection_agg_level', 'aggregation_level', 'timestamp', postgresql_using='btree'),
     )
 
+
+class SpeedtestResultDB(Base):
+    """Speedtest results table"""
+    __tablename__ = "speedtest_results"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    download_mbps = Column(Float, nullable=False)
+    upload_mbps = Column(Float, nullable=False)
+    ping_ms = Column(Float, nullable=False)
+    server_name = Column(String(255))
+    server_location = Column(String(255))
+    
+    __table_args__ = (
+        Index('idx_speedtest_results_timestamp', 'timestamp', postgresql_using='btree'),
+    )
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting async database session"""
     async with AsyncSessionLocal() as session:
@@ -480,4 +497,36 @@ async def _apply_schema_updates(conn):
             """)
         )
         print("Created client_connection_stats table")
+    
+    # Migration: Create speedtest_results table
+    result = await conn.execute(
+        text("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_name = 'speedtest_results'
+        """)
+    )
+    has_speedtest_results = result.scalar() is not None
+    
+    if not has_speedtest_results:
+        await conn.execute(
+            text("""
+                CREATE TABLE speedtest_results (
+                    id SERIAL PRIMARY KEY,
+                    timestamp TIMESTAMPTZ NOT NULL,
+                    download_mbps REAL NOT NULL,
+                    upload_mbps REAL NOT NULL,
+                    ping_ms REAL NOT NULL,
+                    server_name VARCHAR(255),
+                    server_location VARCHAR(255)
+                )
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_speedtest_results_timestamp 
+                ON speedtest_results(timestamp DESC)
+            """)
+        )
+        print("Created speedtest_results table")
 

@@ -16,6 +16,7 @@ from .api.history import router as history_router
 from .api.bandwidth import router as bandwidth_router
 from .api.devices import router as devices_router
 from .api.system import router as system_router
+from .api.speedtest import router as speedtest_router
 from .collectors.aggregation import run_aggregation_job
 
 
@@ -111,6 +112,7 @@ app.include_router(history_router)
 app.include_router(bandwidth_router)
 app.include_router(devices_router)
 app.include_router(system_router)
+app.include_router(speedtest_router)
 
 
 @app.get("/api")
