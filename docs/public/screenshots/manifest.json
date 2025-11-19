@@ -1,5 +1,5 @@
 {
-  "generated": "2025-11-19T06:53:05.723Z",
+  "generated": "2025-11-19T07:00:36.867Z",
   "count": 11,
   "screenshots": [
     {
@@ -62,8 +62,8 @@
       "file": "009-speedtest.webp",
       "original": "009-speedtest.png",
       "alt": "Speedtest",
-      "size": 38920,
-      "originalSize": 65290
+      "size": 32230,
+      "originalSize": 61390
     },
     {
       "file": "010-system-info.webp",
