@@ -55,7 +55,7 @@ in
           done
           
           # Run speedtest and extract metrics
-          RESULT=$(${pkgs.speedtest-cli}/bin/speedtest-cli --simple --secure 2>&1 || echo "ERROR")
+          RESULT=$(${pkgs.speedtest-cli}/bin/speedtest --simple --secure 2>&1 || echo "ERROR")
           
           if [[ "$RESULT" == "ERROR" ]] || [[ -z "$RESULT" ]]; then
             echo "Speedtest failed"

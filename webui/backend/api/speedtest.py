@@ -188,9 +188,9 @@ async def _run_speedtest_async(db: AsyncSession):
         _speedtest_status["progress"] = 0.0
         _speedtest_status["current_phase"] = "ping"
         
-        # Run speedtest-cli
+        # Run speedtest
         process = await asyncio.create_subprocess_exec(
-            "speedtest-cli",
+            "speedtest",
             "--simple",
             "--secure",
             stdout=asyncio.subprocess.PIPE,
