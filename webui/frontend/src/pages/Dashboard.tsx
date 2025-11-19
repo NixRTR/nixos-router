@@ -191,11 +191,11 @@ export function Dashboard() {
                   </Table.Head>
                   <Table.Body className="divide-y">
                     {[
-                      { name: 'DHCP Server (IPv4)', service: 'kea-dhcp4-server' },
+                      { name: 'DHCP Server', service: 'kea-dhcp4-server' },
                       { name: 'Homelab DNS', service: 'unbound-homelab' },
                       { name: 'LAN DNS', service: 'unbound-lan' },
-                      { name: 'PPPoE Server', service: 'pppd-eno1' },
-                      { name: 'Linode Dynamic DNS', service: 'linode-dyndns' },
+                      { name: 'PPPoE', service: 'pppd-eno1' },
+                      { name: 'Dynamic DNS', service: 'linode-dyndns' },
                     ].map(({ name, service: serviceName }) => {
                       const service = services.find(s => s.service_name === serviceName);
                       const status = service 
@@ -236,9 +236,9 @@ export function Dashboard() {
                   </Table.Head>
                   <Table.Body className="divide-y">
                     {[
-                      { name: 'WebUI Frontend', service: 'nginx' },
-                      { name: 'WebUI Backend', service: 'router-webui-backend' },
-                      { name: 'WebUI Database', service: 'postgresql' },
+                      { name: 'Frontend', service: 'nginx' },
+                      { name: 'Backend', service: 'router-webui-backend' },
+                      { name: 'Database', service: 'postgresql' },
                       { name: 'Speedtest', service: 'speedtest', isOneshot: true },
                     ].map(({ name, service: serviceName, isOneshot = false }) => {
                       const service = services.find(s => s.service_name === serviceName);
