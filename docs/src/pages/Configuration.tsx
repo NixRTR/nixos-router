@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { MarkdownContent } from '../components/MarkdownContent';
 
 const configContent = `# Configuration
