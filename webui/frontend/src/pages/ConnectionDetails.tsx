@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Card, Table, Button, Modal, Select, Label, TextInput, Tooltip as FlowbiteTooltip } from 'flowbite-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { CustomTooltip } from '../components/charts/CustomTooltip';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
 import { useMetrics } from '../hooks/useMetrics';
@@ -553,7 +554,7 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
                         tick={{ fontSize: 12 }} 
                         label={{ value: 'Mbit/s', angle: -90, position: 'insideLeft' }}
                       />
-                      <Tooltip />
+                      <Tooltip content={<CustomTooltip />} />
                       <Legend />
                       <Line 
                         type="monotone" 

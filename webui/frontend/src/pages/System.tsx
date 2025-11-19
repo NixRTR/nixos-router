@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Badge, Select, TextInput, Label } from 'flowbite-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { CustomTooltip } from '../components/charts/CustomTooltip';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
 import { useMetrics } from '../hooks/useMetrics';
@@ -332,9 +333,13 @@ export function System() {
                 <LineChart data={cpuChartData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="time" tick={{ fontSize: 12 }} />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="cpu" stroke="#3b82f6" strokeWidth={2} dot={false} name="CPU %" isAnimationActive={false} />
+                  <YAxis 
+                    domain={[0, 100]} 
+                    tick={{ fontSize: 12 }} 
+                    label={{ value: '%', angle: -90, position: 'insideLeft' }}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Line type="monotone" dataKey="cpu" stroke="#3b82f6" strokeWidth={2} dot={false} name="CPU" isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
               <div className="mt-2 text-sm text-gray-600 dark:text-gray-400 text-center">
@@ -349,9 +354,13 @@ export function System() {
                 <LineChart data={memChartData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="time" tick={{ fontSize: 12 }} />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="memory" stroke="#10b981" strokeWidth={2} dot={false} name="Memory %" isAnimationActive={false} />
+                  <YAxis 
+                    domain={[0, 100]} 
+                    tick={{ fontSize: 12 }} 
+                    label={{ value: '%', angle: -90, position: 'insideLeft' }}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Line type="monotone" dataKey="memory" stroke="#10b981" strokeWidth={2} dot={false} name="Memory" isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
               <div className="mt-2 text-sm text-gray-600 dark:text-gray-400 text-center">
@@ -366,9 +375,12 @@ export function System() {
                 <LineChart data={loadChartData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="time" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="load" stroke="#f59e0b" strokeWidth={2} dot={false} name="Load (1m)" isAnimationActive={false} />
+                  <YAxis 
+                    tick={{ fontSize: 12 }} 
+                    label={{ value: 'Load (1m)', angle: -90, position: 'insideLeft' }}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Line type="monotone" dataKey="load" stroke="#f59e0b" strokeWidth={2} dot={false} name="Load" isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
               <div className="mt-2 text-sm text-gray-600 dark:text-gray-400 text-center">
@@ -393,11 +405,14 @@ export function System() {
                     <LineChart data={diskData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="time" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip />
+                      <YAxis 
+                        tick={{ fontSize: 12 }} 
+                        label={{ value: 'MB/s', angle: -90, position: 'insideLeft' }}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
                       <Legend />
-                      <Line type="monotone" dataKey="read_mbps" stroke="#3b82f6" strokeWidth={2} dot={false} name="Read" isAnimationActive={false} />
-                      <Line type="monotone" dataKey="write_mbps" stroke="#ef4444" strokeWidth={2} dot={false} name="Write" isAnimationActive={false} />
+                      <Line type="monotone" dataKey="read_mbps" stroke="#3b82f6" strokeWidth={2} dot={false} name="Read (MB/s)" isAnimationActive={false} />
+                      <Line type="monotone" dataKey="write_mbps" stroke="#ef4444" strokeWidth={2} dot={false} name="Write (MB/s)" isAnimationActive={false} />
                     </LineChart>
                   </ResponsiveContainer>
                   <div className="mt-2 text-sm text-gray-600 dark:text-gray-400 text-center">
@@ -422,15 +437,18 @@ export function System() {
                     <LineChart data={tempData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="time" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip />
+                      <YAxis 
+                        tick={{ fontSize: 12 }} 
+                        label={{ value: '°C', angle: -90, position: 'insideLeft' }}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
                       <Line 
                         type="monotone" 
                         dataKey="temperature" 
                         stroke={currentTemp >= 80 ? '#ef4444' : currentTemp >= 70 ? '#f59e0b' : '#10b981'} 
                         strokeWidth={2} 
                         dot={false} 
-                        name="Temp °C" 
+                        name="Temperature" 
                         isAnimationActive={false} 
                       />
                     </LineChart>

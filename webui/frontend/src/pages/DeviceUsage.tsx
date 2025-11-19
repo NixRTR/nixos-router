@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Table, Badge, Button, Modal, Select, Label, TextInput, Tooltip as FlowbiteTooltip } from 'flowbite-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { CustomTooltip } from '../components/charts/CustomTooltip';
 import { HiSearch } from 'react-icons/hi';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
@@ -900,7 +901,7 @@ export function DeviceUsage() {
                         tick={{ fontSize: 12 }} 
                         label={{ value: 'Mbit/s', angle: -90, position: 'insideLeft' }}
                       />
-                      <Tooltip />
+                      <Tooltip content={<CustomTooltip />} />
                       <Legend />
                       <Line 
                         type="monotone" 

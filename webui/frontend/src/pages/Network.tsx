@@ -9,6 +9,7 @@ import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
 import { useMetrics } from '../hooks/useMetrics';
 import { apiClient } from '../api/client';
+import { CustomTooltip } from '../components/charts/CustomTooltip';
 
 interface BandwidthDataPoint {
   timestamp: string;
@@ -192,14 +193,17 @@ export function Network() {
                         tick={{ fontSize: 12 }}
                         interval={Math.floor(chartData.length / 8)}
                       />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip />
+                      <YAxis 
+                        tick={{ fontSize: 12 }} 
+                        label={{ value: 'Mbit/s', angle: -90, position: 'insideLeft' }}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
                       <Legend />
                       <Line 
                         type="monotone" 
                         dataKey="download" 
                         stroke="#3b82f6" 
-                        name="Download"
+                        name="Download (Mbit/s)"
                         strokeWidth={2}
                         dot={false}
                         isAnimationActive={false}
@@ -208,7 +212,7 @@ export function Network() {
                         type="monotone" 
                         dataKey="upload" 
                         stroke="#10b981" 
-                        name="Upload"
+                        name="Upload (Mbit/s)"
                         strokeWidth={2}
                         dot={false}
                         isAnimationActive={false}
