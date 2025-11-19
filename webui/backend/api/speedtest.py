@@ -263,6 +263,20 @@ async def _run_speedtest_async(db: AsyncSession):
                         except (ValueError, AttributeError):
                             pass
                     
+                    # Look for ping in "Hosted by ... [distance]: X.XXX ms" format
+                    if ping_ms is None and "hosted by" in line_str.lower() and "ms" in line_str.lower():
+                        try:
+                            # Pattern: "Hosted by ... [distance]: X.XXX ms"
+                            # Extract the number before "ms" at the end of the line
+                            match = re.search(r':\s*(\d+\.?\d*)\s*ms\s*$', line_str, re.IGNORECASE)
+                            if match:
+                                ping_ms = float(match.group(1))
+                                _speedtest_status["ping_ms"] = ping_ms
+                                _speedtest_status["progress"] = 10.0
+                                _speedtest_status["current_phase"] = "download"
+                        except (ValueError, AttributeError):
+                            pass
+                    
                     # Look for download phase start
                     if "download" in line_str.lower() and "testing" in line_str.lower():
                         in_download = True
@@ -389,14 +403,45 @@ async def _run_speedtest_async(db: AsyncSession):
             # Look for any line with ping/latency and ms
             for line in output_lines:
                 if ping_ms is None:
+                    # Try "Hosted by ... [distance]: X.XXX ms" format first (most common)
+                    if "hosted by" in line.lower() and "ms" in line.lower():
+                        try:
+                            # Pattern: "Hosted by ... [distance]: X.XXX ms"
+                            match = re.search(r':\s*(\d+\.?\d*)\s*ms\s*$', line, re.IGNORECASE)
+                            if match:
+                                ping_ms = float(match.group(1))
+                                _speedtest_status["ping_ms"] = ping_ms
+                                break
+                        except (ValueError, AttributeError):
+                            pass
+                    
                     # Try to find any number followed by ms in lines containing ping/latency
-                    if ("ping" in line.lower() or "latency" in line.lower()) and "ms" in line.lower():
+                    if ping_ms is None and ("ping" in line.lower() or "latency" in line.lower()) and "ms" in line.lower():
                         try:
                             match = re.search(r'(\d+\.?\d*)\s*ms', line, re.IGNORECASE)
                             if match:
                                 ping_ms = float(match.group(1))
                                 _speedtest_status["ping_ms"] = ping_ms
                                 break
+                        except (ValueError, AttributeError):
+                            pass
+            
+            # Final fallback: look for any decimal number followed by "ms" in any line
+            if ping_ms is None:
+                for line in output_lines:
+                    if ping_ms is None:
+                        try:
+                            # Look for pattern: [decimal number] ms (anywhere in line)
+                            # This is a very general pattern that should catch most ping formats
+                            match = re.search(r'(\d+\.?\d*)\s*ms', line, re.IGNORECASE)
+                            if match:
+                                # Make sure it's a reasonable ping value (not a speed in Mbps)
+                                value = float(match.group(1))
+                                # Ping is typically < 1000ms, so filter out large values that might be speeds
+                                if value < 1000:
+                                    ping_ms = value
+                                    _speedtest_status["ping_ms"] = ping_ms
+                                    break
                         except (ValueError, AttributeError):
                             pass
         
