@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Button, Select, Table, TextInput, Label, Progress } from 'flowbite-react';
-import { HiX, HiArrowDown, HiArrowUp } from 'react-icons/hi';
+import { HiArrowDown, HiArrowUp } from 'react-icons/hi';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { CustomTooltip } from '../components/charts/CustomTooltip';
 import { Sidebar } from '../components/layout/Sidebar';
@@ -85,7 +85,7 @@ export function Speedtest() {
   
   // Speedtest status
   const [status, setStatus] = useState<SpeedtestStatus>({ is_running: false });
-  const [showResults, setShowResults] = useState(false);
+  const [lastResult, setLastResult] = useState<SpeedtestResult | null>(null);
   const statusIntervalRef = useRef<number | null>(null);
   
   const handleLogout = async () => {
@@ -149,6 +149,36 @@ export function Speedtest() {
     fetchTableData();
   }, [token, timeRangeHours, currentPage, pageSize]);
 
+  // Fetch last speedtest result
+  useEffect(() => {
+    const fetchLastResult = async () => {
+      if (!token) return;
+      try {
+        const endTime = new Date();
+        const startTime = new Date(endTime.getTime() - 30 * 24 * 60 * 60 * 1000); // Last 30 days
+        
+        const response = await fetch(
+          `/api/speedtest/history?start_time=${startTime.toISOString()}&end_time=${endTime.toISOString()}&page=1&page_size=1`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          }
+        );
+        if (response.ok) {
+          const data: SpeedtestHistoryResponse = await response.json();
+          if (data.results && data.results.length > 0) {
+            setLastResult(data.results[0]);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching last speedtest result:', error);
+      }
+    };
+    
+    fetchLastResult();
+  }, [token]);
+
   // Poll speedtest status when running
   useEffect(() => {
     if (status.is_running) {
@@ -164,9 +194,8 @@ export function Speedtest() {
             const newStatus: SpeedtestStatus = await response.json();
             setStatus(newStatus);
             
-            // If test completed, refresh data and keep results visible
+            // If test completed, refresh data and update last result
             if (!newStatus.is_running && status.is_running) {
-              // Keep showResults true so results stay visible
               // Refresh chart and table
               const fetchChartData = async () => {
                 try {
@@ -199,8 +228,29 @@ export function Speedtest() {
                 }
               };
               
+              // Fetch and update last result
+              const fetchLastResult = async () => {
+                try {
+                  const endTime = new Date();
+                  const startTime = new Date(endTime.getTime() - 30 * 24 * 60 * 60 * 1000);
+                  const response = await fetch(
+                    `/api/speedtest/history?start_time=${startTime.toISOString()}&end_time=${endTime.toISOString()}&page=1&page_size=1`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                  );
+                  if (response.ok) {
+                    const data: SpeedtestHistoryResponse = await response.json();
+                    if (data.results && data.results.length > 0) {
+                      setLastResult(data.results[0]);
+                    }
+                  }
+                } catch (error) {
+                  console.error('Error fetching last result:', error);
+                }
+              };
+              
               fetchChartData();
               fetchTableData();
+              fetchLastResult();
             }
           }
         } catch (error) {
@@ -234,9 +284,8 @@ export function Speedtest() {
       });
       
       if (response.ok) {
-        // Start polling status and show results
+        // Start polling status
         setStatus({ is_running: true, progress: 0 });
-        setShowResults(true);
       }
     } catch (error) {
       console.error('Error triggering speedtest:', error);
@@ -291,121 +340,121 @@ export function Speedtest() {
               </Button>
             </div>
 
-            {/* Speedtest Results Display */}
-            {(status.is_running || showResults) && (
-              <Card className="relative">
-                {/* Close Button */}
-                <button
-                  onClick={() => setShowResults(false)}
-                  className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  aria-label="Close results"
-                >
-                  <HiX className="w-5 h-5" />
-                </button>
+            {/* Last Speedtest Result Display */}
+            <Card>
+              <div className="text-center">
+                <h3 className="text-xl font-semibold mb-2">
+                  {status.is_running ? 'Speedtest in Progress' : 'Last Speedtest Result'}
+                </h3>
+                {lastResult && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                    {new Date(lastResult.timestamp).toLocaleString()}
+                  </p>
+                )}
                 
-                <div className="text-center pr-8">
-                  <h3 className="text-xl font-semibold mb-6">
-                    {status.is_running ? 'Speedtest in Progress' : 'Speedtest Results'}
-                  </h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-6">
-                    {/* Download */}
-                    <div className="text-center">
-                      <div className="flex items-center justify-center gap-2 mb-2">
-                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Download</span>
-                        <HiArrowDown 
-                          className={`w-5 h-5 text-blue-600 dark:text-blue-400 ${
-                            status.is_running && status.current_phase === 'download' 
-                              ? 'animate-pulse drop-shadow-lg' 
-                              : ''
-                          }`}
-                          style={
-                            status.is_running && status.current_phase === 'download'
-                              ? {
-                                  filter: 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.8))',
-                                  animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                                }
-                              : {}
-                          }
-                        />
-                      </div>
-                      <div className={`text-5xl font-bold text-blue-600 dark:text-blue-400 ${
-                        status.is_running && status.current_phase === 'download' 
-                          ? 'drop-shadow-lg' 
-                          : ''
-                      }`}
-                      style={
-                        status.is_running && status.current_phase === 'download'
-                          ? {
-                              filter: 'drop-shadow(0 0 12px rgba(59, 130, 246, 0.6))',
-                              animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                            }
-                          : {}
-                      }>
-                        {status.download_mbps ? `${status.download_mbps.toFixed(2)}` : '--'}
-                      </div>
-                      <div className="text-lg text-gray-500 dark:text-gray-400 mt-1">Mbps</div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-6">
+                  {/* Download */}
+                  <div className="text-center">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Download</span>
+                      <HiArrowDown 
+                        className={`w-5 h-5 text-blue-600 dark:text-blue-400 ${
+                          status.is_running && status.current_phase === 'download' 
+                            ? 'animate-pulse drop-shadow-lg' 
+                            : ''
+                        }`}
+                        style={
+                          status.is_running && status.current_phase === 'download'
+                            ? {
+                                filter: 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.8))',
+                                animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                              }
+                            : {}
+                        }
+                      />
                     </div>
-
-                    {/* Upload */}
-                    <div className="text-center">
-                      <div className="flex items-center justify-center gap-2 mb-2">
-                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Upload</span>
-                        <HiArrowUp 
-                          className={`w-5 h-5 text-green-600 dark:text-green-400 ${
-                            status.is_running && status.current_phase === 'upload' 
-                              ? 'animate-pulse drop-shadow-lg' 
-                              : ''
-                          }`}
-                          style={
-                            status.is_running && status.current_phase === 'upload'
-                              ? {
-                                  filter: 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.8))',
-                                  animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                                }
-                              : {}
+                    <div className={`text-5xl font-bold text-blue-600 dark:text-blue-400 ${
+                      status.is_running && status.current_phase === 'download' 
+                        ? 'drop-shadow-lg' 
+                        : ''
+                    }`}
+                    style={
+                      status.is_running && status.current_phase === 'download'
+                        ? {
+                            filter: 'drop-shadow(0 0 12px rgba(59, 130, 246, 0.6))',
+                            animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
                           }
-                        />
-                      </div>
-                      <div className={`text-5xl font-bold text-green-600 dark:text-green-400 ${
-                        status.is_running && status.current_phase === 'upload' 
-                          ? 'drop-shadow-lg' 
-                          : ''
-                      }`}
-                      style={
-                        status.is_running && status.current_phase === 'upload'
-                          ? {
-                              filter: 'drop-shadow(0 0 12px rgba(16, 185, 129, 0.6))',
-                              animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                            }
-                          : {}
-                      }>
-                        {status.upload_mbps ? `${status.upload_mbps.toFixed(2)}` : '--'}
-                      </div>
-                      <div className="text-lg text-gray-500 dark:text-gray-400 mt-1">Mbps</div>
+                        : {}
+                    }>
+                      {status.is_running && status.download_mbps 
+                        ? `${status.download_mbps.toFixed(2)}` 
+                        : (lastResult ? `${lastResult.download_mbps.toFixed(2)}` : '--')}
                     </div>
+                    <div className="text-lg text-gray-500 dark:text-gray-400 mt-1">Mbps</div>
+                  </div>
 
-                    {/* Ping */}
-                    <div className="text-center">
-                      <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Ping</div>
-                      <div className="text-5xl font-bold text-gray-700 dark:text-gray-300">
-                        {status.ping_ms ? `${status.ping_ms.toFixed(2)}` : '--'}
-                      </div>
-                      <div className="text-lg text-gray-500 dark:text-gray-400 mt-1">ms</div>
+                  {/* Upload */}
+                  <div className="text-center">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Upload</span>
+                      <HiArrowUp 
+                        className={`w-5 h-5 text-green-600 dark:text-green-400 ${
+                          status.is_running && status.current_phase === 'upload' 
+                            ? 'animate-pulse drop-shadow-lg' 
+                            : ''
+                        }`}
+                        style={
+                          status.is_running && status.current_phase === 'upload'
+                            ? {
+                                filter: 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.8))',
+                                animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                              }
+                            : {}
+                        }
+                      />
+                    </div>
+                    <div className={`text-5xl font-bold text-green-600 dark:text-green-400 ${
+                      status.is_running && status.current_phase === 'upload' 
+                        ? 'drop-shadow-lg' 
+                        : ''
+                    }`}
+                    style={
+                      status.is_running && status.current_phase === 'upload'
+                        ? {
+                            filter: 'drop-shadow(0 0 12px rgba(16, 185, 129, 0.6))',
+                            animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                          }
+                        : {}
+                    }>
+                      {status.is_running && status.upload_mbps 
+                        ? `${status.upload_mbps.toFixed(2)}` 
+                        : (lastResult ? `${lastResult.upload_mbps.toFixed(2)}` : '--')}
+                    </div>
+                    <div className="text-lg text-gray-500 dark:text-gray-400 mt-1">Mbps</div>
+                  </div>
+
+                  {/* Ping */}
+                  <div className="text-center">
+                    <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Ping</div>
+                    <div className="text-5xl font-bold text-gray-700 dark:text-gray-300">
+                      {status.is_running && status.ping_ms 
+                        ? `${status.ping_ms.toFixed(2)}` 
+                        : (lastResult ? `${lastResult.ping_ms.toFixed(2)}` : '--')}
+                    </div>
+                    <div className="text-lg text-gray-500 dark:text-gray-400 mt-1">ms</div>
+                  </div>
+                </div>
+                
+                {status.is_running && status.progress !== undefined && (
+                  <div className="mt-4">
+                    <Progress progress={status.progress} color="blue" />
+                    <div className="text-sm text-gray-500 mt-2 text-center">
+                      {status.current_phase || 'Starting...'}
                     </div>
                   </div>
-                  
-                  {status.is_running && status.progress !== undefined && (
-                    <div className="mt-4">
-                      <Progress progress={status.progress} color="blue" />
-                      <div className="text-sm text-gray-500 mt-2 text-center">
-                        {status.current_phase || 'Starting...'}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            )}
+                )}
+              </div>
+            </Card>
 
             {/* Chart */}
             <Card>

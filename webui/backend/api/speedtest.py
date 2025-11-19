@@ -9,10 +9,11 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 import subprocess
 import asyncio
+import re
+import os
 
 from ..database import get_db, SpeedtestResultDB
 from ..config import settings
-import os
 
 router = APIRouter(prefix="/api/speedtest", tags=["speedtest"])
 
@@ -225,20 +226,37 @@ async def _run_speedtest_async(db: AsyncSession):
                     output_lines.append(line_str)
                     
                     # Parse verbose output for real-time updates
-                    # Look for ping results
+                    # Look for ping results - try multiple formats
+                    # Format 1: "Ping: X ms" or "Latency: X ms"
+                    # Format 2: "Ping: X" (no ms suffix)
+                    # Format 3: "Latency: X ms"
+                    # Format 4: "Testing from..." or "Retrieving speedtest.net configuration..." (before ping)
                     if "Ping:" in line_str or "Latency:" in line_str:
                         try:
                             # Try to extract ping value (format varies)
                             parts = line_str.split()
                             for i, part in enumerate(parts):
                                 if part in ("Ping:", "Latency:") and i + 1 < len(parts):
-                                    ping_str = parts[i + 1].rstrip('ms')
+                                    ping_str = parts[i + 1].rstrip('ms').rstrip(',')
                                     ping_ms = float(ping_str)
                                     _speedtest_status["ping_ms"] = ping_ms
                                     _speedtest_status["progress"] = 10.0
                                     _speedtest_status["current_phase"] = "download"
                                     break
                         except (ValueError, IndexError):
+                            pass
+                    
+                    # Also look for ping in format like "X ms" after "Ping" or "Latency" keywords
+                    if ping_ms is None and ("ping" in line_str.lower() or "latency" in line_str.lower()) and "ms" in line_str.lower():
+                        try:
+                            # Extract number before "ms" - look for pattern like "X ms" or "X.XX ms"
+                            match = re.search(r'(\d+\.?\d*)\s*ms', line_str, re.IGNORECASE)
+                            if match:
+                                ping_ms = float(match.group(1))
+                                _speedtest_status["ping_ms"] = ping_ms
+                                _speedtest_status["progress"] = 10.0
+                                _speedtest_status["current_phase"] = "download"
+                        except (ValueError, AttributeError):
                             pass
                     
                     # Look for download phase start
@@ -283,13 +301,17 @@ async def _run_speedtest_async(db: AsyncSession):
                         except (ValueError, IndexError):
                             pass
                     
-                    # Also check for simple format (fallback)
+                    # Also check for simple format (fallback) - multiple formats
                     if line_str.startswith("Ping:"):
                         try:
-                            ping_ms = float(line_str.split()[1])
-                            _speedtest_status["ping_ms"] = ping_ms
-                            _speedtest_status["progress"] = 10.0
-                            _speedtest_status["current_phase"] = "download"
+                            # Handle "Ping: X ms" or "Ping: X"
+                            parts = line_str.split()
+                            if len(parts) >= 2:
+                                ping_str = parts[1].rstrip('ms').rstrip(',')
+                                ping_ms = float(ping_str)
+                                _speedtest_status["ping_ms"] = ping_ms
+                                _speedtest_status["progress"] = 10.0
+                                _speedtest_status["current_phase"] = "download"
                         except (ValueError, IndexError):
                             pass
                     elif line_str.startswith("Download:"):
@@ -319,12 +341,28 @@ async def _run_speedtest_async(db: AsyncSession):
         # Final parse from output (in case we missed something)
         output = "\n".join(output_lines)
         for line in output_lines:
-            if line.startswith("Ping:") and ping_ms is None:
-                try:
-                    ping_ms = float(line.split()[1])
-                    _speedtest_status["ping_ms"] = ping_ms
-                except (ValueError, IndexError):
-                    pass
+            # Try multiple ping formats
+            if ping_ms is None:
+                # Format 1: "Ping: X ms" or "Ping: X"
+                if line.startswith("Ping:"):
+                    try:
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            ping_str = parts[1].rstrip('ms').rstrip(',')
+                            ping_ms = float(ping_str)
+                            _speedtest_status["ping_ms"] = ping_ms
+                    except (ValueError, IndexError):
+                        pass
+                
+                # Format 2: Look for "X ms" pattern with ping/latency context
+                if ping_ms is None and ("ping" in line.lower() or "latency" in line.lower()) and "ms" in line.lower():
+                    try:
+                        match = re.search(r'(\d+\.?\d*)\s*ms', line, re.IGNORECASE)
+                        if match:
+                            ping_ms = float(match.group(1))
+                            _speedtest_status["ping_ms"] = ping_ms
+                    except (ValueError, AttributeError):
+                        pass
             elif line.startswith("Download:") and download_mbps is None:
                 try:
                     download_mbps = float(line.split()[1])
