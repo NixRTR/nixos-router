@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
-import { Carousel } from 'flowbite-react';
 import { MarkdownContent } from '../components/MarkdownContent';
+import { Modal } from 'flowbite-react';
+import { useEffect, useState, useRef } from 'react';
+import { HiChevronLeft, HiChevronRight, HiX } from 'react-icons/hi';
 
 const homeContent = `# NixOS Router Documentation
 
@@ -35,47 +37,229 @@ Welcome to the NixOS Router documentation. This guide will help you install, con
 - Review the [GitHub Repository](https://github.com/BeardedTek/nixos-router)
 `;
 
-// Screenshot images - add your screenshot files to docs/public/screenshots/
-// Vite serves public files from the root, so use root-relative paths
-const screenshots = [
-  { src: '/screenshots/screenshot1.png', alt: 'Dashboard Overview' },
-  { src: '/screenshots/screenshot2.png', alt: 'Network Monitoring' },
-  { src: '/screenshots/screenshot3.png', alt: 'Device Management' },
-  { src: '/screenshots/screenshot4.png', alt: 'System Metrics' },
-];
+interface ScreenshotManifest {
+  generated: string;
+  count: number;
+  screenshots: Array<{
+    file: string;
+    original?: string;
+    alt: string;
+    size: number;
+    originalSize?: number;
+  }>;
+}
 
 export function Home() {
-  // Filter out screenshots that don't exist (for development)
-  // In production, you can remove this check
-  const availableScreenshots = screenshots.filter((img) => {
-    // For now, we'll show placeholder if images don't exist
-    // You can add actual image files to docs/public/screenshots/ later
-    return true;
-  });
+  const [screenshots, setScreenshots] = useState<Array<{ src: string; original: string; alt: string }>>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const basePath = import.meta.env.VITE_BASE_PATH || '/docs/';
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Load screenshots from manifest.json generated at build time
+    const loadScreenshots = async () => {
+      try {
+        const manifestUrl = `${basePath}screenshots/manifest.json`;
+        const response = await fetch(manifestUrl);
+        
+        if (response.ok) {
+          const manifest: ScreenshotManifest = await response.json();
+          const loadedScreenshots = manifest.screenshots.map(({ file, original, alt }) => ({
+            src: `${basePath}screenshots/${file}`, // WebP for carousel
+            original: original ? `${basePath}screenshots/${original}` : `${basePath}screenshots/${file}`, // Original for modal
+            alt,
+          }));
+          setScreenshots(loadedScreenshots);
+        } else {
+          console.warn('Could not load screenshots manifest, using empty list');
+          setScreenshots([]);
+        }
+      } catch (error) {
+        console.error('Error loading screenshots manifest:', error);
+        setScreenshots([]);
+      }
+    };
+    
+    loadScreenshots();
+  }, [basePath]);
+
+  // Auto-advance carousel every 5 seconds
+  useEffect(() => {
+    if (screenshots.length === 0 || isPaused) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+
+    intervalRef.current = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % screenshots.length);
+    }, 5000);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [screenshots.length, isPaused]);
+
+  const goToSlide = (index: number) => {
+    setCurrentIndex(index);
+    // Reset auto-advance timer
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    intervalRef.current = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % screenshots.length);
+    }, 5000);
+  };
+
+  const goToPrevious = () => {
+    goToSlide((currentIndex - 1 + screenshots.length) % screenshots.length);
+  };
+
+  const goToNext = () => {
+    goToSlide((currentIndex + 1) % screenshots.length);
+  };
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       {/* Screenshot Carousel */}
-      {availableScreenshots.length > 0 && (
+      {screenshots.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
-          <div className="h-64 sm:h-80 xl:h-96">
-            <Carousel slideInterval={5000} indicators pauseOnHover>
-              {availableScreenshots.map((screenshot, index) => (
+          {/* Main Image Display */}
+          <div className="relative h-64 sm:h-80 xl:h-96 group bg-gray-100 dark:bg-gray-700">
+            {/* Previous Arrow */}
+            <button
+              onClick={goToPrevious}
+              onMouseEnter={() => setIsPaused(true)}
+              onMouseLeave={() => setIsPaused(false)}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+              aria-label="Previous image"
+            >
+              <HiChevronLeft className="w-6 h-6" />
+            </button>
+
+            {/* Main Image with fade transition */}
+            <div 
+              className="relative w-full h-full cursor-pointer lg:cursor-zoom-in"
+              onClick={() => {
+                // Only open modal on lg screens and larger
+                if (window.innerWidth >= 1024) {
+                  setModalOpen(true);
+                }
+              }}
+            >
+              {screenshots.map((screenshot, index) => (
                 <img
                   key={index}
                   src={screenshot.src}
                   alt={screenshot.alt}
-                  className="w-full h-full object-contain"
+                  className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-500 ${
+                    index === currentIndex ? 'opacity-100' : 'opacity-0'
+                  }`}
                   onError={(e) => {
-                    // Hide image if it fails to load
                     (e.target as HTMLImageElement).style.display = 'none';
                   }}
                 />
               ))}
-            </Carousel>
+            </div>
+
+            {/* Next Arrow */}
+            <button
+              onClick={goToNext}
+              onMouseEnter={() => setIsPaused(true)}
+              onMouseLeave={() => setIsPaused(false)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+              aria-label="Next image"
+            >
+              <HiChevronRight className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Thumbnails */}
+          <div className="p-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide justify-center">
+              {screenshots.map((screenshot, index) => (
+                <button
+                  key={index}
+                  onClick={() => goToSlide(index)}
+                  onMouseEnter={() => setIsPaused(true)}
+                  onMouseLeave={() => setIsPaused(false)}
+                  className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all duration-200 ${
+                    index === currentIndex
+                      ? 'border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/50 dark:ring-blue-400/50 scale-105'
+                      : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 opacity-70 hover:opacity-100'
+                  }`}
+                  aria-label={`Go to ${screenshot.alt}`}
+                >
+                  <img
+                    src={screenshot.src}
+                    alt={screenshot.alt}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
+
+      {/* Screenshot Modal */}
+      <Modal show={modalOpen} onClose={() => setModalOpen(false)} size="7xl">
+        <Modal.Header>
+          <div className="flex items-center justify-between w-full">
+            <span>{screenshots[currentIndex]?.alt || 'Screenshot'}</span>
+          </div>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="relative">
+            {/* Navigation arrows in modal */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                goToPrevious();
+              }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full"
+              aria-label="Previous image"
+            >
+              <HiChevronLeft className="w-8 h-8" />
+            </button>
+
+            <img
+              src={screenshots[currentIndex]?.original || screenshots[currentIndex]?.src}
+              alt={screenshots[currentIndex]?.alt}
+              className="w-full h-auto max-h-[80vh] object-contain mx-auto"
+              onError={(e) => {
+                // Fallback to WebP if original fails
+                const img = e.target as HTMLImageElement;
+                if (img.src !== screenshots[currentIndex]?.src) {
+                  img.src = screenshots[currentIndex]?.src;
+                } else {
+                  img.style.display = 'none';
+                }
+              }}
+            />
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                goToNext();
+              }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full"
+              aria-label="Next image"
+            >
+              <HiChevronRight className="w-8 h-8" />
+            </button>
+          </div>
+        </Modal.Body>
+      </Modal>
 
       {/* Documentation Content */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">

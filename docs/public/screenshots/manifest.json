@@ -1,0 +1,76 @@
+{
+  "generated": "2025-11-19T00:40:12.352Z",
+  "count": 10,
+  "screenshots": [
+    {
+      "file": "001-Login.webp",
+      "original": "001-Login.png",
+      "alt": "001 Login",
+      "size": 14088,
+      "originalSize": 31286
+    },
+    {
+      "file": "002-dashboard.webp",
+      "original": "002-dashboard.png",
+      "alt": "002 Dashboard",
+      "size": 39012,
+      "originalSize": 67959
+    },
+    {
+      "file": "003-sidebar.webp",
+      "original": "003-sidebar.png",
+      "alt": "003 Sidebar",
+      "size": 32122,
+      "originalSize": 67131
+    },
+    {
+      "file": "004-network.webp",
+      "original": "004-network.png",
+      "alt": "004 Network",
+      "size": 47742,
+      "originalSize": 73095
+    },
+    {
+      "file": "005-devices.webp",
+      "original": "005-devices.png",
+      "alt": "005 Devices",
+      "size": 41348,
+      "originalSize": 70318
+    },
+    {
+      "file": "006-device-usage.webp",
+      "original": "006-device-usage.png",
+      "alt": "006 Device Usage",
+      "size": 32784,
+      "originalSize": 56631
+    },
+    {
+      "file": "007-device-usage-2.webp",
+      "original": "007-device-usage-2.png",
+      "alt": "007 Device Usage 2",
+      "size": 47822,
+      "originalSize": 72550
+    },
+    {
+      "file": "008-system.webp",
+      "original": "008-system.png",
+      "alt": "008 System",
+      "size": 46248,
+      "originalSize": 65183
+    },
+    {
+      "file": "009-system-info.webp",
+      "original": "009-system-info.png",
+      "alt": "009 System Info",
+      "size": 45872,
+      "originalSize": 60342
+    },
+    {
+      "file": "010-light.webp",
+      "original": "010-light.png",
+      "alt": "010 Light",
+      "size": 39664,
+      "originalSize": 69130
+    }
+  ]
+}

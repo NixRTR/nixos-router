@@ -362,7 +362,16 @@ in
               add_header Cache-Control "public, immutable";
             '';
           };
-          
+
+          # Serve documentation screenshots (must come before /docs)
+          "/docs/screenshots" = {
+            root = "/var/lib/router-webui";
+            extraConfig = ''
+              expires 1y;
+              add_header Cache-Control "public, immutable";
+            '';
+          };
+
           # Serve documentation site (must come before /)
           "/docs" = {
             root = "/var/lib/router-webui";

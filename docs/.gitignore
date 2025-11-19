@@ -11,6 +11,9 @@ node_modules
 dist-ssr
 *.local
 
+# Generated WebP images (converted from originals at build time)
+public/screenshots/*.webp
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

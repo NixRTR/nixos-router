@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/generate-screenshots-manifest.js",
     "build": "tsc && vite build",
     "postbuild": "node scripts/copy-404.js",
     "preview": "vite preview",
@@ -31,6 +32,7 @@
     "eslint-plugin-react-refresh": "^0.4.5",
     "flowbite-typography": "^1.0.0",
     "postcss": "^8.4.32",
+    "sharp": "^0.33.0",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.3.3",
     "vite": "^7.2.2"
