@@ -188,49 +188,158 @@ async def _run_speedtest_async(db: AsyncSession):
         _speedtest_status["is_running"] = True
         _speedtest_status["progress"] = 0.0
         _speedtest_status["current_phase"] = "ping"
+        _speedtest_status["ping_ms"] = None
+        _speedtest_status["download_mbps"] = None
+        _speedtest_status["upload_mbps"] = None
         
         # Run speedtest - use SPEEDTEST_BIN env var if available, otherwise try "speedtest" in PATH
+        # Remove --simple to get verbose output that we can parse in real-time
         speedtest_bin = os.environ.get("SPEEDTEST_BIN", "speedtest")
+        # Create environment with unbuffered output
+        env = dict(os.environ)
+        env["PYTHONUNBUFFERED"] = "1"
         process = await asyncio.create_subprocess_exec(
             speedtest_bin,
-            "--simple",
             "--secure",
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
+            env=env,
         )
         
-        stdout, stderr = await process.communicate()
-        
-        if process.returncode != 0:
-            error_msg = stderr.decode() if stderr else "Unknown error"
-            raise Exception(f"Speedtest failed: {error_msg}")
-        
-        output = stdout.decode()
-        
-        # Parse output (format: "Ping: X ms\nDownload: X Mbit/s\nUpload: X Mbit/s")
-        lines = output.strip().split("\n")
+        # Read output line by line in real-time
         ping_ms = None
         download_mbps = None
         upload_mbps = None
+        output_lines = []
+        in_download = False
+        in_upload = False
         
-        for line in lines:
-            if line.startswith("Ping:"):
-                ping_ms = float(line.split()[1])
-                _speedtest_status["ping_ms"] = ping_ms
-                _speedtest_status["progress"] = 33.0
-            elif line.startswith("Download:"):
-                download_mbps = float(line.split()[1])
-                _speedtest_status["download_mbps"] = download_mbps
-                _speedtest_status["current_phase"] = "upload"
-                _speedtest_status["progress"] = 66.0
-            elif line.startswith("Upload:"):
-                upload_mbps = float(line.split()[1])
-                _speedtest_status["upload_mbps"] = upload_mbps
-                _speedtest_status["progress"] = 100.0
-                _speedtest_status["current_phase"] = "complete"
+        if process.stdout:
+            while True:
+                line = await process.stdout.readline()
+                if not line:
+                    break
+                
+                line_str = line.decode('utf-8', errors='ignore').strip()
+                if line_str:  # Only process non-empty lines
+                    output_lines.append(line_str)
+                    
+                    # Parse verbose output for real-time updates
+                    # Look for ping results
+                    if "Ping:" in line_str or "Latency:" in line_str:
+                        try:
+                            # Try to extract ping value (format varies)
+                            parts = line_str.split()
+                            for i, part in enumerate(parts):
+                                if part in ("Ping:", "Latency:") and i + 1 < len(parts):
+                                    ping_str = parts[i + 1].rstrip('ms')
+                                    ping_ms = float(ping_str)
+                                    _speedtest_status["ping_ms"] = ping_ms
+                                    _speedtest_status["progress"] = 10.0
+                                    _speedtest_status["current_phase"] = "download"
+                                    break
+                        except (ValueError, IndexError):
+                            pass
+                    
+                    # Look for download phase start
+                    if "download" in line_str.lower() and "testing" in line_str.lower():
+                        in_download = True
+                        _speedtest_status["current_phase"] = "download"
+                        _speedtest_status["progress"] = 20.0
+                    
+                    # Look for download speed updates (format: "Download: X.XX Mbit/s" or "X.XX Mbit/s")
+                    if in_download and ("Mbit/s" in line_str or "Mbps" in line_str):
+                        try:
+                            # Extract speed value
+                            parts = line_str.split()
+                            for part in parts:
+                                if "Mbit/s" in part or "Mbps" in part:
+                                    speed_str = part.replace("Mbit/s", "").replace("Mbps", "")
+                                    download_mbps = float(speed_str)
+                                    _speedtest_status["download_mbps"] = download_mbps
+                                    _speedtest_status["progress"] = 50.0
+                                    break
+                        except (ValueError, IndexError):
+                            pass
+                    
+                    # Look for upload phase start
+                    if "upload" in line_str.lower() and "testing" in line_str.lower():
+                        in_upload = True
+                        in_download = False
+                        _speedtest_status["current_phase"] = "upload"
+                        _speedtest_status["progress"] = 60.0
+                    
+                    # Look for upload speed updates
+                    if in_upload and ("Mbit/s" in line_str or "Mbps" in line_str):
+                        try:
+                            parts = line_str.split()
+                            for part in parts:
+                                if "Mbit/s" in part or "Mbps" in part:
+                                    speed_str = part.replace("Mbit/s", "").replace("Mbps", "")
+                                    upload_mbps = float(speed_str)
+                                    _speedtest_status["upload_mbps"] = upload_mbps
+                                    _speedtest_status["progress"] = 90.0
+                                    break
+                        except (ValueError, IndexError):
+                            pass
+                    
+                    # Also check for simple format (fallback)
+                    if line_str.startswith("Ping:"):
+                        try:
+                            ping_ms = float(line_str.split()[1])
+                            _speedtest_status["ping_ms"] = ping_ms
+                            _speedtest_status["progress"] = 10.0
+                            _speedtest_status["current_phase"] = "download"
+                        except (ValueError, IndexError):
+                            pass
+                    elif line_str.startswith("Download:"):
+                        try:
+                            download_mbps = float(line_str.split()[1])
+                            _speedtest_status["download_mbps"] = download_mbps
+                            _speedtest_status["progress"] = 50.0
+                            _speedtest_status["current_phase"] = "upload"
+                        except (ValueError, IndexError):
+                            pass
+                    elif line_str.startswith("Upload:"):
+                        try:
+                            upload_mbps = float(line_str.split()[1])
+                            _speedtest_status["upload_mbps"] = upload_mbps
+                            _speedtest_status["progress"] = 100.0
+                            _speedtest_status["current_phase"] = "complete"
+                        except (ValueError, IndexError):
+                            pass
+        
+        # Wait for process to complete
+        returncode = await process.wait()
+        
+        if returncode != 0:
+            error_output = "\n".join(output_lines)
+            raise Exception(f"Speedtest failed with return code {returncode}: {error_output}")
+        
+        # Final parse from output (in case we missed something)
+        output = "\n".join(output_lines)
+        for line in output_lines:
+            if line.startswith("Ping:") and ping_ms is None:
+                try:
+                    ping_ms = float(line.split()[1])
+                    _speedtest_status["ping_ms"] = ping_ms
+                except (ValueError, IndexError):
+                    pass
+            elif line.startswith("Download:") and download_mbps is None:
+                try:
+                    download_mbps = float(line.split()[1])
+                    _speedtest_status["download_mbps"] = download_mbps
+                except (ValueError, IndexError):
+                    pass
+            elif line.startswith("Upload:") and upload_mbps is None:
+                try:
+                    upload_mbps = float(line.split()[1])
+                    _speedtest_status["upload_mbps"] = upload_mbps
+                except (ValueError, IndexError):
+                    pass
         
         if ping_ms is None or download_mbps is None or upload_mbps is None:
-            raise Exception("Failed to parse speedtest output")
+            raise Exception(f"Failed to parse speedtest output. Got: ping={ping_ms}, download={download_mbps}, upload={upload_mbps}")
         
         # Store result in database
         db_result = SpeedtestResultDB(
