@@ -9,11 +9,11 @@ Welcome to the NixOS Router documentation. This guide will help you install, con
 
 ## Quick Links
 
-    - [Installation Guide](/installation) - Get started with installing the router
-    - [Upgrading Guide](/upgrading) - Learn how to upgrade your router
-    - [Verification](/verification) - Verify your router is working correctly
-    - [WebUI Documentation](/webui) - Learn about the web interface features
-    - [Configuration](/configuration) - Configure all aspects of your router
+- [Installation Guide](/installation) - Get started with installing the router
+- [Upgrading Guide](/upgrading) - Learn how to upgrade your router
+- [Verification](/verification) - Verify your router is working correctly
+- [WebUI Documentation](/webui) - Learn about the web interface features
+- [Configuration](/configuration) - Configure all aspects of your router
 
 ## Features
 
