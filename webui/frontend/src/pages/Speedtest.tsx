@@ -93,7 +93,7 @@ export function Speedtest() {
     navigate('/login');
   };
 
-  // Fetch chart data
+  // Fetch chart data and table data together
   useEffect(() => {
     const fetchChartData = async () => {
       if (!token) return;
@@ -114,13 +114,6 @@ export function Speedtest() {
       }
     };
     
-    fetchChartData();
-    const interval = setInterval(fetchChartData, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
-  }, [token, timeRangeHours]);
-
-  // Fetch table data
-  useEffect(() => {
     const fetchTableData = async () => {
       if (!token) return;
       
@@ -146,8 +139,16 @@ export function Speedtest() {
       }
     };
     
-    fetchTableData();
+    const refreshAll = async () => {
+      await Promise.all([fetchChartData(), fetchTableData()]);
+    };
+    
+    refreshAll();
+    const interval = setInterval(refreshAll, 30000); // Refresh every 30 seconds
+    return () => clearInterval(interval);
   }, [token, timeRangeHours, currentPage, pageSize]);
+
+  // Table data is now refreshed together with chart data in the chart useEffect above
 
   // Fetch last speedtest result
   useEffect(() => {
@@ -196,61 +197,48 @@ export function Speedtest() {
             
             // If test completed, refresh data and update last result
             if (!newStatus.is_running && status.is_running) {
-              // Refresh chart and table
-              const fetchChartData = async () => {
+              // Refresh chart, table, and last result
+              const refreshAllData = async () => {
                 try {
-                  const response = await fetch(`/api/speedtest/chart-data?hours=${timeRangeHours}`, {
+                  // Fetch chart data
+                  const chartResponse = await fetch(`/api/speedtest/chart-data?hours=${timeRangeHours}`, {
                     headers: { 'Authorization': `Bearer ${token}` },
                   });
-                  if (response.ok) {
-                    const data = await response.json();
-                    setChartData(data.data || []);
+                  if (chartResponse.ok) {
+                    const chartData = await chartResponse.json();
+                    setChartData(chartData.data || []);
                   }
-                } catch (error) {
-                  console.error('Error fetching chart data:', error);
-                }
-              };
-              
-              const fetchTableData = async () => {
-                try {
+                  
+                  // Fetch table data
                   const endTime = new Date();
                   const startTime = new Date(endTime.getTime() - timeRangeHours * 60 * 60 * 1000);
-                  const response = await fetch(
+                  const tableResponse = await fetch(
                     `/api/speedtest/history?start_time=${startTime.toISOString()}&end_time=${endTime.toISOString()}&page=${currentPage}&page_size=${pageSize}`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                   );
-                  if (response.ok) {
-                    const data: SpeedtestHistoryResponse = await response.json();
-                    setTableData(data);
+                  if (tableResponse.ok) {
+                    const tableData: SpeedtestHistoryResponse = await tableResponse.json();
+                    setTableData(tableData);
                   }
-                } catch (error) {
-                  console.error('Error fetching table data:', error);
-                }
-              };
-              
-              // Fetch and update last result
-              const fetchLastResult = async () => {
-                try {
-                  const endTime = new Date();
-                  const startTime = new Date(endTime.getTime() - 30 * 24 * 60 * 60 * 1000);
-                  const response = await fetch(
-                    `/api/speedtest/history?start_time=${startTime.toISOString()}&end_time=${endTime.toISOString()}&page=1&page_size=1`,
+                  
+                  // Fetch and update last result
+                  const lastResultResponse = await fetch(
+                    `/api/speedtest/history?start_time=${new Date(endTime.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()}&end_time=${endTime.toISOString()}&page=1&page_size=1`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                   );
-                  if (response.ok) {
-                    const data: SpeedtestHistoryResponse = await response.json();
-                    if (data.results && data.results.length > 0) {
-                      setLastResult(data.results[0]);
+                  if (lastResultResponse.ok) {
+                    const lastResultData: SpeedtestHistoryResponse = await lastResultResponse.json();
+                    if (lastResultData.results && lastResultData.results.length > 0) {
+                      setLastResult(lastResultData.results[0]);
                     }
                   }
                 } catch (error) {
-                  console.error('Error fetching last result:', error);
+                  console.error('Error refreshing data after speedtest completion:', error);
                 }
               };
               
-              fetchChartData();
-              fetchTableData();
-              fetchLastResult();
+              // Refresh all data immediately
+              refreshAllData();
             }
           }
         } catch (error) {
