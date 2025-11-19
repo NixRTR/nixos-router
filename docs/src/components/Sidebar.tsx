@@ -41,6 +41,22 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { path: '/upgrading', label: 'Upgrading' },
     { path: '/verification', label: 'Verification' },
     {
+      path: '/webui',
+      label: 'WebUI',
+      children: [
+        { path: '/webui', label: 'Overview' },
+        { path: '/webui/login', label: 'Login' },
+        { path: '/webui/navigation', label: 'Navigation' },
+        { path: '/webui/dashboard', label: 'Dashboard' },
+        { path: '/webui/network', label: 'Network' },
+        { path: '/webui/devices', label: 'Devices' },
+        { path: '/webui/device-usage', label: 'Device Usage' },
+        { path: '/webui/system', label: 'System' },
+        { path: '/webui/speedtest', label: 'Speedtest' },
+        { path: '/webui/system-info', label: 'System Info' },
+      ],
+    },
+    {
       path: '/configuration',
       label: 'Configuration',
       children: [

@@ -1,6 +1,6 @@
 {
-  "generated": "2025-11-19T04:43:48.749Z",
-  "count": 10,
+  "generated": "2025-11-19T06:53:05.723Z",
+  "count": 11,
   "screenshots": [
     {
       "file": "001-Login.webp",
@@ -20,8 +20,8 @@
       "file": "003-sidebar.webp",
       "original": "003-sidebar.png",
       "alt": "Sidebar",
-      "size": 28404,
-      "originalSize": 67131
+      "size": 27840,
+      "originalSize": 62042
     },
     {
       "file": "004-network.webp",
@@ -59,15 +59,22 @@
       "originalSize": 65183
     },
     {
-      "file": "009-system-info.webp",
-      "original": "009-system-info.png",
+      "file": "009-speedtest.webp",
+      "original": "009-speedtest.png",
+      "alt": "Speedtest",
+      "size": 38920,
+      "originalSize": 65290
+    },
+    {
+      "file": "010-system-info.webp",
+      "original": "010-system-info.png",
       "alt": "System Info",
       "size": 40140,
       "originalSize": 60620
     },
     {
-      "file": "010-dark-mode.webp",
-      "original": "010-dark-mode.png",
+      "file": "011-dark-mode.webp",
+      "original": "011-dark-mode.png",
       "alt": "Dark Mode",
       "size": 36984,
       "originalSize": 150887

@@ -8,6 +8,16 @@ const Installation = lazy(() => import('./pages/Installation').then(m => ({ defa
 const Upgrading = lazy(() => import('./pages/Upgrading').then(m => ({ default: m.Upgrading })));
 const Verification = lazy(() => import('./pages/Verification').then(m => ({ default: m.Verification })));
 const Configuration = lazy(() => import('./pages/Configuration').then(m => ({ default: m.Configuration })));
+const WebUIOverview = lazy(() => import('./pages/webui/Overview').then(m => ({ default: m.Overview })));
+const WebUILogin = lazy(() => import('./pages/webui/Login').then(m => ({ default: m.Login })));
+const WebUINavigation = lazy(() => import('./pages/webui/Navigation').then(m => ({ default: m.Navigation })));
+const WebUIDashboard = lazy(() => import('./pages/webui/Dashboard').then(m => ({ default: m.Dashboard })));
+const WebUINetwork = lazy(() => import('./pages/webui/Network').then(m => ({ default: m.Network })));
+const WebUIDevices = lazy(() => import('./pages/webui/Devices').then(m => ({ default: m.Devices })));
+const WebUIDeviceUsage = lazy(() => import('./pages/webui/DeviceUsage').then(m => ({ default: m.DeviceUsage })));
+const WebUISystem = lazy(() => import('./pages/webui/System').then(m => ({ default: m.System })));
+const WebUISpeedtest = lazy(() => import('./pages/webui/Speedtest').then(m => ({ default: m.Speedtest })));
+const WebUISystemInfo = lazy(() => import('./pages/webui/SystemInfo').then(m => ({ default: m.SystemInfo })));
 const SystemConfig = lazy(() => import('./pages/configuration/System').then(m => ({ default: m.SystemConfig })));
 const WanConfig = lazy(() => import('./pages/configuration/Wan').then(m => ({ default: m.WanConfig })));
 const LanBridgesConfig = lazy(() => import('./pages/configuration/LanBridges').then(m => ({ default: m.LanBridgesConfig })));
@@ -53,6 +63,16 @@ function App() {
             <Route path="/installation" element={<Installation />} />
             <Route path="/upgrading" element={<Upgrading />} />
             <Route path="/verification" element={<Verification />} />
+            <Route path="/webui" element={<WebUIOverview />} />
+            <Route path="/webui/login" element={<WebUILogin />} />
+            <Route path="/webui/navigation" element={<WebUINavigation />} />
+            <Route path="/webui/dashboard" element={<WebUIDashboard />} />
+            <Route path="/webui/network" element={<WebUINetwork />} />
+            <Route path="/webui/devices" element={<WebUIDevices />} />
+            <Route path="/webui/device-usage" element={<WebUIDeviceUsage />} />
+            <Route path="/webui/system" element={<WebUISystem />} />
+            <Route path="/webui/speedtest" element={<WebUISpeedtest />} />
+            <Route path="/webui/system-info" element={<WebUISystemInfo />} />
             <Route path="/configuration" element={<Configuration />} />
             <Route path="/configuration/system" element={<SystemConfig />} />
             <Route path="/configuration/wan" element={<WanConfig />} />
