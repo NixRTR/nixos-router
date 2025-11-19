@@ -7,7 +7,7 @@
     "dev": "vite",
     "prebuild": "node scripts/generate-screenshots-manifest.js",
     "build": "tsc && vite build",
-    "postbuild": "node scripts/copy-404.js",
+    "postbuild": "node scripts/copy-404.js && node scripts/cleanup-webp.js",
     "preview": "vite preview",
     "lint": "eslint ."
   },

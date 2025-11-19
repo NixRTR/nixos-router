@@ -15,7 +15,7 @@ const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif'];
 async function convertToWebP(inputPath, outputPath) {
   try {
     await sharp(inputPath)
-      .webp({ quality: 85, effort: 4 })
+      .webp({ quality: 80, effort: 4 }) // Reduced from 85 to 80 for smaller file size with minimal quality loss
       .toFile(outputPath);
     return true;
   } catch (error) {
@@ -65,15 +65,19 @@ try {
     
     const webpStats = statSync(webpPath);
     
+    // Generate description from filename: strip leading numbers, then convert to title case
+    // Examples: "010-dark-mode" → "Dark Mode", "007-device-usage" → "Device Usage"
+    let description = baseName
+      .replace(/^\d+-/, '') // Remove leading digits and dash (e.g., "010-")
+      .replace(/[-_]/g, ' ') // Replace hyphens and underscores with spaces
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+    
     images.push({
       file: webpFile, // Use WebP version
       original: file, // Keep reference to original
-      // Generate alt text from filename
-      alt: baseName
-        .replace(/[-_]/g, ' ')
-        .split(' ')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-        .join(' '),
+      alt: description, // Use description as alt text
       size: webpStats.size,
       originalSize: stats.size,
     });

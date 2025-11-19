@@ -315,6 +315,10 @@ in
     services.nginx = {
       enable = true;
       
+      # Enable gzip compression globally
+      recommendedGzipSettings = true;
+      recommendedOptimisation = true;
+      
       virtualHosts."router-webui" = {
         listen = [{
           addr = "0.0.0.0";
@@ -322,6 +326,33 @@ in
         }];
         
         root = "/var/lib/router-webui/frontend";
+        
+        # Additional gzip configuration for this virtual host
+        extraConfig = ''
+          # Enable gzip compression
+          gzip on;
+          gzip_vary on;
+          gzip_proxied any;
+          gzip_comp_level 6;
+          gzip_types
+            text/plain
+            text/css
+            text/xml
+            text/javascript
+            application/json
+            application/javascript
+            application/xml+rss
+            application/rss+xml
+            application/atom+xml
+            image/svg+xml
+            font/truetype
+            font/opentype
+            application/vnd.ms-fontobject
+            application/font-woff
+            application/font-woff2;
+          gzip_min_length 256;
+          gzip_disable "msie6";
+        '';
         
         locations = {
           # Proxy API requests to FastAPI backend (must come before /)

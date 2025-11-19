@@ -1,76 +1,76 @@
 {
-  "generated": "2025-11-19T00:40:12.352Z",
+  "generated": "2025-11-19T03:04:18.489Z",
   "count": 10,
   "screenshots": [
     {
       "file": "001-Login.webp",
       "original": "001-Login.png",
-      "alt": "001 Login",
-      "size": 14088,
+      "alt": "Login",
+      "size": 12990,
       "originalSize": 31286
     },
     {
       "file": "002-dashboard.webp",
       "original": "002-dashboard.png",
-      "alt": "002 Dashboard",
-      "size": 39012,
+      "alt": "Dashboard",
+      "size": 34046,
       "originalSize": 67959
     },
     {
       "file": "003-sidebar.webp",
       "original": "003-sidebar.png",
-      "alt": "003 Sidebar",
-      "size": 32122,
+      "alt": "Sidebar",
+      "size": 28404,
       "originalSize": 67131
     },
     {
       "file": "004-network.webp",
       "original": "004-network.png",
-      "alt": "004 Network",
-      "size": 47742,
+      "alt": "Network",
+      "size": 42080,
       "originalSize": 73095
     },
     {
       "file": "005-devices.webp",
       "original": "005-devices.png",
-      "alt": "005 Devices",
-      "size": 41348,
+      "alt": "Devices",
+      "size": 36230,
       "originalSize": 70318
     },
     {
       "file": "006-device-usage.webp",
       "original": "006-device-usage.png",
-      "alt": "006 Device Usage",
-      "size": 32784,
+      "alt": "Device Usage",
+      "size": 29102,
       "originalSize": 56631
     },
     {
       "file": "007-device-usage-2.webp",
       "original": "007-device-usage-2.png",
-      "alt": "007 Device Usage 2",
-      "size": 47822,
+      "alt": "Device Usage 2",
+      "size": 42268,
       "originalSize": 72550
     },
     {
       "file": "008-system.webp",
       "original": "008-system.png",
-      "alt": "008 System",
-      "size": 46248,
+      "alt": "System",
+      "size": 40932,
       "originalSize": 65183
     },
     {
       "file": "009-system-info.webp",
       "original": "009-system-info.png",
-      "alt": "009 System Info",
-      "size": 45872,
-      "originalSize": 60342
+      "alt": "System Info",
+      "size": 40140,
+      "originalSize": 60620
     },
     {
-      "file": "010-light.webp",
-      "original": "010-light.png",
-      "alt": "010 Light",
-      "size": 39664,
-      "originalSize": 69130
+      "file": "010-dark-mode.webp",
+      "original": "010-dark-mode.png",
+      "alt": "Dark Mode",
+      "size": 36984,
+      "originalSize": 150887
     }
   ]
 }

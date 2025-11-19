@@ -33,14 +33,20 @@ export default defineConfig({
         assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
       },
     },
-    // Increase chunk size warning limit
-    chunkSizeWarningLimit: 1000,
+    // Lower chunk size warning to catch large bundles early
+    chunkSizeWarningLimit: 500,
     
     // Disable source maps for production
     sourcemap: false,
     
     // Optimize asset inlining threshold
     assetsInlineLimit: 4096, // 4KB - inline small assets
+    
+    // Enable tree shaking and dead code elimination
+    target: 'esnext',
+    modulePreload: {
+      polyfill: false, // Modern browsers support module preload
+    },
   },
   
   // Optimize dependencies
