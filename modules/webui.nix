@@ -280,6 +280,7 @@ in
         IP_BIN = "${pkgs.iproute2}/bin/ip";
         CONNTRACK_BIN = "${pkgs.conntrack-tools}/bin/conntrack";
         FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
+        SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
       };
       
       serviceConfig = {

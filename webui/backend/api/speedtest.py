@@ -12,6 +12,7 @@ import asyncio
 
 from ..database import get_db, SpeedtestResultDB
 from ..config import settings
+import os
 
 router = APIRouter(prefix="/api/speedtest", tags=["speedtest"])
 
@@ -188,9 +189,10 @@ async def _run_speedtest_async(db: AsyncSession):
         _speedtest_status["progress"] = 0.0
         _speedtest_status["current_phase"] = "ping"
         
-        # Run speedtest
+        # Run speedtest - use SPEEDTEST_BIN env var if available, otherwise try "speedtest" in PATH
+        speedtest_bin = os.environ.get("SPEEDTEST_BIN", "speedtest")
         process = await asyncio.create_subprocess_exec(
-            "speedtest",
+            speedtest_bin,
             "--simple",
             "--secure",
             stdout=asyncio.subprocess.PIPE,
