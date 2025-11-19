@@ -404,7 +404,10 @@ async def trigger_speedtest(db: AsyncSession = Depends(get_db)):
     if _speedtest_status["is_running"]:
         raise HTTPException(status_code=409, detail="Speedtest is already running")
     
-    # Reset status
+    # Reset all status values to None to show "--" in UI
+    _speedtest_status["is_running"] = True
+    _speedtest_status["progress"] = 0.0
+    _speedtest_status["current_phase"] = "starting"
     _speedtest_status["download_mbps"] = None
     _speedtest_status["upload_mbps"] = None
     _speedtest_status["ping_ms"] = None

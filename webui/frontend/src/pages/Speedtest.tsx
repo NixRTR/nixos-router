@@ -284,8 +284,15 @@ export function Speedtest() {
       });
       
       if (response.ok) {
-        // Start polling status
-        setStatus({ is_running: true, progress: 0 });
+        // Reset status to show "--" for all values and start pulsing
+        setStatus({ 
+          is_running: true, 
+          progress: 0,
+          current_phase: 'starting',
+          download_mbps: undefined,
+          upload_mbps: undefined,
+          ping_ms: undefined,
+        });
       }
     } catch (error) {
       console.error('Error triggering speedtest:', error);
@@ -352,19 +359,19 @@ export function Speedtest() {
                   </p>
                 )}
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-6">
                   {/* Download */}
                   <div className="text-center">
                     <div className="flex items-center justify-center gap-2 mb-2">
                       <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Download</span>
                       <HiArrowDown 
                         className={`w-5 h-5 text-blue-600 dark:text-blue-400 ${
-                          status.is_running && status.current_phase === 'download' 
+                          status.is_running && !status.download_mbps 
                             ? 'animate-pulse drop-shadow-lg' 
                             : ''
                         }`}
                         style={
-                          status.is_running && status.current_phase === 'download'
+                          status.is_running && !status.download_mbps
                             ? {
                                 filter: 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.8))',
                                 animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
@@ -374,20 +381,20 @@ export function Speedtest() {
                       />
                     </div>
                     <div className={`text-5xl font-bold text-blue-600 dark:text-blue-400 ${
-                      status.is_running && status.current_phase === 'download' 
+                      status.is_running && !status.download_mbps 
                         ? 'drop-shadow-lg' 
                         : ''
                     }`}
                     style={
-                      status.is_running && status.current_phase === 'download'
+                      status.is_running && !status.download_mbps
                         ? {
                             filter: 'drop-shadow(0 0 12px rgba(59, 130, 246, 0.6))',
                             animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
                           }
                         : {}
                     }>
-                      {status.is_running && status.download_mbps 
-                        ? `${status.download_mbps.toFixed(2)}` 
+                      {status.is_running 
+                        ? (status.download_mbps ? `${status.download_mbps.toFixed(2)}` : '--')
                         : (lastResult ? `${lastResult.download_mbps.toFixed(2)}` : '--')}
                     </div>
                     <div className="text-lg text-gray-500 dark:text-gray-400 mt-1">Mbps</div>
@@ -399,12 +406,12 @@ export function Speedtest() {
                       <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Upload</span>
                       <HiArrowUp 
                         className={`w-5 h-5 text-green-600 dark:text-green-400 ${
-                          status.is_running && status.current_phase === 'upload' 
+                          status.is_running && !status.upload_mbps 
                             ? 'animate-pulse drop-shadow-lg' 
                             : ''
                         }`}
                         style={
-                          status.is_running && status.current_phase === 'upload'
+                          status.is_running && !status.upload_mbps
                             ? {
                                 filter: 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.8))',
                                 animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
@@ -414,20 +421,20 @@ export function Speedtest() {
                       />
                     </div>
                     <div className={`text-5xl font-bold text-green-600 dark:text-green-400 ${
-                      status.is_running && status.current_phase === 'upload' 
+                      status.is_running && !status.upload_mbps 
                         ? 'drop-shadow-lg' 
                         : ''
                     }`}
                     style={
-                      status.is_running && status.current_phase === 'upload'
+                      status.is_running && !status.upload_mbps
                         ? {
                             filter: 'drop-shadow(0 0 12px rgba(16, 185, 129, 0.6))',
                             animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
                           }
                         : {}
                     }>
-                      {status.is_running && status.upload_mbps 
-                        ? `${status.upload_mbps.toFixed(2)}` 
+                      {status.is_running 
+                        ? (status.upload_mbps ? `${status.upload_mbps.toFixed(2)}` : '--')
                         : (lastResult ? `${lastResult.upload_mbps.toFixed(2)}` : '--')}
                     </div>
                     <div className="text-lg text-gray-500 dark:text-gray-400 mt-1">Mbps</div>
@@ -436,9 +443,21 @@ export function Speedtest() {
                   {/* Ping */}
                   <div className="text-center">
                     <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Ping</div>
-                    <div className="text-5xl font-bold text-gray-700 dark:text-gray-300">
-                      {status.is_running && status.ping_ms 
-                        ? `${status.ping_ms.toFixed(2)}` 
+                    <div className={`text-5xl font-bold text-gray-700 dark:text-gray-300 ${
+                      status.is_running && !status.ping_ms 
+                        ? 'drop-shadow-lg' 
+                        : ''
+                    }`}
+                    style={
+                      status.is_running && !status.ping_ms
+                        ? {
+                            filter: 'drop-shadow(0 0 12px rgba(107, 114, 128, 0.6))',
+                            animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                          }
+                        : {}
+                    }>
+                      {status.is_running 
+                        ? (status.ping_ms ? `${status.ping_ms.toFixed(2)}` : '--')
                         : (lastResult ? `${lastResult.ping_ms.toFixed(2)}` : '--')}
                     </div>
                     <div className="text-lg text-gray-500 dark:text-gray-400 mt-1">ms</div>
