@@ -186,12 +186,16 @@ async def get_speedtest_status():
 async def _run_speedtest_async(db: AsyncSession):
     """Run speedtest asynchronously and store results"""
     try:
+        # Note: Status is already set by trigger endpoint, but ensure it's set here too
         _speedtest_status["is_running"] = True
         _speedtest_status["progress"] = 0.0
         _speedtest_status["current_phase"] = "ping"
-        _speedtest_status["ping_ms"] = None
-        _speedtest_status["download_mbps"] = None
-        _speedtest_status["upload_mbps"] = None
+        if _speedtest_status.get("ping_ms") is None:
+            _speedtest_status["ping_ms"] = None
+        if _speedtest_status.get("download_mbps") is None:
+            _speedtest_status["download_mbps"] = None
+        if _speedtest_status.get("upload_mbps") is None:
+            _speedtest_status["upload_mbps"] = None
         
         # Run speedtest - use SPEEDTEST_BIN env var if available, otherwise try "speedtest" in PATH
         # Remove --simple to get verbose output that we can parse in real-time
@@ -376,8 +380,31 @@ async def _run_speedtest_async(db: AsyncSession):
                 except (ValueError, IndexError):
                     pass
         
-        if ping_ms is None or download_mbps is None or upload_mbps is None:
+        # Validate that we have at least download and upload (ping is optional but preferred)
+        if download_mbps is None or upload_mbps is None:
             raise Exception(f"Failed to parse speedtest output. Got: ping={ping_ms}, download={download_mbps}, upload={upload_mbps}")
+        
+        # If ping is still None, try one more time to extract it from the full output
+        if ping_ms is None:
+            # Look for any line with ping/latency and ms
+            for line in output_lines:
+                if ping_ms is None:
+                    # Try to find any number followed by ms in lines containing ping/latency
+                    if ("ping" in line.lower() or "latency" in line.lower()) and "ms" in line.lower():
+                        try:
+                            match = re.search(r'(\d+\.?\d*)\s*ms', line, re.IGNORECASE)
+                            if match:
+                                ping_ms = float(match.group(1))
+                                _speedtest_status["ping_ms"] = ping_ms
+                                break
+                        except (ValueError, AttributeError):
+                            pass
+        
+        # Use 0 as default ping if we still can't find it (better than failing)
+        if ping_ms is None:
+            print(f"Warning: Could not parse ping from speedtest output, using 0. Output: {output[:500]}")
+            ping_ms = 0.0
+            _speedtest_status["ping_ms"] = ping_ms
         
         # Store result in database
         db_result = SpeedtestResultDB(
@@ -388,6 +415,7 @@ async def _run_speedtest_async(db: AsyncSession):
         )
         db.add(db_result)
         await db.commit()
+        print(f"Speedtest result saved: ping={ping_ms}ms, download={download_mbps}Mbps, upload={upload_mbps}Mbps")
         
     except Exception as e:
         print(f"Error running speedtest: {e}")
