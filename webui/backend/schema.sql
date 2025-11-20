@@ -185,6 +185,29 @@ CREATE TABLE IF NOT EXISTS speedtest_results (
 
 CREATE INDEX IF NOT EXISTS idx_speedtest_results_timestamp ON speedtest_results(timestamp DESC);
 
+-- CAKE traffic shaping statistics time-series
+CREATE TABLE IF NOT EXISTS cake_stats (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ NOT NULL,
+    interface VARCHAR(32) NOT NULL,
+    
+    -- Overall stats
+    rate_mbps FLOAT,              -- Priority layer bandwidth threshold
+    target_ms FLOAT,              -- AQM target delay
+    interval_ms FLOAT,            -- AQM interval
+    
+    -- Traffic class stats (stored as JSONB for flexibility)
+    classes JSONB,                -- { "bulk": { "pk_delay": ..., "av_delay": ..., "bytes": ..., "drops": ... }, ... }
+    
+    -- Hash statistics
+    way_inds BIGINT,              -- Indirect hits
+    way_miss BIGINT,              -- Hash misses  
+    way_cols BIGINT               -- Hash collisions
+);
+
+CREATE INDEX IF NOT EXISTS idx_cake_stats_interface_time ON cake_stats(interface, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_cake_stats_timestamp ON cake_stats(timestamp DESC);
+
 -- Create hypertable for time-series data (if using TimescaleDB extension)
 -- Uncomment if TimescaleDB is available:
 -- SELECT create_hypertable('system_metrics', 'timestamp', if_not_exists => TRUE);

@@ -6,6 +6,7 @@
 set -euo pipefail
 
 REPO_URL="https://github.com/beardedtek/nixos-router.git" # update if using a fork
+BRANCH="main"
 TARGET_DIR="/etc/nixos"
 
 RED='\033[0;31m'
@@ -30,6 +31,63 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+show_usage() {
+    cat << EOF
+NixOS Router Update Script
+Fetches the latest configuration from the repository and applies it
+
+Usage: $0 [OPTIONS]
+
+Options:
+  -h, --help          Show this help message and exit
+  -r, --repo-url URL  Override the repository URL
+                      Default: https://github.com/beardedtek/nixos-router.git
+  -b, --branch NAME   Override the git branch to use
+                      Default: main
+
+Examples:
+  $0                          # Update using default repository and main branch
+  $0 -r https://github.com/user/fork.git  # Use a different repository
+  $0 -b develop              # Use develop branch from default repository
+  $0 -r https://github.com/user/fork.git -b custom  # Use custom repo and branch
+
+EOF
+}
+
+parse_arguments() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_usage
+                exit 0
+                ;;
+            -r|--repo-url)
+                if [[ -z "${2:-}" ]]; then
+                    log_error "--repo-url requires a URL argument"
+                    show_usage
+                    exit 1
+                fi
+                REPO_URL="$2"
+                shift 2
+                ;;
+            -b|--branch)
+                if [[ -z "${2:-}" ]]; then
+                    log_error "--branch requires a branch name argument"
+                    show_usage
+                    exit 1
+                fi
+                BRANCH="$2"
+                shift 2
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                show_usage
+                exit 1
+                ;;
+        esac
+    done
+}
+
 require_root() {
     if [[ $EUID -ne 0 ]]; then
         log_error "This script must be run as root."
@@ -49,6 +107,7 @@ ensure_git() {
 
     log_info "git not found; dropping into nix shell (nixpkgs#git)"
     export NIX_SHELL_ACTIVE=1
+    # REPO_URL and BRANCH are already exported in main(), they'll be preserved
     exec nix --extra-experimental-features 'nix-command flakes' \
         shell nixpkgs#git --command "$0" "$@"
 }
@@ -68,7 +127,9 @@ sync_repository() {
     temp_dir=$(mktemp -d)
 
     log_info "Cloning repository into ${temp_dir}"
-    git clone --depth=1 "$REPO_URL" "${temp_dir}/repo" >/dev/null
+    log_info "Repository: ${REPO_URL}"
+    log_info "Branch: ${BRANCH}"
+    git clone --depth=1 --branch "$BRANCH" "$REPO_URL" "${temp_dir}/repo" >/dev/null
 
     log_info "Syncing repository into ${TARGET_DIR}"
     rsync -a \
@@ -132,15 +193,35 @@ check_config_structure() {
     
     if [[ ${#missing_sections[@]} -eq 0 ]]; then
         log_success "router-config.nix structure is complete"
-        return
+        
+        # Optional: Ask about CAKE if not present
+        # Check for cake configuration within the wan section
+        # Look for "cake" followed by "=" or "{" within the wan block
+        # Extract wan section (typically within 40 lines) and check for cake
+        local wan_section
+        wan_section=$(grep -A 40 "^[[:space:]]*wan[[:space:]]*=" "$config_file" 2>/dev/null || echo "")
+        if [[ -n "$wan_section" ]] && ! echo "$wan_section" | grep -qE "[[:space:]]*cake[[:space:]]*[={]"; then
+            echo
+            read -p "CAKE traffic shaping is not configured. Would you like to add it? [y/N]: " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                missing_sections+=("cake")
+            fi
+        fi
     fi
     
-    log_warning "Missing sections in router-config.nix: ${missing_sections[*]}"
-    echo
-    read -p "Would you like to add the missing sections now? [y/N]: " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Skipping structure update. You can add missing sections manually."
+    # Only prompt if there are actually missing sections
+    if [[ ${#missing_sections[@]} -gt 0 ]]; then
+        log_warning "Missing sections in router-config.nix: ${missing_sections[*]}"
+        echo
+        read -p "Would you like to add the missing sections now? [y/N]: " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Skipping structure update. You can add missing sections manually."
+            return
+        fi
+    else
+        log_success "All sections are present, no updates needed"
         return
     fi
     
@@ -193,6 +274,30 @@ check_config_structure() {
                 # Add minimal webui config
                 sed -i '$ i\  webui = { enable = true; port = 8080; collectionInterval = 2; database = { host = "localhost"; port = 5432; name = "router_webui"; user = "router_webui"; }; retentionDays = 30; };' "$config_file"
                 ;;
+            "cake")
+                log_info "Adding CAKE traffic shaping configuration..."
+                echo "CAKE aggressiveness levels:"
+                echo "  1) auto (monitors bandwidth and adjusts automatically) - Recommended"
+                echo "  2) conservative (minimal shaping, best for high-speed links)"
+                echo "  3) moderate (balanced latency/throughput)"
+                echo "  4) aggressive (maximum latency reduction, best for slower links)"
+                read -p "Select aggressiveness level (1-4) [1]: " cake_choice
+                case ${cake_choice:-1} in
+                    1) cake_aggressiveness="auto" ;;
+                    2) cake_aggressiveness="conservative" ;;
+                    3) cake_aggressiveness="moderate" ;;
+                    4) cake_aggressiveness="aggressive" ;;
+                    *) cake_aggressiveness="auto" ;;
+                esac
+                # Add cake section after wan interface line
+                sed -i "/^[[:space:]]*interface[[:space:]]*=/a\\
+    \\
+    # CAKE traffic shaping configuration\\
+    cake = {\\
+      enable = true;\\
+      aggressiveness = \"$cake_aggressiveness\";\\
+    };" "$config_file"
+                ;;
         esac
     done
     
@@ -206,6 +311,12 @@ apply_configuration() {
 }
 
 main() {
+    # Parse command-line arguments
+    parse_arguments "$@"
+    
+    # Export variables so they're preserved if ensure_git re-executes the script
+    export REPO_URL BRANCH
+    
     require_root
     ensure_git "$@"
 

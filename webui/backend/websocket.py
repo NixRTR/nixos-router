@@ -18,6 +18,9 @@ from .collectors.services import collect_service_statuses
 from .collectors.dns import collect_dns_stats
 from .collectors.client_bandwidth import collect_client_bandwidth
 from .collectors.client_connections import collect_client_connections
+from .collectors.cake import collect_cake_stats, cake_stats_to_dict
+from .utils.cake import is_cake_enabled
+from .database import CakeStatsDB
 from .config import settings
 
 
@@ -116,6 +119,11 @@ class ConnectionManager:
         # Collect client connections
         client_connections = collect_client_connections() if settings.bandwidth_collection_enabled else []
         
+        # Collect CAKE statistics if enabled
+        cake_stats = None
+        if is_cake_enabled()[0]:  # Check if CAKE is enabled
+            cake_stats = collect_cake_stats()
+        
         # Store in database asynchronously
         asyncio.create_task(self._store_metrics(
             system_metrics,
@@ -125,7 +133,8 @@ class ConnectionManager:
             disk_io,
             temperatures,
             client_bandwidth,
-            client_connections
+            client_connections,
+            cake_stats
         ))
         
         # Create snapshot for broadcast
@@ -149,7 +158,8 @@ class ConnectionManager:
         disk_io: List,
         temperatures: List,
         client_bandwidth: List[dict] = None,
-        client_connections: List[dict] = None
+        client_connections: List[dict] = None,
+        cake_stats = None
     ):
         """Store metrics in database
         
@@ -332,6 +342,23 @@ class ConnectionManager:
                             aggregation_level='raw'
                         )
                         session.add(conn_db)
+                
+                # Store CAKE statistics if available
+                if cake_stats:
+                    import json
+                    cake_dict = cake_stats_to_dict(cake_stats)
+                    cake_db = CakeStatsDB(
+                        timestamp=cake_stats.timestamp,
+                        interface=cake_stats.interface,
+                        rate_mbps=cake_stats.rate_mbps,
+                        target_ms=cake_stats.target_ms,
+                        interval_ms=cake_stats.interval_ms,
+                        classes=json.dumps(cake_dict['classes']),  # Store classes as JSON string
+                        way_inds=cake_stats.way_inds,
+                        way_miss=cake_stats.way_miss,
+                        way_cols=cake_stats.way_cols
+                    )
+                    session.add(cake_db)
                 
                 await session.commit()
                 

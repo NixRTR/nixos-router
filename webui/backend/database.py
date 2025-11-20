@@ -256,6 +256,33 @@ class SpeedtestResultDB(Base):
         Index('idx_speedtest_results_timestamp', 'timestamp', postgresql_using='btree'),
     )
 
+
+class CakeStatsDB(Base):
+    """CAKE traffic shaping statistics table"""
+    __tablename__ = "cake_stats"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    interface = Column(String(32), nullable=False)
+    
+    # Overall stats
+    rate_mbps = Column(Float)              # Priority layer bandwidth threshold
+    target_ms = Column(Float)              # AQM target delay
+    interval_ms = Column(Float)            # AQM interval
+    
+    # Traffic class stats (stored as JSONB for flexibility)
+    classes = Column(JSONB)                # { "bulk": { "pk_delay": ..., "av_delay": ..., "bytes": ..., "drops": ... }, ... }
+    
+    # Hash statistics
+    way_inds = Column(BigInteger)          # Indirect hits
+    way_miss = Column(BigInteger)          # Hash misses  
+    way_cols = Column(BigInteger)          # Hash collisions
+    
+    __table_args__ = (
+        Index('idx_cake_stats_interface_time', 'interface', 'timestamp', postgresql_using='btree'),
+        Index('idx_cake_stats_timestamp', 'timestamp', postgresql_using='btree'),
+    )
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting async database session"""
     async with AsyncSessionLocal() as session:

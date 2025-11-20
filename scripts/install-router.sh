@@ -60,6 +60,26 @@ if [[ "$WAN_TYPE" == "pppoe" ]]; then
     echo
 fi
 
+# CAKE traffic shaping configuration
+echo
+echo "CAKE Traffic Shaping Configuration:"
+echo "CAKE (Common Applications Kept Enhanced) reduces bufferbloat and improves latency"
+echo "Options:"
+echo "  1) Disabled (no traffic shaping)"
+echo "  2) Auto (monitors bandwidth and adjusts automatically) - Recommended"
+echo "  3) Conservative (minimal shaping, best for high-speed links)"
+echo "  4) Moderate (balanced latency/throughput)"
+echo "  5) Aggressive (maximum latency reduction, best for slower links)"
+read -p "Enable CAKE traffic shaping? (1-5) [1]: " CAKE_CHOICE
+case ${CAKE_CHOICE:-1} in
+    1) CAKE_ENABLE="false"; CAKE_AGGRESSIVENESS="auto" ;;
+    2) CAKE_ENABLE="true"; CAKE_AGGRESSIVENESS="auto" ;;
+    3) CAKE_ENABLE="true"; CAKE_AGGRESSIVENESS="conservative" ;;
+    4) CAKE_ENABLE="true"; CAKE_AGGRESSIVENESS="moderate" ;;
+    5) CAKE_ENABLE="true"; CAKE_AGGRESSIVENESS="aggressive" ;;
+    *) CAKE_ENABLE="false"; CAKE_AGGRESSIVENESS="auto" ;;
+esac
+
 # Collect user password
 read -s -p "Enter password for routeradmin user: " USER_PASSWORD
 echo
@@ -383,6 +403,21 @@ setup_router_config() {
   wan = {
     type = "$WAN_TYPE";  # "dhcp" or "pppoe"
     interface = "$WAN_INTERFACE";
+EOF
+
+    # Add CAKE configuration if enabled
+    if [[ "$CAKE_ENABLE" == "true" ]]; then
+        cat >> /mnt/etc/nixos/router-config.nix << EOF
+    
+    # CAKE traffic shaping configuration
+    cake = {
+      enable = true;
+      aggressiveness = "$CAKE_AGGRESSIVENESS";
+    };
+EOF
+    fi
+
+    cat >> /mnt/etc/nixos/router-config.nix << EOF
   };
 
   # LAN configuration - Single network
@@ -572,6 +607,21 @@ EOF
   wan = {
     type = "$WAN_TYPE";  # "dhcp" or "pppoe"
     interface = "$WAN_INTERFACE";
+EOF
+
+    # Add CAKE configuration if enabled (advanced mode)
+    if [[ "$CAKE_ENABLE" == "true" ]]; then
+        cat >> /mnt/etc/nixos/router-config.nix << EOF
+    
+    # CAKE traffic shaping configuration
+    cake = {
+      enable = true;
+      aggressiveness = "$CAKE_AGGRESSIVENESS";
+    };
+EOF
+    fi
+
+    cat >> /mnt/etc/nixos/router-config.nix << EOF
   };
 
   # LAN configuration - Multiple isolated networks
