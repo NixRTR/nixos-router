@@ -5,48 +5,10 @@ import subprocess
 import re
 import json
 import os
-import shutil
 from datetime import datetime, timezone
 from typing import Optional, Dict
 from ..models import CakeStats, CakeTrafficClass
 from ..utils.cake import get_wan_interface, is_cake_enabled
-
-
-def find_tc_binary() -> Optional[str]:
-    """Find tc binary path - Nix way (check env var, then PATH, then common locations)
-    
-    Returns:
-        Path to tc binary or None if not found
-    """
-    # Check environment variable first
-    env_path = os.environ.get("TC_BIN")
-    if env_path and os.path.isfile(env_path):
-        return env_path
-    
-    # Try to find in PATH
-    tc_path = shutil.which("tc")
-    if tc_path:
-        return tc_path
-    
-    # Check common Nix store locations
-    # In NixOS, iproute2 is typically in /run/current-system/sw/bin or /nix/store/.../bin
-    candidates = [
-        "/run/current-system/sw/bin/tc",
-        "/run/wrappers/bin/tc",
-        "/usr/bin/tc",
-        "/bin/tc",
-    ]
-    
-    # Also check if we're in a nix-shell environment
-    nix_profile = os.environ.get("NIX_PROFILES", "")
-    for profile in nix_profile.split():
-        candidates.append(f"{profile}/bin/tc")
-    
-    for path in candidates:
-        if os.path.isfile(path):
-            return path
-    
-    return None
 
 
 def parse_tc_cake_output(output: str, interface: str) -> Optional[CakeStats]:
@@ -205,11 +167,8 @@ def collect_cake_stats(interface: Optional[str] = None) -> Optional[CakeStats]:
         return None
     
     try:
-        # Find tc binary
-        tc_bin = find_tc_binary()
-        if tc_bin is None:
-            # tc not found, skip collection silently
-            return None
+        # Get tc binary path (from environment variable if set)
+        tc_bin = os.environ.get("TC_BIN", "tc")
         
         # Run tc command to get CAKE statistics
         result = subprocess.run(

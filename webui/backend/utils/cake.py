@@ -3,8 +3,18 @@ CAKE detection and WAN interface determination utilities
 """
 import subprocess
 import re
+import os
 from typing import Optional, Tuple
 from ..config import settings
+
+
+def _get_tc_binary() -> str:
+    """Get tc binary path from environment variable or default to 'tc'
+    
+    Returns:
+        Path to tc binary
+    """
+    return os.environ.get("TC_BIN", "tc")
 
 
 def get_wan_interface() -> Optional[str]:
@@ -35,13 +45,13 @@ def get_wan_interface() -> Optional[str]:
 
 
 def is_cake_service_enabled() -> bool:
-    """Check if cake-setup.service exists and is enabled
+    """Check if cake-setup.service exists and is active/enabled
     
     Returns:
-        True if service exists and is enabled, False otherwise
+        True if service exists and is active or enabled, False otherwise
     """
     try:
-        # Check if service exists and is enabled
+        # Check if service exists (doesn't matter if enabled, static, or indirect)
         result = subprocess.run(
             ['systemctl', 'is-enabled', 'cake-setup.service'],
             capture_output=True,
@@ -49,10 +59,20 @@ def is_cake_service_enabled() -> bool:
             timeout=5,
             check=False
         )
-        # Exit code 0 = enabled, 1 = disabled/static/indirect, 2+ = doesn't exist
+        # Exit code 0 = enabled/static/indirect, 1 = disabled, 2+ = doesn't exist
         if result.returncode == 0:
-            enabled_state = result.stdout.strip()
-            return enabled_state == 'enabled'
+            # Service exists - check if it's active
+            active_result = subprocess.run(
+                ['systemctl', 'is-active', 'cake-setup.service'],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False
+            )
+            if active_result.returncode == 0:
+                active_state = active_result.stdout.strip()
+                # Service is active if state is 'active' or 'activating'
+                return active_state in ('active', 'activating')
         return False
     except (subprocess.TimeoutExpired, subprocess.SubprocessError):
         return False
@@ -74,9 +94,12 @@ def is_cake_qdisc_configured(interface: Optional[str] = None) -> bool:
         return False
     
     try:
+        # Get tc binary path (from environment variable if set)
+        tc_bin = _get_tc_binary()
+        
         # Check if CAKE qdisc exists on root
         result = subprocess.run(
-            ['tc', 'qdisc', 'show', 'dev', interface, 'root'],
+            [tc_bin, 'qdisc', 'show', 'dev', interface, 'root'],
             capture_output=True,
             text=True,
             timeout=5,
