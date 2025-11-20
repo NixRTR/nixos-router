@@ -15,25 +15,27 @@ let
   cakeInterface = if wanType == "pppoe" then pppoeInterface else wanInterface;
   
   # Map aggressiveness levels to CAKE parameters
+  # Note: autorate-ingress measures ingress bandwidth to automatically tune egress shaping
+  # There is no autorate-egress parameter - autorate-ingress handles both directions
   cakeParams = {
     auto = {
       bandwidth = "unlimited";
-      extraParams = [ "autorate-ingress" "autorate-egress" ];
+      extraParams = [ "autorate-ingress" ];
       aqm = null;  # Auto-tuned by CAKE
     };
     conservative = {
       bandwidth = "unlimited";  # Will use autorate to detect
-      extraParams = [ "autorate-ingress" "autorate-egress" ];
+      extraParams = [ "autorate-ingress" ];
       aqm = null;  # Uses CAKE defaults (target ~5ms, interval ~100ms)
     };
     moderate = {
       bandwidth = "unlimited";
-      extraParams = [ "autorate-ingress" "autorate-egress" ];
+      extraParams = [ "autorate-ingress" ];
       aqm = null;  # Uses CAKE defaults
     };
     aggressive = {
       bandwidth = "unlimited";
-      extraParams = [ "autorate-ingress" "autorate-egress" ];
+      extraParams = [ "autorate-ingress" ];
       aqm = "target 2ms interval 50ms";  # More aggressive AQM
     };
   };
@@ -116,14 +118,13 @@ in
         ${pkgs.iproute2}/bin/tc qdisc del dev ${cakeInterface} ingress 2>/dev/null || true
         
         # Apply CAKE for egress (upload) traffic on root qdisc
-        # autorate-ingress measures ingress bandwidth to help tune egress shaping
-        # autorate-egress automatically adjusts egress bandwidth based on actual link speed
+        # autorate-ingress measures ingress bandwidth to automatically tune egress shaping
         # Trim any extra spaces from parameters
         cake_root_params=$(echo "${cakeRootParams}" | xargs)
         ${pkgs.iproute2}/bin/tc qdisc add dev ${cakeInterface} root cake $cake_root_params
         
         # Apply CAKE for ingress (download) traffic if autorate-ingress is enabled
-        # This provides bidirectional shaping
+        # This provides bidirectional shaping with separate ingress qdisc
         if echo "${cakeRootParams}" | grep -q "autorate-ingress"; then
           cake_ingress_params=$(echo "${cakeIngressParams}" | xargs)
           ${pkgs.iproute2}/bin/tc qdisc add dev ${cakeInterface} ingress cake $cake_ingress_params
