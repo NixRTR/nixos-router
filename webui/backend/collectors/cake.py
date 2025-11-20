@@ -49,7 +49,8 @@ def parse_tc_cake_output(output: str, interface: str) -> Optional[CakeStats]:
             else:
                 rate_mbps = rate_value / 1000000  # Assume bits if no unit
         
-        # Parse target and interval
+        # Parse target and interval from table format
+        # These are in the table rows: "  target          334ms       20.9ms       41.8ms       83.6ms"
         target_match = re.search(r'target\s+([\d.]+)ms', output, re.IGNORECASE)
         if target_match:
             target_ms = float(target_match.group(1))
@@ -58,76 +59,138 @@ def parse_tc_cake_output(output: str, interface: str) -> Optional[CakeStats]:
         if interval_match:
             interval_ms = float(interval_match.group(1))
         
-        # Parse traffic class statistics
-        # CAKE has 4 traffic classes: Bulk, Best Effort, Video, Voice
-        # Example format:
-        #   0: Bulk          pkts: 12345  bytes: 12345678  drops: 0  marks: 0
-        #      pkts: 12345  bytes: 12345678  delays: 1.2ms avg, 2.3ms peak, 0.5ms sparse
-        class_names = ['bulk', 'best.*effort', 'video', 'voice']
-        class_labels = ['bulk', 'best-effort', 'video', 'voice']
+        # Parse traffic class statistics from table format
+        # CAKE uses a table with columns: Bulk | Best Effort | Video | Voice
+        # Example:
+        #                   Bulk  Best Effort        Video        Voice
+        #   pk_delay       4.42ms       15.4ms          2us       46.4ms
+        #   av_delay         76us       3.53ms          0us       8.93ms
+        #   sp_delay          9us          6us          0us        337us
+        #   pkts               16       585580            3         3654
+        #   bytes             640    131174092          188      1089043
+        #   drops               0         3110            0            0
+        #   marks               0            0            0            0
         
-        for class_name, class_label in zip(class_names, class_labels):
-            # Find class section
-            class_pattern = rf'(\d+):\s*{class_name}[^\n]*\n(.*?)(?=\n\s*\d+:|$)'
-            class_match = re.search(class_pattern, output, re.IGNORECASE | re.DOTALL)
+        # Find the table section (after the header row)
+        table_start = re.search(r'(?:Bulk|bulk)\s+(?:Best\s+Effort|best.*effort)\s+(?:Video|video)\s+(?:Voice|voice)', output, re.IGNORECASE)
+        if table_start:
+            # Extract table content starting from after the header
+            table_content = output[table_start.end():]
             
-            if class_match:
-                class_content = class_match.group(2)
+            # Helper function to parse a table row and extract column values
+            def parse_table_row(row_name: str, content: str) -> list:
+                """Parse a table row and return list of 4 values (one per traffic class)"""
+                pattern = rf'{row_name}\s+(.*?)(?=\n\s+\w|\Z)'
+                match = re.search(pattern, content, re.IGNORECASE | re.DOTALL)
+                if not match:
+                    return [None, None, None, None]
                 
-                # Parse packet and byte counts
-                pkts_match = re.search(r'pkts:\s*(\d+)', class_content, re.IGNORECASE)
-                bytes_match = re.search(r'bytes:\s*(\d+)', class_content, re.IGNORECASE)
-                drops_match = re.search(r'drops:\s*(\d+)', class_content, re.IGNORECASE)
-                marks_match = re.search(r'marks:\s*(\d+)', class_content, re.IGNORECASE)
+                row_text = match.group(1).strip()
+                # Extract values - they can be numbers with units (ms, us, bit, b)
+                # Pattern: number, optional decimal, optional unit
+                values = []
+                # Split by whitespace and extract numbers with units
+                parts = re.findall(r'([\d.]+)\s*(ms|us|ns|bit|b|pkt)?', row_text)
                 
-                # Parse delays
-                pk_delay_match = re.search(r'peak[,\s]+([\d.]+)ms', class_content, re.IGNORECASE)
-                av_delay_match = re.search(r'avg[,\s]+([\d.]+)ms', class_content, re.IGNORECASE)
-                sp_delay_match = re.search(r'sparse[,\s]+([\d.]+)ms', class_content, re.IGNORECASE)
+                for val_str, unit in parts[:4]:  # Take first 4 columns
+                    try:
+                        val = float(val_str)
+                        values.append((val, unit.lower() if unit else ''))
+                    except ValueError:
+                        values.append((None, ''))
                 
-                # Alternative delay format: delays: X.Xms avg, Y.Yms peak, Z.Zms sparse
-                delays_match = re.search(
-                    r'delays:\s*([\d.]+)ms\s+avg[,\s]+([\d.]+)ms\s+peak[,\s]+([\d.]+)ms\s+sparse',
-                    class_content,
-                    re.IGNORECASE
-                )
+                # Pad if needed
+                while len(values) < 4:
+                    values.append((None, ''))
                 
-                pkts = int(pkts_match.group(1)) if pkts_match else None
-                bytes_val = int(bytes_match.group(1)) if bytes_match else None
-                drops = int(drops_match.group(1)) if drops_match else None
-                marks = int(marks_match.group(1)) if marks_match else None
-                
-                if delays_match:
-                    av_delay = float(delays_match.group(1))
-                    pk_delay = float(delays_match.group(2))
-                    sp_delay = float(delays_match.group(3))
+                return values[:4]
+            
+            # Helper to convert delay values to milliseconds
+            def convert_to_ms(value: float, unit: str) -> Optional[float]:
+                """Convert delay value to milliseconds"""
+                if value is None:
+                    return None
+                unit_lower = unit.lower()
+                if unit_lower == 'us':
+                    return value / 1000.0
+                elif unit_lower == 'ns':
+                    return value / 1000000.0
+                elif unit_lower == 'ms' or unit_lower == '':
+                    return value
                 else:
-                    pk_delay = float(pk_delay_match.group(1)) if pk_delay_match else None
-                    av_delay = float(av_delay_match.group(1)) if av_delay_match else None
-                    sp_delay = float(sp_delay_match.group(1)) if sp_delay_match else None
+                    return value  # Default to assuming ms
+            
+            # Parse delay rows
+            pk_delay_row = parse_table_row('pk_delay', table_content)
+            av_delay_row = parse_table_row('av_delay', table_content)
+            sp_delay_row = parse_table_row('sp_delay', table_content)
+            
+            # Parse packet/byte/drop rows
+            pkts_row = parse_table_row('pkts', table_content)
+            bytes_row = parse_table_row('bytes', table_content)
+            drops_row = parse_table_row('drops', table_content)
+            marks_row = parse_table_row('marks', table_content)
+            
+            # Map columns to class labels: [Bulk, Best Effort, Video, Voice]
+            class_labels = ['bulk', 'best-effort', 'video', 'voice']
+            
+            for i, class_label in enumerate(class_labels):
+                # Get values for this column (index i)
+                pk_delay_val, pk_delay_unit = pk_delay_row[i] if i < len(pk_delay_row) else (None, '')
+                av_delay_val, av_delay_unit = av_delay_row[i] if i < len(av_delay_row) else (None, '')
+                sp_delay_val, sp_delay_unit = sp_delay_row[i] if i < len(sp_delay_row) else (None, '')
                 
-                classes[class_label] = CakeTrafficClass(
-                    pk_delay_ms=pk_delay,
-                    av_delay_ms=av_delay,
-                    sp_delay_ms=sp_delay,
-                    bytes=bytes_val,
-                    packets=pkts,
-                    drops=drops,
-                    marks=marks
-                )
-        
-        # Parse hash statistics
-        way_inds_match = re.search(r'way_inds\s*=\s*(\d+)', output, re.IGNORECASE)
-        if way_inds_match:
-            way_inds = int(way_inds_match.group(1))
-        
-        way_miss_match = re.search(r'way_miss\s*=\s*(\d+)', output, re.IGNORECASE)
-        if way_miss_match:
-            way_miss = int(way_miss_match.group(1))
-        
-        way_cols_match = re.search(r'way_cols\s*=\s*(\d+)', output, re.IGNORECASE)
-        if way_cols_match:
-            way_cols = int(way_cols_match.group(1))
+                # Convert delays to milliseconds
+                pk_delay = convert_to_ms(pk_delay_val, pk_delay_unit) if pk_delay_val is not None else None
+                av_delay = convert_to_ms(av_delay_val, av_delay_unit) if av_delay_val is not None else None
+                sp_delay = convert_to_ms(sp_delay_val, sp_delay_unit) if sp_delay_val is not None else None
+                
+                # Get packet/byte/drop/mark values (integers, no unit conversion needed)
+                pkts_val, _ = pkts_row[i] if i < len(pkts_row) else (None, '')
+                bytes_val, bytes_unit = bytes_row[i] if i < len(bytes_row) else (None, '')
+                drops_val, _ = drops_row[i] if i < len(drops_row) else (None, '')
+                marks_val, _ = marks_row[i] if i < len(marks_row) else (None, '')
+                
+                # Convert bytes (handle bit/b unit)
+                bytes_int = None
+                if bytes_val is not None:
+                    if bytes_unit == 'bit':
+                        bytes_int = int(bytes_val / 8)  # Convert bits to bytes
+                    else:
+                        bytes_int = int(bytes_val)
+                
+                pkts = int(pkts_val) if pkts_val is not None else None
+                drops = int(drops_val) if drops_val is not None else None
+                marks = int(marks_val) if marks_val is not None else None
+                
+                # Only create class entry if we have at least some data
+                if pkts is not None or bytes_int is not None or drops is not None or pk_delay is not None:
+                    classes[class_label] = CakeTrafficClass(
+                        pk_delay_ms=pk_delay,
+                        av_delay_ms=av_delay,
+                        sp_delay_ms=sp_delay,
+                        bytes=bytes_int,
+                        packets=pkts,
+                        drops=drops,
+                        marks=marks
+                    )
+            
+            # Parse hash statistics from table
+            way_inds_row = parse_table_row('way_inds', table_content)
+            way_miss_row = parse_table_row('way_miss', table_content)
+            way_cols_row = parse_table_row('way_cols', table_content)
+            
+            # Sum hash stats across all classes
+            way_inds_sum = sum(int(val) for val, _ in way_inds_row if val is not None)
+            way_miss_sum = sum(int(val) for val, _ in way_miss_row if val is not None)
+            way_cols_sum = sum(int(val) for val, _ in way_cols_row if val is not None)
+            
+            if way_inds_sum > 0:
+                way_inds = way_inds_sum
+            if way_miss_sum > 0:
+                way_miss = way_miss_sum
+            if way_cols_sum > 0:
+                way_cols = way_cols_sum
         
         return CakeStats(
             timestamp=datetime.now(timezone.utc),
@@ -142,6 +205,8 @@ def parse_tc_cake_output(output: str, interface: str) -> Optional[CakeStats]:
         )
     except Exception as e:
         print(f"Error parsing CAKE statistics: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -196,6 +261,8 @@ def collect_cake_stats(interface: Optional[str] = None) -> Optional[CakeStats]:
         return None
     except Exception as e:
         print(f"Unexpected error collecting CAKE statistics: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -230,4 +297,3 @@ def cake_stats_to_dict(cake_stats: CakeStats) -> Dict:
         'way_miss': cake_stats.way_miss,
         'way_cols': cake_stats.way_cols,
     }
-

@@ -87,8 +87,13 @@ export function TrafficShaping() {
       
       try {
         const status = await apiClient.getCakeStatus();
-        setCakeEnabled(status.enabled);
-        setCakeInterface(status.interface || null);
+        if (status && typeof status.enabled === 'boolean') {
+          setCakeEnabled(status.enabled);
+          setCakeInterface(status.interface || null);
+        } else {
+          console.error('Invalid CAKE status response:', status);
+          setCakeEnabled(false);
+        }
       } catch (error) {
         console.error('Failed to check CAKE status:', error);
         setCakeEnabled(false);
@@ -146,11 +151,14 @@ export function TrafficShaping() {
 
   // Calculate average latency
   const getAverageLatency = (): number | null => {
-    if (!currentStats?.classes) return null;
+    if (!currentStats?.classes || Object.keys(currentStats.classes).length === 0) {
+      // If no classes data, try to use target_ms as fallback
+      return currentStats?.target_ms || null;
+    }
     
     const delays: number[] = [];
     Object.values(currentStats.classes).forEach(cls => {
-      if (cls.av_delay_ms !== undefined) {
+      if (cls && cls.av_delay_ms !== undefined && cls.av_delay_ms !== null) {
         delays.push(cls.av_delay_ms);
       }
     });
@@ -173,13 +181,17 @@ export function TrafficShaping() {
 
   // Calculate total drops and marks
   const getTotalDropsMarks = (): { drops: number; marks: number } => {
-    if (!currentStats?.classes) return { drops: 0, marks: 0 };
+    if (!currentStats?.classes || Object.keys(currentStats.classes).length === 0) {
+      return { drops: 0, marks: 0 };
+    }
     
     let drops = 0;
     let marks = 0;
     Object.values(currentStats.classes).forEach(cls => {
-      if (cls.drops) drops += cls.drops;
-      if (cls.marks) marks += cls.marks;
+      if (cls) {
+        if (cls.drops !== undefined && cls.drops !== null) drops += cls.drops;
+        if (cls.marks !== undefined && cls.marks !== null) marks += cls.marks;
+      }
     });
     
     return { drops, marks };
@@ -187,9 +199,11 @@ export function TrafficShaping() {
 
   // Prepare chart data
   const prepareChartData = () => {
-    if (!history?.data) return [];
+    if (!history?.data || !Array.isArray(history.data)) return [];
     
-    return history.data.map(point => ({
+    return history.data
+      .filter(point => point && point.timestamp) // Filter out null/invalid points
+      .map(point => ({
       time: new Date(point.timestamp).toLocaleTimeString(),
       timestamp: point.timestamp,
       rate_mbps: point.rate_mbps || 0,
@@ -219,7 +233,9 @@ export function TrafficShaping() {
   const chartData = prepareChartData();
   const avgLatency = getAverageLatency();
   const totalThroughput = getTotalThroughput();
-  const { drops, marks } = getTotalDropsMarks();
+  const dropsMarks = getTotalDropsMarks();
+  const drops = dropsMarks?.drops || 0;
+  const marks = dropsMarks?.marks || 0;
 
   if (!cakeEnabled) {
     return (
@@ -332,7 +348,7 @@ export function TrafficShaping() {
                     <span className="text-gray-600 dark:text-gray-400">Status: </span>
                     <Badge color="success">Enabled</Badge>
                   </div>
-                  {currentStats && (
+                  {currentStats && currentStats.timestamp && (
                     <div>
                       <span className="text-gray-600 dark:text-gray-400">Last Updated: </span>
                       <span className="text-gray-900 dark:text-gray-100">
