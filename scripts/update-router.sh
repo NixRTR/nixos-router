@@ -195,7 +195,9 @@ check_config_structure() {
         log_success "router-config.nix structure is complete"
         
         # Optional: Ask about CAKE if not present
-        if ! grep -q "cake = {" "$config_file"; then
+        # Check for cake configuration (commented or uncommented) in the wan section
+        # Look for "cake" followed by "=" within the wan block (not just anywhere)
+        if ! grep -A 20 "^[[:space:]]*wan[[:space:]]*=" "$config_file" | grep -q "[[:space:]]*cake[[:space:]]*="; then
             echo
             read -p "CAKE traffic shaping is not configured. Would you like to add it? [y/N]: " -n 1 -r
             echo
