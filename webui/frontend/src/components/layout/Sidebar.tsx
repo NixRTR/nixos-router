@@ -13,6 +13,7 @@ import {
   HiInformationCircle,
   HiBookOpen,
   HiLightningBolt,
+  HiTrendingUp,
 } from 'react-icons/hi';
 import { FaGithub } from 'react-icons/fa';
 import { apiClient } from '../../api/client';
@@ -26,6 +27,7 @@ interface SidebarProps {
 export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const [githubStats, setGitHubStats] = useState<{ stars: number; forks: number } | null>(null);
+  const [cakeEnabled, setCakeEnabled] = useState(false);
 
   useEffect(() => {
     // Fetch GitHub stats on mount
@@ -40,6 +42,23 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
       }
     };
     fetchGitHubStats();
+  }, []);
+
+  useEffect(() => {
+    // Check CAKE status on mount
+    const checkCakeStatus = async () => {
+      try {
+        const status = await apiClient.getCakeStatus();
+        setCakeEnabled(status.enabled);
+      } catch (error) {
+        console.error('Failed to check CAKE status:', error);
+        setCakeEnabled(false);
+      }
+    };
+    checkCakeStatus();
+    // Re-check every minute
+    const interval = setInterval(checkCakeStatus, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleItemClick = () => {
@@ -130,6 +149,18 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
               >
                 Speedtest
               </FlowbiteSidebar.Item>
+
+              {cakeEnabled && (
+                <FlowbiteSidebar.Item
+                  as={Link}
+                  to="/traffic-shaping"
+                  icon={HiTrendingUp}
+                  active={location.pathname === '/traffic-shaping'}
+                  onClick={handleItemClick}
+                >
+                  Traffic Shaping
+                </FlowbiteSidebar.Item>
+              )}
             </FlowbiteSidebar.ItemGroup>
 
             <FlowbiteSidebar.ItemGroup>

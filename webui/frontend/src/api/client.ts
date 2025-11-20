@@ -200,6 +200,29 @@ class APIClient {
     const response = await this.client.get<{ content: string }>('/api/system/documentation');
     return response.data;
   }
+
+  // CAKE Traffic Shaping
+  async getCakeStatus(): Promise<{ enabled: boolean; interface?: string }> {
+    const response = await this.client.get<{ enabled: boolean; interface?: string }>('/api/cake/status');
+    return response.data;
+  }
+
+  async getCurrentCakeStats(): Promise<any> {
+    const response = await this.client.get('/api/cake/current');
+    return response.data;
+  }
+
+  async getCakeHistory(
+    range: string = '1h',
+    interface?: string
+  ): Promise<{ interface: string; data: any[] }> {
+    const params: Record<string, string> = { range };
+    if (interface) params.interface = interface;
+    const response = await this.client.get<{ interface: string; data: any[] }>('/api/cake/history', {
+      params,
+    });
+    return response.data;
+  }
 }
 
 export const apiClient = new APIClient();

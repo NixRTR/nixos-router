@@ -322,3 +322,51 @@ class ClientConnectionHistory(BaseModel):
     remote_port: int
     data: List[ClientConnectionDataPoint]
 
+
+class CakeTrafficClass(BaseModel):
+    """CAKE traffic class statistics"""
+    pk_delay_ms: Optional[float] = None  # Peak delay in milliseconds
+    av_delay_ms: Optional[float] = None  # Average delay in milliseconds
+    sp_delay_ms: Optional[float] = None  # Sparse delay in milliseconds
+    bytes: Optional[int] = None          # Total bytes
+    packets: Optional[int] = None        # Total packets
+    drops: Optional[int] = None          # Dropped packets
+    marks: Optional[int] = None          # ECN marks
+
+
+class CakeStats(BaseModel):
+    """CAKE traffic shaping statistics"""
+    timestamp: datetime
+    interface: str
+    rate_mbps: Optional[float] = None        # Priority layer bandwidth threshold
+    target_ms: Optional[float] = None        # AQM target delay
+    interval_ms: Optional[float] = None      # AQM interval
+    classes: Dict[str, CakeTrafficClass] = Field(default_factory=dict)  # Per-class stats
+    way_inds: Optional[int] = None           # Hash indirect hits
+    way_miss: Optional[int] = None           # Hash misses
+    way_cols: Optional[int] = None           # Hash collisions
+
+
+class CakeDataPoint(BaseModel):
+    """Single data point for CAKE statistics history"""
+    timestamp: datetime
+    rate_mbps: Optional[float] = None
+    target_ms: Optional[float] = None
+    interval_ms: Optional[float] = None
+    classes: Dict[str, CakeTrafficClass] = Field(default_factory=dict)
+    way_inds: Optional[int] = None
+    way_miss: Optional[int] = None
+    way_cols: Optional[int] = None
+
+
+class CakeStatsHistory(BaseModel):
+    """Historical CAKE statistics"""
+    interface: str
+    data: List[CakeDataPoint]
+
+
+class CakeStatus(BaseModel):
+    """CAKE enabled/disabled status"""
+    enabled: bool
+    interface: Optional[str] = None
+
