@@ -167,6 +167,8 @@ edit_cake_settings() {
     
     current_cake_enable=$(extract_block_value 'wan.cake' 'enable' 'false')
     current_cake_aggressiveness=$(extract_block_value 'wan.cake' 'aggressiveness' 'auto')
+    current_cake_upload_bw=$(extract_block_value 'wan.cake' 'uploadBandwidth' '')
+    current_cake_download_bw=$(extract_block_value 'wan.cake' 'downloadBandwidth' '')
     
     read -p "Enable CAKE traffic shaping? (y/N) [$( [[ $current_cake_enable == "true" ]] && echo Y || echo N )]: " cake_enable_input
     cake_enable=$( [[ ${cake_enable_input:-$( [[ $current_cake_enable == "true" ]] && echo y || echo n )} =~ ^[Yy]$ ]] && echo "true" || echo "false" )
@@ -195,12 +197,37 @@ edit_cake_settings() {
             4) cake_aggressiveness="aggressive" ;;
             *) cake_aggressiveness="auto" ;;
         esac
+        
+        echo
+        echo "Bandwidth Configuration (optional):"
+        echo "Set explicit bandwidth limits to improve CAKE performance."
+        echo "Recommend setting to ~95% of your actual speeds to account for overhead."
+        echo "Leave blank to use automatic bandwidth detection (autorate-ingress)."
+        echo
+        
+        read -p "Upload bandwidth (e.g., 190Mbit for 200Mbit connection) [$current_cake_upload_bw]: " cake_upload_bw_input
+        cake_upload_bw="${cake_upload_bw_input:-$current_cake_upload_bw}"
+        
+        read -p "Download bandwidth (e.g., 475Mbit for 500Mbit connection) [$current_cake_download_bw]: " cake_download_bw_input
+        cake_download_bw="${cake_download_bw_input:-$current_cake_download_bw}"
+        
+        # Clear if empty
+        if [[ -z "$cake_upload_bw" ]]; then
+            cake_upload_bw=""
+        fi
+        if [[ -z "$cake_download_bw" ]]; then
+            cake_download_bw=""
+        fi
     else
         cake_aggressiveness="$current_cake_aggressiveness"
+        cake_upload_bw=""
+        cake_download_bw=""
     fi
     
     CAKE_ENABLE="$cake_enable"
     CAKE_AGGRESSIVENESS="$cake_aggressiveness"
+    CAKE_UPLOAD_BW="$cake_upload_bw"
+    CAKE_DOWNLOAD_BW="$cake_download_bw"
     
     log_success "CAKE settings updated"
 }
@@ -393,6 +420,8 @@ main() {
     WAN_INTERFACE=""
     CAKE_ENABLE=""
     CAKE_AGGRESSIVENESS=""
+    CAKE_UPLOAD_BW=""
+    CAKE_DOWNLOAD_BW=""
     HOMELAB_IP=""
     HOMELAB_SUBNET=""
     HOMELAB_DHCP_ENABLE=""
@@ -490,6 +519,12 @@ main() {
                     echo "    enable = $CAKE_ENABLE;"
                     if [[ "$CAKE_ENABLE" == "true" ]]; then
                         echo "    aggressiveness = \"$CAKE_AGGRESSIVENESS\";"
+                        if [[ -n "$CAKE_UPLOAD_BW" ]]; then
+                            echo "    uploadBandwidth = \"$CAKE_UPLOAD_BW\";"
+                        fi
+                        if [[ -n "$CAKE_DOWNLOAD_BW" ]]; then
+                            echo "    downloadBandwidth = \"$CAKE_DOWNLOAD_BW\";"
+                        fi
                     fi
                     echo "  };"
                 fi

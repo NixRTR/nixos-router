@@ -14,28 +14,38 @@ let
   # WAN interface for CAKE (PPPoE uses logical interface, others use physical)
   cakeInterface = if wanType == "pppoe" then pppoeInterface else wanInterface;
   
+  # Extract explicit bandwidth settings if provided
+  # Format: "200Mbit", "500Mbit", "1000mbit", etc.
+  uploadBandwidth = cakeConfig.uploadBandwidth or null;
+  downloadBandwidth = cakeConfig.downloadBandwidth or null;
+  
+  # Determine if we should use autorate-ingress or explicit bandwidth
+  # If explicit bandwidth is set, use it; otherwise use autorate-ingress
+  useAutorate = uploadBandwidth == null && downloadBandwidth == null;
+  
   # Map aggressiveness levels to CAKE parameters
   # Note: autorate-ingress measures ingress bandwidth to automatically tune egress shaping
   # There is no autorate-egress parameter - autorate-ingress handles both directions
+  # If explicit bandwidth is provided, it takes precedence over autorate-ingress
   cakeParams = {
     auto = {
-      bandwidth = "unlimited";
-      extraParams = [ "autorate-ingress" ];
+      bandwidth = if uploadBandwidth != null then uploadBandwidth else "unlimited";
+      extraParams = if useAutorate then [ "autorate-ingress" ] else [];
       aqm = null;  # Auto-tuned by CAKE
     };
     conservative = {
-      bandwidth = "unlimited";  # Will use autorate to detect
-      extraParams = [ "autorate-ingress" ];
+      bandwidth = if uploadBandwidth != null then uploadBandwidth else "unlimited";
+      extraParams = if useAutorate then [ "autorate-ingress" ] else [];
       aqm = null;  # Uses CAKE defaults (target ~5ms, interval ~100ms)
     };
     moderate = {
-      bandwidth = "unlimited";
-      extraParams = [ "autorate-ingress" ];
+      bandwidth = if uploadBandwidth != null then uploadBandwidth else "unlimited";
+      extraParams = if useAutorate then [ "autorate-ingress" ] else [];
       aqm = null;  # Uses CAKE defaults
     };
     aggressive = {
-      bandwidth = "unlimited";
-      extraParams = [ "autorate-ingress" ];
+      bandwidth = if uploadBandwidth != null then uploadBandwidth else "unlimited";
+      extraParams = if useAutorate then [ "autorate-ingress" ] else [];
       aqm = "target 2ms interval 50ms";  # More aggressive AQM
     };
   };
@@ -46,6 +56,7 @@ let
   # Build CAKE command parameters as space-separated string
   # For root qdisc (egress/upload shaping)
   # Note: When bandwidth is "unlimited", omit the bandwidth parameter entirely
+  # If explicit bandwidth is set, use it; otherwise let autorate-ingress handle it
   cakeRootParams = 
     "diffserv4 nat wash " +
     (if params.bandwidth != null && params.bandwidth != "unlimited" then "bandwidth ${params.bandwidth} " else "") +

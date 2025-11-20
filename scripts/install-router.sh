@@ -72,13 +72,33 @@ echo "  4) Moderate (balanced latency/throughput)"
 echo "  5) Aggressive (maximum latency reduction, best for slower links)"
 read -p "Enable CAKE traffic shaping? (1-5) [1]: " CAKE_CHOICE
 case ${CAKE_CHOICE:-1} in
-    1) CAKE_ENABLE="false"; CAKE_AGGRESSIVENESS="auto" ;;
+    1) CAKE_ENABLE="false"; CAKE_AGGRESSIVENESS="auto"; CAKE_UPLOAD_BW=""; CAKE_DOWNLOAD_BW="" ;;
     2) CAKE_ENABLE="true"; CAKE_AGGRESSIVENESS="auto" ;;
     3) CAKE_ENABLE="true"; CAKE_AGGRESSIVENESS="conservative" ;;
     4) CAKE_ENABLE="true"; CAKE_AGGRESSIVENESS="moderate" ;;
     5) CAKE_ENABLE="true"; CAKE_AGGRESSIVENESS="aggressive" ;;
-    *) CAKE_ENABLE="false"; CAKE_AGGRESSIVENESS="auto" ;;
+    *) CAKE_ENABLE="false"; CAKE_AGGRESSIVENESS="auto"; CAKE_UPLOAD_BW=""; CAKE_DOWNLOAD_BW="" ;;
 esac
+
+# If CAKE is enabled, ask about explicit bandwidth limits
+if [[ "$CAKE_ENABLE" == "true" ]]; then
+    echo
+    echo "Bandwidth Configuration (optional):"
+    echo "You can set explicit bandwidth limits to improve CAKE performance."
+    echo "If not set, CAKE will automatically detect bandwidth using autorate-ingress."
+    echo "Recommend setting to ~95% of your actual speeds to account for overhead."
+    echo
+    read -p "Set explicit upload bandwidth? (e.g., 190Mbit for 200Mbit connection) [leave blank for auto-detect]: " CAKE_UPLOAD_BW
+    read -p "Set explicit download bandwidth? (e.g., 475Mbit for 500Mbit connection) [leave blank for auto-detect]: " CAKE_DOWNLOAD_BW
+    
+    # Clear if empty
+    if [[ -z "$CAKE_UPLOAD_BW" ]]; then
+        CAKE_UPLOAD_BW=""
+    fi
+    if [[ -z "$CAKE_DOWNLOAD_BW" ]]; then
+        CAKE_DOWNLOAD_BW=""
+    fi
+fi
 
 # Collect user password
 read -s -p "Enter password for routeradmin user: " USER_PASSWORD
@@ -413,8 +433,15 @@ EOF
     cake = {
       enable = true;
       aggressiveness = "$CAKE_AGGRESSIVENESS";
-    };
 EOF
+        # Add bandwidth settings if provided
+        if [[ -n "$CAKE_UPLOAD_BW" ]]; then
+            echo "      uploadBandwidth = \"$CAKE_UPLOAD_BW\";" >> /mnt/etc/nixos/router-config.nix
+        fi
+        if [[ -n "$CAKE_DOWNLOAD_BW" ]]; then
+            echo "      downloadBandwidth = \"$CAKE_DOWNLOAD_BW\";" >> /mnt/etc/nixos/router-config.nix
+        fi
+        echo "    };" >> /mnt/etc/nixos/router-config.nix
     fi
 
     cat >> /mnt/etc/nixos/router-config.nix << EOF
@@ -617,8 +644,15 @@ EOF
     cake = {
       enable = true;
       aggressiveness = "$CAKE_AGGRESSIVENESS";
-    };
 EOF
+        # Add bandwidth settings if provided
+        if [[ -n "$CAKE_UPLOAD_BW" ]]; then
+            echo "      uploadBandwidth = \"$CAKE_UPLOAD_BW\";" >> /mnt/etc/nixos/router-config.nix
+        fi
+        if [[ -n "$CAKE_DOWNLOAD_BW" ]]; then
+            echo "      downloadBandwidth = \"$CAKE_DOWNLOAD_BW\";" >> /mnt/etc/nixos/router-config.nix
+        fi
+        echo "    };" >> /mnt/etc/nixos/router-config.nix
     fi
 
     cat >> /mnt/etc/nixos/router-config.nix << EOF

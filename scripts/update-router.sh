@@ -289,14 +289,38 @@ check_config_structure() {
                     4) cake_aggressiveness="aggressive" ;;
                     *) cake_aggressiveness="auto" ;;
                 esac
-                # Add cake section after wan interface line
-                sed -i "/^[[:space:]]*interface[[:space:]]*=/a\\
-    \\
-    # CAKE traffic shaping configuration\\
+                
+                # Ask about bandwidth configuration
+                echo
+                echo "Bandwidth Configuration (optional):"
+                echo "Set explicit bandwidth limits to improve CAKE performance."
+                echo "Recommend setting to ~95% of your actual speeds to account for overhead."
+                echo "Leave blank to use automatic bandwidth detection (autorate-ingress)."
+                echo
+                read -p "Upload bandwidth (e.g., 190Mbit for 200Mbit connection) [leave blank for auto-detect]: " cake_upload_bw
+                read -p "Download bandwidth (e.g., 475Mbit for 500Mbit connection) [leave blank for auto-detect]: " cake_download_bw
+                
+                # Build cake section
+                cake_section="    # CAKE traffic shaping configuration\\
     cake = {\\
       enable = true;\\
-      aggressiveness = \"$cake_aggressiveness\";\\
-    };" "$config_file"
+      aggressiveness = \"$cake_aggressiveness\";"
+                
+                if [[ -n "$cake_upload_bw" ]]; then
+                    cake_section="$cake_section\\
+      uploadBandwidth = \"$cake_upload_bw\";"
+                fi
+                if [[ -n "$cake_download_bw" ]]; then
+                    cake_section="$cake_section\\
+      downloadBandwidth = \"$cake_download_bw\";"
+                fi
+                
+                cake_section="$cake_section\\
+    };"
+                
+                # Add cake section after wan interface line
+                sed -i "/^[[:space:]]*interface[[:space:]]*=/a\\
+$cake_section" "$config_file"
                 ;;
         esac
     done
