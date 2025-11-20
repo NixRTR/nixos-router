@@ -278,6 +278,7 @@ in
         # Provide absolute binary paths for commands used by backend
         NFT_BIN = "${pkgs.nftables}/bin/nft";
         IP_BIN = "${pkgs.iproute2}/bin/ip";
+        TC_BIN = "${pkgs.iproute2}/bin/tc";  # Traffic control (for CAKE statistics)
         CONNTRACK_BIN = "${pkgs.conntrack-tools}/bin/conntrack";
         FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
         SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
