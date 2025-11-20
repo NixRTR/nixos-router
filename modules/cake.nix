@@ -52,14 +52,6 @@ let
     (concatStringsSep " " params.extraParams) +
     (if params.aqm != null then " ${params.aqm}" else "");
   
-  # For ingress qdisc (download shaping) - same params but without autorate-ingress
-  # autorate-ingress is only for the root qdisc to measure ingress bandwidth
-  filteredExtraParams = filter (p: p != "autorate-ingress") params.extraParams;
-  cakeIngressParams = 
-    "diffserv4 nat " +
-    (if params.bandwidth != null && params.bandwidth != "unlimited" then "bandwidth ${params.bandwidth} " else "") +
-    (concatStringsSep " " filteredExtraParams) +
-    (if params.aqm != null then " ${params.aqm}" else "");
 
 in
 
@@ -115,32 +107,22 @@ in
         
         # Remove existing qdisc if any (ignore errors)
         ${pkgs.iproute2}/bin/tc qdisc del dev ${cakeInterface} root 2>/dev/null || true
-        ${pkgs.iproute2}/bin/tc qdisc del dev ${cakeInterface} ingress 2>/dev/null || true
         
         # Apply CAKE for egress (upload) traffic on root qdisc
         # autorate-ingress measures ingress bandwidth to automatically tune egress shaping
+        # CAKE on the root qdisc with autorate-ingress handles both directions
+        # Note: CAKE cannot be applied directly to ingress qdisc - use IFB for full bidirectional shaping if needed
         # Trim any extra spaces from parameters
         cake_root_params=$(echo "${cakeRootParams}" | xargs)
         ${pkgs.iproute2}/bin/tc qdisc add dev ${cakeInterface} root cake $cake_root_params
         
-        # Apply CAKE for ingress (download) traffic if autorate-ingress is enabled
-        # This provides bidirectional shaping with separate ingress qdisc
-        if echo "${cakeRootParams}" | grep -q "autorate-ingress"; then
-          cake_ingress_params=$(echo "${cakeIngressParams}" | xargs)
-          ${pkgs.iproute2}/bin/tc qdisc add dev ${cakeInterface} ingress cake $cake_ingress_params
-        fi
-        
-        echo "CAKE configured on ${cakeInterface}"
-        echo "  Aggressiveness: ${aggressiveness}"
-        echo "  Egress parameters: ${cakeRootParams}"
-        
         echo "CAKE configured on ${cakeInterface} with aggressiveness: ${aggressiveness}"
+        echo "  Parameters: $cake_root_params"
       '';
       
       preStop = ''
-        # Cleanup CAKE qdiscs on service stop
+        # Cleanup CAKE qdisc on service stop
         ${pkgs.iproute2}/bin/tc qdisc del dev ${cakeInterface} root 2>/dev/null || true
-        ${pkgs.iproute2}/bin/tc qdisc del dev ${cakeInterface} ingress 2>/dev/null || true
       '';
     };
   };
