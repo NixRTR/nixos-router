@@ -160,6 +160,51 @@ edit_wan_settings() {
     log_success "WAN settings updated"
 }
 
+edit_cake_settings() {
+    echo
+    echo "=== CAKE Traffic Shaping Configuration ==="
+    echo "CAKE (Common Applications Kept Enhanced) reduces bufferbloat and improves latency"
+    
+    current_cake_enable=$(extract_block_value 'wan.cake' 'enable' 'false')
+    current_cake_aggressiveness=$(extract_block_value 'wan.cake' 'aggressiveness' 'auto')
+    
+    read -p "Enable CAKE traffic shaping? (y/N) [$( [[ $current_cake_enable == "true" ]] && echo Y || echo N )]: " cake_enable_input
+    cake_enable=$( [[ ${cake_enable_input:-$( [[ $current_cake_enable == "true" ]] && echo y || echo n )} =~ ^[Yy]$ ]] && echo "true" || echo "false" )
+    
+    if [[ "$cake_enable" == "true" ]]; then
+        echo
+        echo "CAKE aggressiveness levels:"
+        echo "  1) auto - Monitors bandwidth and adjusts automatically (Recommended)"
+        echo "  2) conservative - Minimal shaping, best for high-speed links"
+        echo "  3) moderate - Balanced latency/throughput"
+        echo "  4) aggressive - Maximum latency reduction, best for slower links"
+        
+        default_aggressive=1
+        case "$current_cake_aggressiveness" in
+            "auto") default_aggressive=1 ;;
+            "conservative") default_aggressive=2 ;;
+            "moderate") default_aggressive=3 ;;
+            "aggressive") default_aggressive=4 ;;
+        esac
+        
+        read -p "Select aggressiveness level (1-4) [$default_aggressive]: " cake_aggressive_choice
+        case ${cake_aggressive_choice:-$default_aggressive} in
+            1) cake_aggressiveness="auto" ;;
+            2) cake_aggressiveness="conservative" ;;
+            3) cake_aggressiveness="moderate" ;;
+            4) cake_aggressiveness="aggressive" ;;
+            *) cake_aggressiveness="auto" ;;
+        esac
+    else
+        cake_aggressiveness="$current_cake_aggressiveness"
+    fi
+    
+    CAKE_ENABLE="$cake_enable"
+    CAKE_AGGRESSIVENESS="$cake_aggressiveness"
+    
+    log_success "CAKE settings updated"
+}
+
 edit_lan_bridges() {
     echo
     echo "=== LAN Bridge Configuration ==="
@@ -324,13 +369,14 @@ show_main_menu() {
     echo
     echo "1) System Settings (hostname, domain, timezone, nameservers)"
     echo "2) WAN Configuration"
-    echo "3) LAN Bridges (view only - edit manually)"
-    echo "4) Network Configuration (HOMELAB/LAN DHCP/DNS)"
-    echo "5) Port Forwarding (view only - edit manually)"
-    echo "6) Dynamic DNS"
-    echo "7) Web UI Configuration"
-    echo "8) View/Edit Secrets"
-    echo "9) Save and Rebuild"
+    echo "3) CAKE Traffic Shaping Configuration"
+    echo "4) LAN Bridges (view only - edit manually)"
+    echo "5) Network Configuration (HOMELAB/LAN DHCP/DNS)"
+    echo "6) Port Forwarding (view only - edit manually)"
+    echo "7) Dynamic DNS"
+    echo "8) Web UI Configuration"
+    echo "9) View/Edit Secrets"
+    echo "a) Save and Rebuild"
     echo "0) Exit without saving"
     echo
 }
@@ -345,6 +391,8 @@ main() {
     SYSTEM_NAMESERVERS=""
     WAN_TYPE=""
     WAN_INTERFACE=""
+    CAKE_ENABLE=""
+    CAKE_AGGRESSIVENESS=""
     HOMELAB_IP=""
     HOMELAB_SUBNET=""
     HOMELAB_DHCP_ENABLE=""
@@ -385,24 +433,28 @@ main() {
                 CHANGES_MADE=true
                 ;;
             3)
-                edit_lan_bridges
+                edit_cake_settings
+                CHANGES_MADE=true
                 ;;
             4)
+                edit_lan_bridges
+                ;;
+            5)
                 edit_network_config
                 CHANGES_MADE=true
                 ;;
-            5)
+            6)
                 edit_port_forwards
                 ;;
-            6)
+            7)
                 edit_dyndns
                 CHANGES_MADE=true
                 ;;
-            7)
+            8)
                 edit_webui
                 CHANGES_MADE=true
                 ;;
-            8)
+            9)
                 if [[ -f "$SECRETS_PATH" ]]; then
                     echo
                     read -p "View decrypted secrets? [y/N]: " view_secrets
@@ -418,7 +470,7 @@ main() {
                     log_warning "Secrets file not found at $SECRETS_PATH"
                 fi
                 ;;
-            9)
+            a|A|9)
                 if [[ "$CHANGES_MADE" == "false" ]]; then
                     log_info "No changes to save"
                     continue
@@ -428,6 +480,20 @@ main() {
                 log_info "The script has collected your changes, but complex structures"
                 log_info "like bridges, DNS records, and port forwards must be edited manually."
                 log_info "Please review the current values and update router-config.nix accordingly."
+                
+                # If CAKE settings were changed, add or update the cake section
+                if [[ -n "$CAKE_ENABLE" ]]; then
+                    log_info "Updating CAKE configuration in router-config.nix..."
+                    # This would need actual file editing logic - for now, just note it
+                    log_warning "CAKE settings need to be manually updated in router-config.nix:"
+                    echo "  cake = {"
+                    echo "    enable = $CAKE_ENABLE;"
+                    if [[ "$CAKE_ENABLE" == "true" ]]; then
+                        echo "    aggressiveness = \"$CAKE_AGGRESSIVENESS\";"
+                    fi
+                    echo "  };"
+                fi
+                
                 echo
                 read -p "Would you like to rebuild now? [y/N]: " rebuild_now
                 if [[ $rebuild_now =~ ^[Yy]$ ]]; then

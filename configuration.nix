@@ -41,6 +41,7 @@ in
     ./modules/dashboard.nix    # Monitoring (Grafana, Prometheus)
     ./modules/linode-dyndns.nix # Dynamic DNS updates
     ./modules/webui.nix        # Web UI monitoring dashboard
+    ./modules/cake.nix         # CAKE traffic shaping (bufferbloat mitigation)
     ];
 
   # Enable Nix flakes and modern command syntax

@@ -21,6 +21,18 @@
   wan = {
     type = "pppoe";  # "dhcp" or "pppoe"
     interface = "eno1";
+    
+    # CAKE traffic shaping configuration (optional)
+    # CAKE (Common Applications Kept Enhanced) is a comprehensive queue management system
+    # that reduces bufferbloat and improves latency under load
+    # cake = {
+    #   enable = true;  # Set to true to enable CAKE traffic shaping
+    #   aggressiveness = "auto";  # Options: "auto", "conservative", "moderate", "aggressive"
+    #   # auto: Monitors bandwidth and adjusts automatically (recommended)
+    #   # conservative: Minimal shaping, best for high-speed links
+    #   # moderate: Balanced latency/throughput
+    #   # aggressive: Maximum latency reduction, best for slower links
+    # };
   };
 
   # LAN configuration - Multiple isolated networks
