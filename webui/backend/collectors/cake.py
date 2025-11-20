@@ -33,10 +33,14 @@ def parse_tc_cake_output(output: str, interface: str) -> Optional[CakeStats]:
         
         # Parse overall stats from first line
         # Example: qdisc cake 8001: root refcnt 2 bandwidth 200Mbit diffserv4 nat wash ...
-        first_line_match = re.search(r'bandwidth\s+([\d.]+)([KMGT]?)bit', output, re.IGNORECASE)
-        if first_line_match:
-            rate_value = float(first_line_match.group(1))
-            rate_unit = first_line_match.group(2).upper()
+        # When using autorate-ingress, CAKE reports "capacity estimate: XXXbit" which is the detected bandwidth
+        # Prefer capacity estimate (detected) over configured bandwidth
+        
+        # First, try to find the capacity estimate (detected bandwidth with autorate-ingress)
+        capacity_match = re.search(r'capacity\s+estimate:\s+([\d.]+)([KMGT]?)bit', output, re.IGNORECASE)
+        if capacity_match:
+            rate_value = float(capacity_match.group(1))
+            rate_unit = capacity_match.group(2).upper() if capacity_match.group(2) else ''
             # Convert to Mbps
             if rate_unit == 'K':
                 rate_mbps = rate_value / 1000
@@ -48,6 +52,23 @@ def parse_tc_cake_output(output: str, interface: str) -> Optional[CakeStats]:
                 rate_mbps = rate_value * 1000000
             else:
                 rate_mbps = rate_value / 1000000  # Assume bits if no unit
+        else:
+            # Fall back to configured bandwidth if capacity estimate not found
+            first_line_match = re.search(r'bandwidth\s+([\d.]+)([KMGT]?)bit', output, re.IGNORECASE)
+            if first_line_match:
+                rate_value = float(first_line_match.group(1))
+                rate_unit = first_line_match.group(2).upper() if first_line_match.group(2) else ''
+                # Convert to Mbps
+                if rate_unit == 'K':
+                    rate_mbps = rate_value / 1000
+                elif rate_unit == 'M':
+                    rate_mbps = rate_value
+                elif rate_unit == 'G':
+                    rate_mbps = rate_value * 1000
+                elif rate_unit == 'T':
+                    rate_mbps = rate_value * 1000000
+                else:
+                    rate_mbps = rate_value / 1000000  # Assume bits if no unit
         
         # Parse target and interval from table format
         # These are in the table rows: "  target          334ms       20.9ms       41.8ms       83.6ms"
