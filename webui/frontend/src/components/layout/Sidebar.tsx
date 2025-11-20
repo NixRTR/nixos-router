@@ -48,10 +48,13 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
     // Check CAKE status on mount
     const checkCakeStatus = async () => {
       try {
+        console.log('Checking CAKE status...');
         const status = await apiClient.getCakeStatus();
+        console.log('CAKE status response:', status);
         setCakeEnabled(status.enabled);
       } catch (error) {
         console.error('Failed to check CAKE status:', error);
+        console.error('Error details:', error);
         setCakeEnabled(false);
       }
     };

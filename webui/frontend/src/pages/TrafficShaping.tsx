@@ -1,12 +1,12 @@
 /**
  * Traffic Shaping (CAKE) monitoring page
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Badge, Select, TextInput, Label, Accordion } from 'flowbite-react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  BarChart, Bar, AreaChart, Area
+  AreaChart, Area
 } from 'recharts';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
@@ -73,7 +73,6 @@ export function TrafficShaping() {
   // Historical data
   const [history, setHistory] = useState<CakeHistory | null>(null);
   
-  const lastStatsRef = useRef<string>('');
   const { connectionStatus } = useMetrics(token);
   
   const handleLogout = async () => {
@@ -133,7 +132,7 @@ export function TrafficShaping() {
           return;
         }
         
-        const data = await apiClient.getCakeHistory(range, cakeInterface || undefined);
+        const data = await apiClient.getCakeHistory(range, cakeInterface ?? undefined);
         setHistory(data);
       } catch (error) {
         console.error('Failed to fetch CAKE history:', error);

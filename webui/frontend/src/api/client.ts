@@ -214,10 +214,10 @@ class APIClient {
 
   async getCakeHistory(
     range: string = '1h',
-    interface?: string
+    interfaceName?: string
   ): Promise<{ interface: string; data: any[] }> {
     const params: Record<string, string> = { range };
-    if (interface) params.interface = interface;
+    if (interfaceName) params.interface = interfaceName;
     const response = await this.client.get<{ interface: string; data: any[] }>('/api/cake/history', {
       params,
     });
