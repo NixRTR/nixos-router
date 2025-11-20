@@ -43,9 +43,10 @@ let
   
   # Build CAKE command parameters as space-separated string
   # For root qdisc (egress/upload shaping)
+  # Note: When bandwidth is "unlimited", omit the bandwidth parameter entirely
   cakeRootParams = 
     "diffserv4 nat wash " +
-    (if params.bandwidth != null then "bandwidth ${params.bandwidth} " else "") +
+    (if params.bandwidth != null && params.bandwidth != "unlimited" then "bandwidth ${params.bandwidth} " else "") +
     (concatStringsSep " " params.extraParams) +
     (if params.aqm != null then " ${params.aqm}" else "");
   
@@ -54,7 +55,7 @@ let
   filteredExtraParams = filter (p: p != "autorate-ingress") params.extraParams;
   cakeIngressParams = 
     "diffserv4 nat " +
-    (if params.bandwidth != null then "bandwidth ${params.bandwidth} " else "") +
+    (if params.bandwidth != null && params.bandwidth != "unlimited" then "bandwidth ${params.bandwidth} " else "") +
     (concatStringsSep " " filteredExtraParams) +
     (if params.aqm != null then " ${params.aqm}" else "");
 
@@ -82,6 +83,8 @@ in
         RemainAfterExit = true;
         Restart = "on-failure";
         RestartSec = "10s";
+        # Ensure iproute2 is in PATH for ip and tc commands
+        PATH = "${pkgs.iproute2}/bin:${pkgs.coreutils}/bin";
       };
       
       script = ''
@@ -102,8 +105,10 @@ in
         sleep 2
         
         # Check if interface is up
-        if ! ip link show ${cakeInterface} | grep -q "state UP"; then
-          echo "WARNING: Interface ${cakeInterface} is not UP, but proceeding anyway"
+        # PPPoE interfaces show "state UNKNOWN" but have UP,LOWER_UP flags when active
+        # Check for UP flag in the link status instead of state
+        if ! ${pkgs.iproute2}/bin/ip link show ${cakeInterface} 2>/dev/null | grep -qE "<.*UP.*>"; then
+          echo "WARNING: Interface ${cakeInterface} does not appear to be UP, but proceeding anyway"
         fi
         
         # Remove existing qdisc if any (ignore errors)
@@ -113,12 +118,15 @@ in
         # Apply CAKE for egress (upload) traffic on root qdisc
         # autorate-ingress measures ingress bandwidth to help tune egress shaping
         # autorate-egress automatically adjusts egress bandwidth based on actual link speed
-        ${pkgs.iproute2}/bin/tc qdisc add dev ${cakeInterface} root cake ${cakeRootParams}
+        # Trim any extra spaces from parameters
+        cake_root_params=$(echo "${cakeRootParams}" | xargs)
+        ${pkgs.iproute2}/bin/tc qdisc add dev ${cakeInterface} root cake $cake_root_params
         
         # Apply CAKE for ingress (download) traffic if autorate-ingress is enabled
         # This provides bidirectional shaping
         if echo "${cakeRootParams}" | grep -q "autorate-ingress"; then
-          ${pkgs.iproute2}/bin/tc qdisc add dev ${cakeInterface} ingress cake ${cakeIngressParams}
+          cake_ingress_params=$(echo "${cakeIngressParams}" | xargs)
+          ${pkgs.iproute2}/bin/tc qdisc add dev ${cakeInterface} ingress cake $cake_ingress_params
         fi
         
         echo "CAKE configured on ${cakeInterface}"
