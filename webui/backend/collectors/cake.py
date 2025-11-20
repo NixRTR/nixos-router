@@ -80,21 +80,25 @@ def parse_tc_cake_output(output: str, interface: str) -> Optional[CakeStats]:
             # Helper function to parse a table row and extract column values
             def parse_table_row(row_name: str, content: str) -> list:
                 """Parse a table row and return list of 4 values (one per traffic class)"""
-                pattern = rf'{row_name}\s+(.*?)(?=\n\s+\w|\Z)'
-                match = re.search(pattern, content, re.IGNORECASE | re.DOTALL)
+                # Match row name followed by values (until next row or end)
+                # Pattern: row_name followed by whitespace, then values until newline with next row start
+                pattern = rf'{row_name}\s+([^\n]+)'
+                match = re.search(pattern, content, re.IGNORECASE)
                 if not match:
                     return [None, None, None, None]
                 
                 row_text = match.group(1).strip()
-                # Extract values - they can be numbers with units (ms, us, bit, b)
+                # Extract values - they can be numbers with units (ms, us, bit, b) or just numbers
                 # Pattern: number, optional decimal, optional unit
                 values = []
-                # Split by whitespace and extract numbers with units
+                # Extract all numbers (with or without units) from the row
+                # This regex finds numbers that might have units or are standalone
                 parts = re.findall(r'([\d.]+)\s*(ms|us|ns|bit|b|pkt)?', row_text)
                 
                 for val_str, unit in parts[:4]:  # Take first 4 columns
                     try:
                         val = float(val_str)
+                        # Store value and unit (even if unit is empty string)
                         values.append((val, unit.lower() if unit else ''))
                     except ValueError:
                         values.append((None, ''))
@@ -180,17 +184,26 @@ def parse_tc_cake_output(output: str, interface: str) -> Optional[CakeStats]:
             way_miss_row = parse_table_row('way_miss', table_content)
             way_cols_row = parse_table_row('way_cols', table_content)
             
-            # Sum hash stats across all classes
-            way_inds_sum = sum(int(val) for val, _ in way_inds_row if val is not None)
-            way_miss_sum = sum(int(val) for val, _ in way_miss_row if val is not None)
-            way_cols_sum = sum(int(val) for val, _ in way_cols_row if val is not None)
-            
-            if way_inds_sum > 0:
+            # Sum hash stats across all classes (0 is valid, so include all values)
+            # Check if row was found (not all None) before processing
+            if way_inds_row and any(val is not None for val, _ in way_inds_row):
+                way_inds_sum = sum(int(val) if val is not None else 0 for val, _ in way_inds_row)
                 way_inds = way_inds_sum
-            if way_miss_sum > 0:
+            elif way_inds_row and not any(val is not None for val, _ in way_inds_row):
+                # Row exists but all values are None - this shouldn't happen, but handle it
+                way_inds = 0
+            
+            if way_miss_row and any(val is not None for val, _ in way_miss_row):
+                way_miss_sum = sum(int(val) if val is not None else 0 for val, _ in way_miss_row)
                 way_miss = way_miss_sum
-            if way_cols_sum > 0:
-                way_cols = way_cols_sum
+            elif way_miss_row and not any(val is not None for val, _ in way_miss_row):
+                way_miss = 0
+            
+            if way_cols_row and any(val is not None for val, _ in way_cols_row):
+                way_cols_sum = sum(int(val) if val is not None else 0 for val, _ in way_cols_row)
+                way_cols = way_cols_sum  # 0 is valid, store it
+            elif way_cols_row and not any(val is not None for val, _ in way_cols_row):
+                way_cols = 0
         
         return CakeStats(
             timestamp=datetime.now(timezone.utc),

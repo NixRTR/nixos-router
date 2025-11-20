@@ -562,19 +562,19 @@ export function TrafficShaping() {
                         <div>
                           <p className="text-sm text-gray-600 dark:text-gray-400">Packets</p>
                           <p className="text-lg font-semibold">
-                            {classStats.packets !== undefined ? classStats.packets.toLocaleString() : '--'}
+                            {classStats.packets !== undefined && classStats.packets !== null ? classStats.packets.toLocaleString() : '--'}
                           </p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-600 dark:text-gray-400">Drops</p>
                           <p className="text-lg font-semibold text-red-600">
-                            {classStats.drops !== undefined ? classStats.drops.toLocaleString() : '--'}
+                            {classStats.drops !== undefined && classStats.drops !== null ? classStats.drops.toLocaleString() : '--'}
                           </p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-600 dark:text-gray-400">Marks</p>
                           <p className="text-lg font-semibold text-yellow-600">
-                            {classStats.marks !== undefined ? classStats.marks.toLocaleString() : '--'}
+                            {classStats.marks !== undefined && classStats.marks !== null ? classStats.marks.toLocaleString() : '--'}
                           </p>
                         </div>
                       </div>
@@ -586,30 +586,35 @@ export function TrafficShaping() {
           )}
 
           {/* Hash Performance */}
-          {currentStats && (currentStats.way_inds !== undefined || currentStats.way_miss !== undefined || currentStats.way_cols !== undefined) && (
+          {currentStats && (
+            (currentStats.way_inds !== undefined && currentStats.way_inds !== null) ||
+            (currentStats.way_miss !== undefined && currentStats.way_miss !== null) ||
+            (currentStats.way_cols !== undefined && currentStats.way_cols !== null)
+          ) && (
             <Card>
               <h3 className="text-lg font-semibold mb-4">Hash Performance</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="text-center">
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Indirect Hits</p>
                   <p className="text-2xl font-bold">
-                    {currentStats.way_inds !== undefined ? currentStats.way_inds.toLocaleString() : '--'}
+                    {currentStats.way_inds !== undefined && currentStats.way_inds !== null ? currentStats.way_inds.toLocaleString() : '--'}
                   </p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Misses</p>
                   <p className="text-2xl font-bold">
-                    {currentStats.way_miss !== undefined ? currentStats.way_miss.toLocaleString() : '--'}
+                    {currentStats.way_miss !== undefined && currentStats.way_miss !== null ? currentStats.way_miss.toLocaleString() : '--'}
                   </p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Collisions</p>
                   <p className="text-2xl font-bold">
-                    {currentStats.way_cols !== undefined ? currentStats.way_cols.toLocaleString() : '--'}
+                    {currentStats.way_cols !== undefined && currentStats.way_cols !== null ? currentStats.way_cols.toLocaleString() : '--'}
                   </p>
                 </div>
               </div>
-              {(currentStats.way_inds !== undefined && currentStats.way_miss !== undefined) && (
+              {(currentStats.way_inds !== undefined && currentStats.way_inds !== null && 
+                currentStats.way_miss !== undefined && currentStats.way_miss !== null) && (
                 <div className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
                   Hit Rate: {((currentStats.way_inds / (currentStats.way_inds + currentStats.way_miss)) * 100).toFixed(2)}%
                 </div>
