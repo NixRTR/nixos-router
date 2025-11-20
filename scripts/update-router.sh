@@ -195,9 +195,12 @@ check_config_structure() {
         log_success "router-config.nix structure is complete"
         
         # Optional: Ask about CAKE if not present
-        # Check for cake configuration (commented or uncommented) in the wan section
-        # Look for "cake" followed by "=" within the wan block (not just anywhere)
-        if ! grep -A 20 "^[[:space:]]*wan[[:space:]]*=" "$config_file" | grep -q "[[:space:]]*cake[[:space:]]*="; then
+        # Check for cake configuration within the wan section
+        # Look for "cake" followed by "=" or "{" within the wan block
+        # Extract wan section (typically within 40 lines) and check for cake
+        local wan_section
+        wan_section=$(grep -A 40 "^[[:space:]]*wan[[:space:]]*=" "$config_file" 2>/dev/null || echo "")
+        if [[ -n "$wan_section" ]] && ! echo "$wan_section" | grep -qE "[[:space:]]*cake[[:space:]]*[={]"; then
             echo
             read -p "CAKE traffic shaping is not configured. Would you like to add it? [y/N]: " -n 1 -r
             echo
@@ -207,12 +210,18 @@ check_config_structure() {
         fi
     fi
     
-    log_warning "Missing sections in router-config.nix: ${missing_sections[*]}"
-    echo
-    read -p "Would you like to add the missing sections now? [y/N]: " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Skipping structure update. You can add missing sections manually."
+    # Only prompt if there are actually missing sections
+    if [[ ${#missing_sections[@]} -gt 0 ]]; then
+        log_warning "Missing sections in router-config.nix: ${missing_sections[*]}"
+        echo
+        read -p "Would you like to add the missing sections now? [y/N]: " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Skipping structure update. You can add missing sections manually."
+            return
+        fi
+    else
+        log_success "All sections are present, no updates needed"
         return
     fi
     
