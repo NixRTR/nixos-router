@@ -7,12 +7,12 @@ import{j as e}from"./ui-vendor-CtbJYEGA.js";import{M as t}from"./MarkdownContent
 2. Re-run the script:
 
    \`\`\`bash
-   curl -fsSL https://beard.click/nixos-router > install.sh
-   chmod +x install.sh
-   sudo ./install.sh
+   curl -fsSL https://beard.click/nixos-router-update > update.sh
+   chmod +x update.sh
+   sudo ./update.sh
    \`\`\`
 
-   Choose the upgrade option when prompted. The script pulls the latest commits and rebuilds the system.
+   The script pulls the latest commits and rebuilds the system.
 
 ## With the ISO
 

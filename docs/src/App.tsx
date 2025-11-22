@@ -20,6 +20,7 @@ const WebUISpeedtest = lazy(() => import('./pages/webui/Speedtest').then(m => ({
 const WebUISystemInfo = lazy(() => import('./pages/webui/SystemInfo').then(m => ({ default: m.SystemInfo })));
 const SystemConfig = lazy(() => import('./pages/configuration/System').then(m => ({ default: m.SystemConfig })));
 const WanConfig = lazy(() => import('./pages/configuration/Wan').then(m => ({ default: m.WanConfig })));
+const CakeConfig = lazy(() => import('./pages/configuration/Cake').then(m => ({ default: m.CakeConfig })));
 const LanBridgesConfig = lazy(() => import('./pages/configuration/LanBridges').then(m => ({ default: m.LanBridgesConfig })));
 const HomelabConfig = lazy(() => import('./pages/configuration/Homelab').then(m => ({ default: m.HomelabConfig })));
 const LanConfig = lazy(() => import('./pages/configuration/Lan').then(m => ({ default: m.LanConfig })));
@@ -76,6 +77,7 @@ function App() {
             <Route path="/configuration" element={<Configuration />} />
             <Route path="/configuration/system" element={<SystemConfig />} />
             <Route path="/configuration/wan" element={<WanConfig />} />
+            <Route path="/configuration/cake" element={<CakeConfig />} />
             <Route path="/configuration/lan-bridges" element={<LanBridgesConfig />} />
             <Route path="/configuration/homelab" element={<HomelabConfig />} />
             <Route path="/configuration/lan" element={<LanConfig />} />
