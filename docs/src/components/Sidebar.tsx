@@ -44,6 +44,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       children: [
         { path: '/configuration/system', label: 'System' },
         { path: '/configuration/wan', label: 'WAN' },
+        { path: '/configuration/cake', label: 'CAKE' },
         { path: '/configuration/lan-bridges', label: 'LAN Bridges' },
         { path: '/configuration/homelab', label: 'Homelab' },
         { path: '/configuration/lan', label: 'LAN' },

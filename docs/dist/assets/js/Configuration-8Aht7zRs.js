@@ -6,6 +6,7 @@ This section covers all configuration options for the NixOS Router.
 
 - [System Configuration](/configuration/system) - Basic system settings
 - [WAN Configuration](/configuration/wan) - WAN interface and connection settings
+- [CAKE](/configuration/cake) - Traffic shaping and bufferbloat mitigation
 - [LAN Bridges](/configuration/lan-bridges) - LAN bridge configuration
 - [Homelab Network](/configuration/homelab) - Homelab network settings
 - [LAN Network](/configuration/lan) - LAN network settings
