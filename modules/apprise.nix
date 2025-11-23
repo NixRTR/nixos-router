@@ -19,13 +19,15 @@ let
         "mailto://${services.email.username}:${config.sops.placeholder."apprise-email-password"}@${services.email.smtpHost}:${toString (services.email.smtpPort or 587)}?to=${services.email.to}${fromParam}"
       else "";
       
-      # Home Assistant: hassio://token@host:port
+      # Home Assistant: hassio://host:port/token
+      # Format: hassio://host:port/long-lived-access-token
       homeAssistantUrl = if services.homeAssistant.enable or false then
         let
           host = services.homeAssistant.host;
           port = toString (services.homeAssistant.port or 8123);
+          protocol = if (services.homeAssistant.useHttps or false) then "hassios" else "hassio";
         in
-        "hassio://${config.sops.placeholder."apprise-homeassistant-token"}@${host}:${port}"
+        "${protocol}://${host}:${port}/${config.sops.placeholder."apprise-homeassistant-token"}"
       else "";
       
       # Discord: discord://webhook_id/webhook_token
