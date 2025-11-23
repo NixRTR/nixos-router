@@ -42,6 +42,7 @@ in
     ./modules/linode-dyndns.nix # Dynamic DNS updates
     ./modules/webui.nix        # Web UI monitoring dashboard
     ./modules/cake.nix         # CAKE traffic shaping (bufferbloat mitigation)
+    ./modules/apprise.nix      # Apprise API notification service
     ];
 
   # Enable Nix flakes and modern command syntax
@@ -157,6 +158,14 @@ in
       name = routerConfig.webui.database.name or "router_webui";
       user = routerConfig.webui.database.user or "router_webui";
     };
+  };
+
+  # Apprise API configuration (from router-config.nix)
+  services.apprise-api = lib.mkIf (routerConfig.apprise.enable or false) {
+    enable = true;
+    port = routerConfig.apprise.port or 8001;
+    attachSize = routerConfig.apprise.attachSize or 0;
+    attachmentsDir = routerConfig.apprise.attachmentsDir or null;
   };
 
   # Enable SSH for remote administration

@@ -191,6 +191,10 @@ check_config_structure() {
         missing_sections+=("webui")
     fi
     
+    if ! grep -q "^[[:space:]]*apprise[[:space:]]*=" "$config_file"; then
+        missing_sections+=("apprise")
+    fi
+    
     if [[ ${#missing_sections[@]} -eq 0 ]]; then
         log_success "router-config.nix structure is complete"
         
@@ -273,6 +277,11 @@ check_config_structure() {
             "webui")
                 # Add minimal webui config
                 sed -i '$ i\  webui = { enable = true; port = 8080; collectionInterval = 2; database = { host = "localhost"; port = 5432; name = "router_webui"; user = "router_webui"; }; retentionDays = 30; };' "$config_file"
+                ;;
+            "apprise")
+                # Add minimal apprise config
+                sed -i '$ i\  apprise = { enable = false; port = 8001; attachSize = 0; services = { email = { enable = false; }; homeAssistant = { enable = false; }; discord = { enable = false; }; slack = { enable = false; }; telegram = { enable = false; }; ntfy = { enable = false; }; }; };' "$config_file"
+                log_warning "Apprise secrets must be configured in secrets/secrets.yaml if you enable apprise services"
                 ;;
             "cake")
                 log_info "Adding CAKE traffic shaping configuration..."

@@ -6,6 +6,7 @@ let
   routerConfig = import ../router-config.nix;
   pppoeEnabled = routerConfig.wan.type == "pppoe";
   dyndnsEnabled = routerConfig.dyndns.enable or false;
+  appriseEnabled = routerConfig.apprise.enable or false;
 
 in
 
@@ -42,6 +43,49 @@ in
     // optionalAttrs dyndnsEnabled {
       linode-api-token = {
         owner = "root";
+        mode = "0400";
+      };
+    }
+    # Apprise API secrets (conditional)
+    // optionalAttrs appriseEnabled {
+      apprise-email-password = {
+        owner = "apprise";
+        mode = "0400";
+      };
+      apprise-homeassistant-token = {
+        owner = "apprise";
+        mode = "0400";
+      };
+      apprise-discord-webhook-id = {
+        owner = "apprise";
+        mode = "0400";
+      };
+      apprise-discord-webhook-token = {
+        owner = "apprise";
+        mode = "0400";
+      };
+      apprise-slack-token-a = {
+        owner = "apprise";
+        mode = "0400";
+      };
+      apprise-slack-token-b = {
+        owner = "apprise";
+        mode = "0400";
+      };
+      apprise-slack-token-c = {
+        owner = "apprise";
+        mode = "0400";
+      };
+      apprise-telegram-bot-token = {
+        owner = "apprise";
+        mode = "0400";
+      };
+      apprise-ntfy-username = {
+        owner = "apprise";
+        mode = "0400";
+      };
+      apprise-ntfy-password = {
+        owner = "apprise";
         mode = "0400";
       };
     };
