@@ -19,13 +19,22 @@ let
         "mailto://${services.email.username}:${config.sops.placeholder."apprise-email-password"}@${services.email.smtpHost}:${toString (services.email.smtpPort or 587)}?to=${services.email.to}${fromParam}"
       else "";
       
-      # Home Assistant: hassio://host:port/token
-      # Format: hassio://host:port/long-lived-access-token
+      # Home Assistant: hassio://host:port/token or hassios://host:port/token
+      # Format: hassio://host:port/long-lived-access-token (HTTP)
+      #         hassios://host:port/long-lived-access-token (HTTPS)
+      # If useHttps is true, default port is 443; otherwise default is 8123
       homeAssistantUrl = if services.homeAssistant.enable or false then
         let
           host = services.homeAssistant.host;
-          port = toString (services.homeAssistant.port or 8123);
-          protocol = if (services.homeAssistant.useHttps or false) then "hassios" else "hassio";
+          useHttps = services.homeAssistant.useHttps or false;
+          # If port is explicitly set, use it; otherwise default based on HTTPS
+          port = if (services.homeAssistant.port or null) != null then
+            toString services.homeAssistant.port
+          else if useHttps then
+            "443"
+          else
+            "8123";
+          protocol = if useHttps then "hassios" else "hassio";
         in
         "${protocol}://${host}:${port}/${config.sops.placeholder."apprise-homeassistant-token"}"
       else "";
