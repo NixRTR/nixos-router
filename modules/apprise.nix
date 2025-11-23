@@ -5,169 +5,6 @@ with lib;
 let
   cfg = config.services.apprise-api;
   routerConfig = import ../router-config.nix;
-  
-  # Build custom paho-mqtt package pinned to version 1.6.1 (required by apprise-api)
-  # nixpkgs has 2.1.0, but apprise-api requires < 2.0.0
-  paho-mqtt-1-6-1 = pkgs.python311Packages.buildPythonPackage rec {
-    pname = "paho-mqtt";
-    version = "1.6.1";
-    
-    src = pkgs.python311Packages.fetchPypi {
-      inherit pname version;
-      sha256 = "0vy2xy78nqqqwbgk96cfrb5lgivjldc5ba5mf81w1bi32v4930ia";
-    };
-    
-    format = "setuptools";
-    
-    propagatedBuildInputs = with pkgs.python311Packages; [
-      # paho-mqtt has minimal dependencies
-    ];
-    
-    nativeBuildInputs = with pkgs.python311Packages; [
-      setuptools
-      wheel
-    ];
-    
-    doCheck = false;
-    
-    meta = with lib; {
-      description = "MQTT version 5.0/3.1.1 client class";
-      homepage = "https://www.eclipse.org/paho/";
-      license = licenses.epl20;
-    };
-  };
-  
-  # Build custom apprise package pinned to version 1.9.4 (required by apprise-api)
-  # nixpkgs has 1.9.5, but apprise-api requires exactly 1.9.4
-  apprise-1-9-4 = pkgs.python311Packages.buildPythonPackage rec {
-    pname = "apprise";
-    version = "1.9.4";
-    
-    src = pkgs.python311Packages.fetchPypi {
-      inherit pname version;
-      sha256 = "126951n9lnlqrw5lbsvs9xs7jzg33bqqxm7cfnqag2csw6p24ca8";
-    };
-    
-    # Apprise uses setuptools, not pyproject
-    format = "setuptools";
-    
-    propagatedBuildInputs = with pkgs.python311Packages; [
-      requests
-      pyyaml
-      click
-      markdown
-      # Optional but commonly used dependencies
-      beautifulsoup4  # For HTML parsing in some notification services
-      cryptography    # For encrypted connections
-    ];
-    
-    nativeBuildInputs = with pkgs.python311Packages; [
-      setuptools
-      wheel
-    ];
-    
-    doCheck = false;
-    
-    meta = with lib; {
-      description = "Push Notifications that work with just about every platform";
-      homepage = "https://github.com/caronc/apprise";
-      license = licenses.bsd2;
-    };
-  };
-  
-  # Build custom apprise-api package from GitHub
-  # apprise-api is not available in nixpkgs, so we build it ourselves
-  apprise-api-package = pkgs.python311Packages.buildPythonPackage rec {
-    pname = "apprise-api";
-    version = "1.2.1";
-    
-    src = pkgs.fetchFromGitHub {
-      owner = "caronc";
-      repo = "apprise-api";
-      rev = "v${version}";
-      sha256 = "sha256-duGwg/zBtbdPv6fpNubNJ6yCqiv1JI9kYLIf799LzlI=";
-    };
-    
-    format = "pyproject";
-    
-    propagatedBuildInputs = with pkgs.python311Packages; [
-      apprise-1-9-4  # Use our custom apprise 1.9.4 package
-      flask
-      gunicorn
-      pyyaml
-      click
-      requests
-      # Optional dependencies that apprise-api supports
-      django
-      gevent
-      paho-mqtt-1-6-1  # Use our custom paho-mqtt < 2.0.0 package
-      gntp
-      django-prometheus
-    ];
-    
-    # Apprise-api uses pyproject.toml, so we need to ensure it's properly built
-    nativeBuildInputs = with pkgs.python311Packages; [
-      setuptools
-      wheel
-      pip
-    ];
-    
-    # Patch the incorrect imports in apprise-api
-    # The code uses relative imports that don't work when installed as a package
-    postPatch = ''
-      # Fix imports in settings/__init__.py
-      if [ -f "apprise_api/core/settings/__init__.py" ]; then
-        # Fix "from core.themes" to "from apprise_api.core.themes"
-        sed -i 's/^from core\.themes/from apprise_api.core.themes/g' apprise_api/core/settings/__init__.py
-        sed -i 's/^from core\./from apprise_api.core./g' apprise_api/core/settings/__init__.py
-      fi
-      # Fix any other "from core." imports in the codebase
-      find apprise_api -name "*.py" -type f -exec sed -i 's/^from core\./from apprise_api.core./g' {} +
-      
-      # Fix Django INSTALLED_APPS using Python for more reliable replacement
-      if [ -f "apprise_api/core/settings/__init__.py" ]; then
-        ${pkgs.python3}/bin/python3 << 'PYTHON'
-import re
-
-settings_file = "apprise_api/core/settings/__init__.py"
-with open(settings_file, 'r') as f:
-    content = f.read()
-
-# Replace standalone 'api' or "api" in INSTALLED_APPS, but not apprise_api.api
-# Match 'api' or "api" that's not part of apprise_api.api
-# Use negative lookbehind to avoid matching apprise_api.api
-content = re.sub(r"(?<!apprise_api\.)(['\"])api\1", r"\1apprise_api.api\1", content)
-
-with open(settings_file, 'w') as f:
-    f.write(content)
-PYTHON
-      fi
-      
-      # Fix AppConfig.name in apps.py files
-      # The AppConfig.name should match the full module path
-      find apprise_api -name "apps.py" -type f -exec sed -i "s/name = 'api'/name = 'apprise_api.api'/g" {} +
-      find apprise_api -name "apps.py" -type f -exec sed -i 's/name = "api"/name = "apprise_api.api"/g' {} +
-    '';
-    
-    doCheck = false; # Skip tests for now
-    
-    meta = with lib; {
-      description = "A lightweight REST framework that wraps the Apprise Notification Library";
-      homepage = "https://github.com/caronc/apprise-api";
-      license = licenses.mit;
-    };
-  };
-  
-  # Python environment with apprise-api and dependencies
-  # Note: apprise-1-9-4 is included via apprise-api-package's propagatedBuildInputs
-  pythonEnv = pkgs.python311.withPackages (ps: with ps; [
-    apprise-api-package
-    flask
-    gunicorn
-    pyyaml
-    click
-    requests
-  ]);
 
   # Generate apprise service URLs from router-config.nix
   # Format: one service URL per line
@@ -264,11 +101,15 @@ in
   };
   
   config = mkIf cfg.enable {
+    # Enable Docker
+    virtualisation.docker.enable = true;
+    
     # Create system user for the service
     users.users.apprise = {
       isSystemUser = true;
       group = "apprise";
       description = "Apprise API service user";
+      extraGroups = [ "docker" ];
     };
     
     users.groups.apprise = {};
@@ -311,67 +152,49 @@ in
       '';
     };
     
-    # Apprise API service
+    # Apprise API service using Docker
     systemd.services.apprise-api = {
-      description = "Apprise API notification service";
-      after = [ "network.target" "apprise-api-config-init.service" ];
-      wants = [ "apprise-api-config-init.service" ];
-      requires = [ "apprise-api-config-init.service" ];
+      description = "Apprise API notification service (Docker)";
+      after = [ "network.target" "docker.service" "apprise-api-config-init.service" ];
+      wants = [ "docker.service" "apprise-api-config-init.service" ];
+      requires = [ "docker.service" "apprise-api-config-init.service" ];
       wantedBy = [ "multi-user.target" ];
       
-      environment = {
-        APPRISE_CONFIG_DIR = cfg.configDir;
-        APPRISE_ATTACH_SIZE = toString cfg.attachSize;
-        # Django settings module path
-        DJANGO_SETTINGS_MODULE = "apprise_api.core.settings";
-      } // (optionalAttrs (cfg.attachmentsDir != null) {
-        APPRISE_ATTACHMENTS = cfg.attachmentsDir;
-      });
+      path = with pkgs; [ docker ];
       
       serviceConfig = {
         Type = "simple";
         User = "apprise";
         Group = "apprise";
-        WorkingDirectory = "/var/lib/apprise";
-        # Use StandardError=journal to ensure errors are logged
-        StandardError = "journal";
-        StandardOutput = "journal";
-        # Use a wrapper script to test import first and show errors clearly
-        ExecStart = pkgs.writeShellScript "apprise-api-start" ''
-          set -e
-          export APPRISE_CONFIG_DIR="${cfg.configDir}"
-          export APPRISE_ATTACH_SIZE="${toString cfg.attachSize}"
-          export DJANGO_SETTINGS_MODULE="apprise_api.core.settings"
-          ${lib.optionalString (cfg.attachmentsDir != null) "export APPRISE_ATTACHMENTS=\"${cfg.attachmentsDir}\""}
-          
-          # Test import first to see any errors
-          ${pythonEnv}/bin/python -c "import apprise_api.core.wsgi; print('Import successful')" || {
-            echo "Import failed, showing traceback:"
-            ${pythonEnv}/bin/python -c "import apprise_api.core.wsgi" 2>&1 || true
-            exit 1
-          }
-          
-          # If import works, start gunicorn
-          exec ${pythonEnv}/bin/gunicorn \
-            --bind 127.0.0.1:${toString cfg.port} \
-            --workers 2 \
-            --log-level debug \
-            --capture-output \
-            --error-logfile - \
-            --access-logfile - \
-            apprise_api.core.wsgi:app
-        '';
         Restart = "always";
         RestartSec = "10s";
-        
-        # Security hardening
-        NoNewPrivileges = true;
-        PrivateTmp = true;
-        ProtectSystem = "strict";
-        ProtectHome = true;
-        ReadWritePaths = [ "/var/lib/apprise" ];
-        ReadOnlyPaths = [ "/proc" "/sys" ];
       };
+      
+      preStart = ''
+        # Pull the image if it doesn't exist
+        ${pkgs.docker}/bin/docker pull lscr.io/linuxserver/apprise-api:latest || true
+      '';
+      
+      script = let
+        attachSizeEnv = if cfg.attachSize > 0 then "--env APPRISE_ATTACH_SIZE=${toString cfg.attachSize}" else "";
+        attachmentsMount = if cfg.attachmentsDir != null then "--volume ${cfg.attachmentsDir}:/apprise/attachments" else "";
+      in ''
+        # Stop and remove existing container if it exists
+        ${pkgs.docker}/bin/docker stop apprise-api 2>/dev/null || true
+        ${pkgs.docker}/bin/docker rm apprise-api 2>/dev/null || true
+        
+        # Run the container in foreground (no --detach) so systemd can manage it
+        exec ${pkgs.docker}/bin/docker run \
+          --name apprise-api \
+          --rm \
+          --publish 127.0.0.1:${toString cfg.port}:8000 \
+          --volume ${cfg.configDir}:/config \
+          ${attachmentsMount} \
+          --env PUID=$(id -u apprise) \
+          --env PGID=$(id -g apprise) \
+          ${attachSizeEnv} \
+          lscr.io/linuxserver/apprise-api:latest
+      '';
     };
     
     # Add nginx location for /apprise/
@@ -392,4 +215,3 @@ in
     };
   };
 }
-
