@@ -186,12 +186,12 @@ def url_encode_password_in_url(url: str) -> str:
         else:
             encoded_netloc = parsed.netloc
         
-        # For paths that might contain tokens (like discord://id/token, hassio://host:port/token)
+        # For paths that might contain tokens (like discord://id/token, hassio://host:port/token, tgram://token/chat_id)
         # We need to encode each path segment individually
         encoded_path = parsed.path
-        if encoded_path and '/' in encoded_path:
-            # Split path into segments
-            path_parts = encoded_path.split('/')
+        if encoded_path:
+            # Split path into segments (this will include empty strings for leading/trailing slashes)
+            path_parts = parsed.path.split('/')
             encoded_parts = []
             for part in path_parts:
                 if part:
@@ -202,12 +202,19 @@ def url_encode_password_in_url(url: str) -> str:
                     except:
                         encoded_parts.append(quote(part, safe=''))
                 else:
+                    # Preserve empty segments (important for trailing slashes and empty path segments)
                     encoded_parts.append('')
             
             # Reconstruct path with slashes (slashes are delimiters, not encoded)
-            encoded_path = '/'.join(encoded_parts)
-            if not encoded_path.startswith('/'):
-                encoded_path = '/' + encoded_path
+            # Preserve leading slash if original had one
+            if parsed.path.startswith('/'):
+                encoded_path = '/' + '/'.join(encoded_parts)
+            else:
+                encoded_path = '/'.join(encoded_parts)
+            
+            # Ensure trailing slash is preserved if original had one
+            if parsed.path.endswith('/') and not encoded_path.endswith('/'):
+                encoded_path += '/'
         
         # Reconstruct URL
         encoded_url = urlunparse((

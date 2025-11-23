@@ -41,8 +41,17 @@ let
       else "";
       
       # Telegram: tgram://bot_token/chat_id
+      # Note: chatId is required for Telegram notifications
       telegramUrl = if services.telegram.enable or false then
-        "tgram://${config.sops.placeholder."apprise-telegram-bot-token"}/${services.telegram.chatId or ""}"
+        let
+          chatId = services.telegram.chatId or "";
+        in
+        if chatId != "" then
+          "tgram://${config.sops.placeholder."apprise-telegram-bot-token"}/${chatId}"
+        else
+          # If chatId is missing, still generate URL but it will fail at runtime
+          # This allows the error to be caught and reported
+          "tgram://${config.sops.placeholder."apprise-telegram-bot-token"}/"
       else "";
       
       # ntfy: ntfy://topic or ntfy://user:pass@server/topic
