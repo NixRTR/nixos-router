@@ -112,9 +112,8 @@ let
       pip
     ];
     
-    # Patch the incorrect import in settings/__init__.py
-    # The code uses "from core.themes" but should use "from apprise_api.core.themes"
-    # Also fix other relative imports that don't work when installed as a package
+    # Patch the incorrect imports in apprise-api
+    # The code uses relative imports that don't work when installed as a package
     postPatch = ''
       # Fix imports in settings/__init__.py
       if [ -f "apprise_api/core/settings/__init__.py" ]; then
@@ -124,6 +123,12 @@ let
       fi
       # Fix any other "from core." imports in the codebase
       find apprise_api -name "*.py" -type f -exec sed -i 's/^from core\./from apprise_api.core./g' {} +
+      
+      # Fix Django INSTALLED_APPS - change "api" to "apprise_api.api"
+      if [ -f "apprise_api/core/settings/__init__.py" ]; then
+        sed -i "s/'api'/'apprise_api.api'/g" apprise_api/core/settings/__init__.py
+        sed -i 's/"api"/"apprise_api.api"/g' apprise_api/core/settings/__init__.py
+      fi
     '';
     
     doCheck = false; # Skip tests for now
