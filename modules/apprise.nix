@@ -313,7 +313,31 @@ in
         # Use StandardError=journal to ensure errors are logged
         StandardError = "journal";
         StandardOutput = "journal";
-        ExecStart = "${pythonEnv}/bin/gunicorn --bind 127.0.0.1:${toString cfg.port} --workers 2 --log-level debug --capture-output --error-logfile - --access-logfile - apprise_api.core.wsgi:app";
+        # Use a wrapper script to test import first and show errors clearly
+        ExecStart = pkgs.writeShellScript "apprise-api-start" ''
+          set -e
+          export APPRISE_CONFIG_DIR="${cfg.configDir}"
+          export APPRISE_ATTACH_SIZE="${toString cfg.attachSize}"
+          export DJANGO_SETTINGS_MODULE="apprise_api.core.settings"
+          ${lib.optionalString (cfg.attachmentsDir != null) "export APPRISE_ATTACHMENTS=\"${cfg.attachmentsDir}\""}
+          
+          # Test import first to see any errors
+          ${pythonEnv}/bin/python -c "import apprise_api.core.wsgi; print('Import successful')" || {
+            echo "Import failed, showing traceback:"
+            ${pythonEnv}/bin/python -c "import apprise_api.core.wsgi" 2>&1 || true
+            exit 1
+          }
+          
+          # If import works, start gunicorn
+          exec ${pythonEnv}/bin/gunicorn \
+            --bind 127.0.0.1:${toString cfg.port} \
+            --workers 2 \
+            --log-level debug \
+            --capture-output \
+            --error-logfile - \
+            --access-logfile - \
+            apprise_api.core.wsgi:app
+        '';
         Restart = "always";
         RestartSec = "10s";
         
