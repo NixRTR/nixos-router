@@ -124,11 +124,19 @@ let
       # Fix any other "from core." imports in the codebase
       find apprise_api -name "*.py" -type f -exec sed -i 's/^from core\./from apprise_api.core./g' {} +
       
-      # Fix Django INSTALLED_APPS - change "api" to "apprise_api.api"
+      # Fix Django INSTALLED_APPS - change standalone "api" to "apprise_api.api"
+      # Need to be careful not to change "apprise_api.api" back
       if [ -f "apprise_api/core/settings/__init__.py" ]; then
-        sed -i "s/'api'/'apprise_api.api'/g" apprise_api/core/settings/__init__.py
-        sed -i 's/"api"/"apprise_api.api"/g' apprise_api/core/settings/__init__.py
+        # Replace standalone 'api' or "api" (not part of apprise_api.api)
+        # Use word boundaries to avoid changing apprise_api.api
+        sed -i "s/\\b'api'\\b/'apprise_api.api'/g" apprise_api/core/settings/__init__.py
+        sed -i 's/\b"api"\b/"apprise_api.api"/g' apprise_api/core/settings/__init__.py
       fi
+      
+      # Fix AppConfig.name in apps.py files
+      # The AppConfig.name should match the full module path
+      find apprise_api -name "apps.py" -type f -exec sed -i "s/name = 'api'/name = 'apprise_api.api'/g" {} +
+      find apprise_api -name "apps.py" -type f -exec sed -i 's/name = "api"/name = "apprise_api.api"/g' {} +
     '';
     
     doCheck = false; # Skip tests for now
