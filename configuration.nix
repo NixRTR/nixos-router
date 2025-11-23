@@ -152,6 +152,7 @@ in
     enable = true;
     port = routerConfig.webui.port or 8080;
     collectionInterval = routerConfig.webui.collectionInterval or 2;
+    debug = routerConfig.webui.debug or false;
     database = {
       host = routerConfig.webui.database.host or "localhost";
       port = routerConfig.webui.database.port or 5432;

@@ -20,6 +20,15 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
+
+# Enable verbose logging for Apprise (equivalent to -vvvv)
+# Set Apprise logger to DEBUG level for maximum verbosity
+apprise_logger = logging.getLogger('apprise')
+apprise_logger.setLevel(logging.DEBUG)
+
+# Also enable debug for apprise.plugins and apprise.attachment modules
+logging.getLogger('apprise.plugins').setLevel(logging.DEBUG)
+logging.getLogger('apprise.attachment').setLevel(logging.DEBUG)
 from .database import init_db
 from .websocket import manager, websocket_endpoint
 from .api.auth import router as auth_router
