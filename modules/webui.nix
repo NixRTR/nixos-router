@@ -23,6 +23,7 @@ let
     pamela  # PAM authentication support
     manuf  # MAC address OUI vendor lookup
     httpx  # HTTP client for GitHub API requests
+    apprise  # Notification service integration
   ]);
   
   # Backend source
