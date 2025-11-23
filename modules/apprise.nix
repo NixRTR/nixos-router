@@ -10,12 +10,11 @@ let
   # Format: one service URL per line
   generateAppriseConfig = services:
     let
-      # Email: mailto://user:pass@smtp:port?to=recipient
+      # Email: mailto://user:pass@smtp:port?to=recipient&from=sender
       emailUrl = if services.email.enable or false then
         let
-          fromParam = if (services.email.from or null) != null then
-            "&from=${services.email.from}"
-          else "";
+          fromEmail = services.email.from or services.email.username;
+          fromParam = "&from=${fromEmail}";
         in
         "mailto://${services.email.username}:${config.sops.placeholder."apprise-email-password"}@${services.email.smtpHost}:${toString (services.email.smtpPort or 587)}?to=${services.email.to}${fromParam}"
       else "";

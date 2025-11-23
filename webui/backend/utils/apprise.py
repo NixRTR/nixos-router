@@ -233,9 +233,29 @@ def load_apprise_config(config_path: Optional[str] = None) -> Apprise:
                         logger.debug(f"Line {line_num} - Encoded (masked): {masked_encoded[:80]}...")
                     
                     try:
+                        # Store count before adding
+                        count_before = len(apobj)
+                        
                         # Add each service URL to Apprise
                         apobj.add(encoded_url)
-                        logger.info(f"Successfully added service from line {line_num}")
+                        
+                        # Check if service was actually added
+                        count_after = len(apobj)
+                        if count_after > count_before:
+                            logger.info(f"Successfully added service from line {line_num} (Apprise now has {count_after} service(s))")
+                        else:
+                            logger.warning(f"Service from line {line_num} was not added to Apprise (count unchanged: {count_before})")
+                            logger.warning(f"This usually means Apprise rejected the URL format. Check Apprise logs above.")
+                            # Try to add the original URL as a fallback
+                            try:
+                                logger.warning(f"Attempting to add original URL as fallback")
+                                apobj.add(line)
+                                if len(apobj) > count_before:
+                                    logger.info(f"Successfully added original URL as fallback")
+                                else:
+                                    logger.error(f"Fallback also failed - URL format may be incorrect")
+                            except Exception as fallback_error:
+                                logger.error(f"Fallback also failed: {type(fallback_error).__name__}: {str(fallback_error)}")
                     except Exception as add_error:
                         logger.error(f"Failed to add service from line {line_num}: {type(add_error).__name__}: {str(add_error)}")
                         # Show more context about the URL structure
