@@ -188,32 +188,63 @@ def load_apprise_config(config_path: Optional[str] = None) -> Apprise:
     
     # Load configuration from file
     if os.path.exists(config_path):
-        logger.debug(f"Loading Apprise config from: {config_path}")
+        logger.info(f"Loading Apprise config from: {config_path}")
+        # Check file permissions and size
+        stat_info = os.stat(config_path)
+        logger.debug(f"Config file size: {stat_info.st_size} bytes, mode: {oct(stat_info.st_mode)}")
+        
         with open(config_path, 'r') as f:
             lines = f.readlines()
-            logger.debug(f"Config file has {len(lines)} lines")
+            logger.info(f"Config file has {len(lines)} lines")
+            
+            # Log first few non-empty lines (masked) to verify sops replacement
+            non_empty_lines = [line.strip() for line in lines if line.strip() and not line.strip().startswith('#')]
+            logger.debug(f"Found {len(non_empty_lines)} non-empty, non-comment lines")
+            for idx, line in enumerate(non_empty_lines[:5], 1):
+                # Mask sensitive parts but show structure
+                masked = re.sub(r':([^:@/]+)@', r':***@', line)
+                masked = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked)
+                logger.debug(f"Line {idx} structure (masked): {masked[:100]}...")
+            
             # Read all lines, filter out empty lines and comments
             for line_num, line in enumerate(lines, 1):
                 original_line = line
                 line = line.strip()
                 if line and not line.startswith('#'):
                     # Check if line contains sops placeholder (not replaced)
-                    if '${' in line or '${' in line:
-                        logger.warning(f"Line {line_num} contains unprocessed placeholder: {line[:100]}...")
+                    if '${' in line:
+                        logger.error(f"Line {line_num} contains UNREPLACED sops placeholder: {line[:100]}...")
+                        logger.error(f"This means sops-nix did not replace the placeholder. Check:")
+                        logger.error(f"  1. Is the secret defined in modules/secrets.nix?")
+                        logger.error(f"  2. Does the secret exist in secrets/secrets.yaml?")
+                        logger.error(f"  3. Is sops-nix properly configured?")
+                        continue  # Skip this line - it won't work
+                    
+                    # Log the raw line structure (masked) before encoding
+                    masked_line = re.sub(r':([^:@/]+)@', r':***@', line)
+                    masked_line = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_line)
+                    logger.debug(f"Line {line_num} - Raw (masked): {masked_line[:80]}...")
                     
                     # URL-encode passwords/tokens in the URL before adding to Apprise
                     encoded_url = url_encode_password_in_url(line)
-                    logger.debug(f"Line {line_num} - Original: {line[:50]}... (masked)")
-                    logger.debug(f"Line {line_num} - Encoded: {encoded_url[:50]}... (masked)")
+                    if encoded_url != line:
+                        masked_encoded = re.sub(r':([^:@/]+)@', r':***@', encoded_url)
+                        masked_encoded = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_encoded)
+                        logger.debug(f"Line {line_num} - Encoded (masked): {masked_encoded[:80]}...")
                     
                     try:
                         # Add each service URL to Apprise
                         apobj.add(encoded_url)
-                        logger.debug(f"Successfully added service from line {line_num}")
+                        logger.info(f"Successfully added service from line {line_num}")
                     except Exception as add_error:
                         logger.error(f"Failed to add service from line {line_num}: {type(add_error).__name__}: {str(add_error)}")
-                        logger.error(f"Problematic URL (original): {line[:100]}... (masked)")
-                        logger.error(f"Problematic URL (encoded): {encoded_url[:100]}... (masked)")
+                        # Show more context about the URL structure
+                        masked_orig = re.sub(r':([^:@/]+)@', r':***@', line)
+                        masked_orig = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_orig)
+                        masked_enc = re.sub(r':([^:@/]+)@', r':***@', encoded_url)
+                        masked_enc = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_enc)
+                        logger.error(f"Problematic URL (original, masked): {masked_orig[:100]}...")
+                        logger.error(f"Problematic URL (encoded, masked): {masked_enc[:100]}...")
                         # Try to add the original URL as a fallback
                         try:
                             logger.warning(f"Attempting to add original URL as fallback")
@@ -223,6 +254,8 @@ def load_apprise_config(config_path: Optional[str] = None) -> Apprise:
                             logger.error(f"Fallback also failed: {type(fallback_error).__name__}: {str(fallback_error)}")
     else:
         logger.warning(f"Apprise config file does not exist: {config_path}")
+        logger.warning(f"Expected location: {config_path}")
+        logger.warning(f"Check if apprise-api-config-init.service ran successfully")
     
     logger.debug(f"Apprise object contains {len(apobj)} service(s)")
     return apobj
