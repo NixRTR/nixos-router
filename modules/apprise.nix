@@ -51,11 +51,15 @@ let
       
       # Telegram: tgram://bot_token/chat_id
       # Note: chatId is required for Telegram notifications
+      # Supports both chatId (camelCase) and chatID (capital ID) for compatibility
       telegramUrl = if services.telegram.enable or false then
         let
-          # Get chatId, handling null, empty string, or missing value
+          # Get chatId, handling both chatId and chatID field names
+          # Try chatId first (preferred), then chatID (for backwards compatibility)
           chatId = if (services.telegram.chatId or null) != null then
             toString (services.telegram.chatId)
+          else if (services.telegram.chatID or null) != null then
+            toString (services.telegram.chatID)
           else
             "";
         in
