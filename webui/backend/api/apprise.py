@@ -1,6 +1,7 @@
 """
 Apprise API notification service endpoints
 """
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, List
@@ -13,6 +14,8 @@ from ..utils.apprise import (
     load_apprise_config,
     test_service
 )
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api/apprise", tags=["apprise"])
@@ -124,34 +127,61 @@ async def test_service_endpoint(
     Returns:
         NotificationResponse: Success status and message
     """
-    if not is_apprise_enabled():
+    logger.info(f"Test service endpoint called for service index: {service_index}")
+    
+    try:
+        if not is_apprise_enabled():
+            logger.warning("Apprise is not enabled")
+            raise HTTPException(
+                status_code=503,
+                detail="Apprise is not enabled"
+            )
+        
+        logger.debug("Fetching configured services")
+        services = get_configured_services()
+        logger.debug(f"Found {len(services)} configured services")
+        
+        if service_index < 0 or service_index >= len(services):
+            logger.error(f"Service index {service_index} out of range (0-{len(services)-1})")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Service index {service_index} not found. Available indices: 0-{len(services)-1}"
+            )
+        
+        service_url = services[service_index]
+        logger.info(f"Testing service at index {service_index}: {service_url[:50]}... (masked)")
+        
+        try:
+            success, error, details = test_service(service_url)
+            logger.info(f"Test result for service {service_index}: success={success}, error={error}, details={details}")
+        except Exception as test_error:
+            logger.error(f"Exception in test_service: {type(test_error).__name__}: {str(test_error)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error testing service: {str(test_error)}"
+            )
+        
+        if success:
+            return NotificationResponse(
+                success=True,
+                message=f"Test notification sent successfully",
+                details=details
+            )
+        else:
+            # Return 200 with success=False so frontend can display the error
+            return NotificationResponse(
+                success=False,
+                message=error or "Failed to send test notification",
+                details=details
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in test_service_endpoint: {type(e).__name__}: {str(e)}", exc_info=True)
         raise HTTPException(
-            status_code=503,
-            detail="Apprise is not enabled"
-        )
-    
-    services = get_configured_services()
-    
-    if service_index < 0 or service_index >= len(services):
-        raise HTTPException(
-            status_code=404,
-            detail=f"Service index {service_index} not found"
-        )
-    
-    service_url = services[service_index]
-    success, error, details = test_service(service_url)
-    
-    if success:
-        return NotificationResponse(
-            success=True,
-            message=f"Test notification sent successfully",
-            details=details
-        )
-    else:
-        return NotificationResponse(
-            success=False,
-            message=error or "Failed to send test notification",
-            details=details
+            status_code=500,
+            detail=f"Internal server error: {type(e).__name__}: {str(e)}"
         )
 
 

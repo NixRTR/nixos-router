@@ -3,9 +3,12 @@ Utility functions for Apprise notifications
 """
 import re
 import os
+import logging
 from typing import Optional, List, Tuple
 from apprise import Apprise
 from ..config import settings
+
+logger = logging.getLogger(__name__)
 
 
 # Default config file path (matches modules/apprise.nix default)
@@ -194,28 +197,47 @@ def test_service(
     Returns:
         Tuple of (success: bool, error_message: Optional[str], details: Optional[str])
     """
+    logger.info(f"Testing service with URL: {service_url[:50]}... (masked)")
     try:
         # Get raw service URLs to find the matching one
+        logger.debug("Fetching raw and masked service URLs")
         raw_urls = get_raw_service_urls()
         masked_urls = get_configured_services()
+        logger.debug(f"Found {len(raw_urls)} raw URLs and {len(masked_urls)} masked URLs")
         
         # Find the matching raw URL
         raw_url = None
         for i, masked_url in enumerate(masked_urls):
             if masked_url == service_url and i < len(raw_urls):
                 raw_url = raw_urls[i]
+                logger.debug(f"Matched masked URL at index {i} to raw URL: {raw_url[:50]}... (masked)")
                 break
         
         # If not found, try using the service_url directly (might be raw)
         if raw_url is None:
+            logger.warning(f"Could not find matching raw URL for masked URL, using service_url directly")
             raw_url = service_url
         
+        if not raw_url:
+            logger.error("No raw URL found or provided")
+            return (False, "No service URL provided", None)
+        
         # Create Apprise object with just this service
+        logger.debug(f"Creating Apprise object and adding service: {get_service_name_from_url(raw_url)}")
         apobj = Apprise()
-        apobj.add(raw_url)
+        
+        try:
+            apobj.add(raw_url)
+            logger.debug(f"Successfully added service to Apprise object")
+        except Exception as add_error:
+            logger.error(f"Failed to add service URL to Apprise: {type(add_error).__name__}: {str(add_error)}")
+            return (False, f"Invalid service URL: {str(add_error)}", f"Failed to parse service URL: {type(add_error).__name__}")
         
         if not apobj:
-            return (False, "Invalid service URL", None)
+            logger.error("Apprise object is empty after adding service")
+            return (False, "Invalid service URL", "Service URL could not be added to Apprise")
+        
+        logger.debug(f"Apprise object contains {len(apobj)} service(s)")
         
         # Map notification type
         apprise_type = None
@@ -227,29 +249,42 @@ def test_service(
                 'failure': 'failure',
             }
             apprise_type = type_map.get(notification_type.lower())
+            logger.debug(f"Mapped notification type '{notification_type}' to '{apprise_type}'")
         
         # Send notification
-        result = apobj.notify(
-            body=body,
-            title=title,
-            notify_type=apprise_type
-        )
+        logger.info(f"Sending test notification to {get_service_name_from_url(raw_url)}")
+        try:
+            result = apobj.notify(
+                body=body,
+                title=title,
+                notify_type=apprise_type
+            )
+            logger.debug(f"Notification result: {result}")
+        except Exception as notify_error:
+            logger.error(f"Exception during notify(): {type(notify_error).__name__}: {str(notify_error)}", exc_info=True)
+            error_msg = str(notify_error)
+            error_type = type(notify_error).__name__
+            if "Connection" in error_type or "timeout" in error_msg.lower():
+                details = f"Connection error: {error_msg}"
+            elif "Authentication" in error_type or "auth" in error_msg.lower() or "unauthorized" in error_msg.lower():
+                details = f"Authentication error: {error_msg}"
+            elif "Invalid" in error_type or "invalid" in error_msg.lower():
+                details = f"Invalid configuration: {error_msg}"
+            else:
+                details = f"{error_type}: {error_msg}"
+            return (False, error_msg, details)
         
         if result:
+            logger.info(f"Successfully sent notification to {get_service_name_from_url(raw_url)}")
             return (True, None, f"Notification sent successfully to {get_service_name_from_url(raw_url)}")
         else:
-            # Apprise returns False but doesn't provide detailed error messages
-            # We can check the Apprise object's response for more details
-            # Get the last error if available
-            error_details = []
-            for service in apobj:
-                # Try to get error information from the service
-                # Apprise doesn't expose this easily, so we'll provide a generic message
-                pass
-            
+            logger.warning(f"Notification returned False for {get_service_name_from_url(raw_url)}")
+            # Try to get more information about the failure
+            # Apprise doesn't expose detailed error messages easily
             return (False, "Failed to send notification", "The service may be misconfigured, unreachable, or the credentials may be invalid")
             
     except Exception as e:
+        logger.error(f"Unexpected exception in test_service: {type(e).__name__}: {str(e)}", exc_info=True)
         error_msg = str(e)
         error_type = type(e).__name__
         # Provide more context for common errors
