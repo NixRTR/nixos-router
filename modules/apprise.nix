@@ -11,12 +11,21 @@ let
   generateAppriseConfig = services:
     let
       # Email: mailto://user:pass@smtp:port?to=recipient&from=sender
+      # For port 465 (SSL/TLS), use mailtos:// scheme
+      # For port 587 (STARTTLS), use mailto:// scheme
       emailUrl = if services.email.enable or false then
         let
           fromEmail = services.email.from or services.email.username;
           fromParam = "&from=${fromEmail}";
+          # Handle port - convert string to int if needed, default to 587
+          smtpPort = if builtins.isString (services.email.smtpPort or "") then
+            builtins.toInt (services.email.smtpPort)
+          else
+            (services.email.smtpPort or 587);
+          # Use mailtos:// for port 465 (SSL/TLS), mailto:// for others
+          scheme = if smtpPort == 465 then "mailtos" else "mailto";
         in
-        "mailto://${services.email.username}:${config.sops.placeholder."apprise-email-password"}@${services.email.smtpHost}:${toString (services.email.smtpPort or 587)}?to=${services.email.to}${fromParam}"
+        "${scheme}://${services.email.username}:${config.sops.placeholder."apprise-email-password"}@${services.email.smtpHost}:${toString smtpPort}?to=${services.email.to}${fromParam}"
       else "";
       
       # Home Assistant: hassio://host:port/token or hassios://host:port/token

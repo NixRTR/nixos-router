@@ -104,14 +104,17 @@ def url_encode_password_in_url(url: str) -> str:
                 if ':' in userinfo:
                     username, password = userinfo.split(':', 1)
                     # Decode any existing encoding first to avoid double-encoding
+                    # Use errors='replace' to handle invalid percent encodings gracefully
                     try:
-                        decoded_username = unquote(username, encoding='utf-8', errors='strict')
-                        decoded_password = unquote(password, encoding='utf-8', errors='strict')
-                    except:
+                        decoded_username = unquote(username, encoding='utf-8', errors='replace')
+                        decoded_password = unquote(password, encoding='utf-8', errors='replace')
+                    except Exception as e:
+                        logger.debug(f"Failed to decode username/password, using as-is: {e}")
                         decoded_username = username
                         decoded_password = password
                     
                     # URL-encode username and password (no safe characters for credentials)
+                    # This will properly encode special characters like @, %, etc.
                     encoded_username = quote(decoded_username, safe='')
                     encoded_password = quote(decoded_password, safe='')
                     
