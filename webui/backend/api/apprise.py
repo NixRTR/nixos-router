@@ -114,6 +114,85 @@ async def get_services(
     return [ServiceInfo(url=url) for url in services]
 
 
+@router.post("/send/{service_index}", response_model=NotificationResponse)
+async def send_to_service_endpoint(
+    service_index: int,
+    request: NotificationRequest,
+    _: str = Depends(get_current_user)
+) -> NotificationResponse:
+    """Send a notification to a specific service by index
+    
+    Args:
+        service_index: Index of the service to send to (0-based)
+        request: Notification request with body, optional title and type
+        
+    Returns:
+        NotificationResponse: Success status and message
+    """
+    logger.info(f"Send to service endpoint called for service index: {service_index}")
+    
+    try:
+        if not is_apprise_enabled():
+            logger.warning("Apprise is not enabled")
+            raise HTTPException(
+                status_code=503,
+                detail="Apprise is not enabled"
+            )
+        
+        logger.debug("Fetching configured services")
+        services = get_configured_services()
+        logger.debug(f"Found {len(services)} configured services")
+        
+        if service_index < 0 or service_index >= len(services):
+            logger.error(f"Service index {service_index} out of range (0-{len(services)-1})")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Service index {service_index} not found. Available indices: 0-{len(services)-1}"
+            )
+        
+        service_url = services[service_index]
+        logger.info(f"Sending notification to service at index {service_index}: {service_url[:50]}... (masked)")
+        logger.debug(f"Notification details: title={request.title}, body={request.body[:50]}..., type={request.notification_type}")
+        
+        try:
+            success, error, details = test_service(
+                service_url,
+                body=request.body,
+                title=request.title,
+                notification_type=request.notification_type
+            )
+            logger.info(f"Send result for service {service_index}: success={success}, error={error}, details={details}")
+        except Exception as send_error:
+            logger.error(f"Exception in test_service: {type(send_error).__name__}: {str(send_error)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error sending notification: {str(send_error)}"
+            )
+        
+        if success:
+            return NotificationResponse(
+                success=True,
+                message=f"Notification sent successfully",
+                details=details
+            )
+        else:
+            # Return 200 with success=False so frontend can display the error
+            return NotificationResponse(
+                success=False,
+                message=error or "Failed to send notification",
+                details=details
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in send_to_service_endpoint: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {type(e).__name__}: {str(e)}"
+        )
+
+
 @router.post("/test/{service_index}", response_model=NotificationResponse)
 async def test_service_endpoint(
     service_index: int,

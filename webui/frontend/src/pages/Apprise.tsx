@@ -36,6 +36,11 @@ export function Apprise() {
   const [testResults, setTestResults] = useState<Map<number, { success: boolean; message: string; details?: string }>>(new Map());
   const [testErrors, setTestErrors] = useState<Map<number, string>>(new Map());
   
+  // Send notification state - track status per service index
+  const [sendingServices, setSendingServices] = useState<Set<number>>(new Set());
+  const [sendResults, setSendResults] = useState<Map<number, { success: boolean; message: string; details?: string }>>(new Map());
+  const [sendErrors, setSendErrors] = useState<Map<number, string>>(new Map());
+  
   const { connectionStatus } = useMetrics(token);
 
   useEffect(() => {
@@ -98,7 +103,56 @@ export function Apprise() {
     }
   };
 
-  const handleTestService = async (serviceIndex: number, serviceUrl: string) => {
+  const handleSendToService = async (serviceIndex: number) => {
+    if (!notificationBody.trim()) {
+      setSendErrors(prev => new Map(prev).set(serviceIndex, 'Message body is required'));
+      return;
+    }
+
+    setSendingServices(prev => new Set(prev).add(serviceIndex));
+    setSendErrors(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(serviceIndex);
+      return newMap;
+    });
+    setSendResults(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(serviceIndex);
+      return newMap;
+    });
+    
+    try {
+      const result = await apiClient.sendAppriseNotificationToService(
+        serviceIndex,
+        notificationBody,
+        notificationTitle || undefined,
+        notificationType || undefined
+      );
+      setSendResults(prev => new Map(prev).set(serviceIndex, result));
+      
+      if (!result.success) {
+        const errorMsg = result.details 
+          ? `${result.message}: ${result.details}`
+          : result.message;
+        setSendErrors(prev => new Map(prev).set(serviceIndex, errorMsg));
+      }
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to send notification';
+      setSendErrors(prev => new Map(prev).set(serviceIndex, errorMsg));
+      setSendResults(prev => new Map(prev).set(serviceIndex, {
+        success: false,
+        message: errorMsg,
+      }));
+    } finally {
+      setSendingServices(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(serviceIndex);
+        return newSet;
+      });
+    }
+  };
+
+  const handleTestService = async (serviceIndex: number) => {
     setTestingServices(prev => new Set(prev).add(serviceIndex));
     setTestErrors(prev => {
       const newMap = new Map(prev);
@@ -349,7 +403,12 @@ export function Apprise() {
                     const isTesting = testingServices.has(index);
                     const testResult = testResults.get(index);
                     const testError = testErrors.get(index);
-                    const isSuccess = testResult?.success === true;
+                    const isTestSuccess = testResult?.success === true;
+                    
+                    const isSending = sendingServices.has(index);
+                    const sendResult = sendResults.get(index);
+                    const sendError = sendErrors.get(index);
+                    const isSendSuccess = sendResult?.success === true;
                     
                     return (
                       <Card key={index} className="bg-gray-50 dark:bg-gray-800">
@@ -357,8 +416,11 @@ export function Apprise() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
                               <Badge color="info">{getServiceName(service.url)}</Badge>
-                              {isSuccess && (
+                              {isTestSuccess && (
                                 <HiCheckCircle className="w-5 h-5 text-green-500" title="Test successful" />
+                              )}
+                              {isSendSuccess && (
+                                <HiCheckCircle className="w-5 h-5 text-blue-500" title="Notification sent" />
                               )}
                             </div>
                             <code className="text-sm text-gray-600 dark:text-gray-400 break-all">
@@ -376,23 +438,48 @@ export function Apprise() {
                                 <div className="text-sm">{testResult.details}</div>
                               </Alert>
                             )}
+                            {sendError && (
+                              <Alert color="failure" className="mt-2">
+                                <div className="text-sm">
+                                  <strong>Send Error:</strong> {sendError}
+                                </div>
+                              </Alert>
+                            )}
+                            {sendResult?.success && sendResult.details && (
+                              <Alert color="success" className="mt-2">
+                                <div className="text-sm">{sendResult.details}</div>
+                              </Alert>
+                            )}
                           </div>
                           <div className="flex gap-2">
                             <div className="relative">
                               <Button
                                 size="sm"
-                                color={isSuccess ? "success" : "light"}
-                                onClick={() => handleTestService(index, service.url)}
-                                disabled={isTesting}
+                                color={isTestSuccess ? "success" : "light"}
+                                onClick={() => handleTestService(index)}
+                                disabled={isTesting || isSending}
                               >
-                                {isTesting ? 'Testing...' : isSuccess ? 'Test Again' : 'Test'}
+                                {isTesting ? 'Testing...' : isTestSuccess ? 'Test Again' : 'Test'}
                               </Button>
-                              {isSuccess && !isTesting && (
+                              {isTestSuccess && !isTesting && (
                                 <HiCheckCircle className="absolute -top-1 -right-1 w-5 h-5 text-green-500 bg-white dark:bg-gray-800 rounded-full" />
                               )}
                             </div>
+                            <div className="relative">
+                              <Button
+                                size="sm"
+                                color={isSendSuccess ? "success" : "blue"}
+                                onClick={() => handleSendToService(index)}
+                                disabled={isSending || isTesting || !notificationBody.trim()}
+                              >
+                                {isSending ? 'Sending...' : isSendSuccess ? 'Send Again' : 'Send'}
+                              </Button>
+                              {isSendSuccess && !isSending && (
+                                <HiCheckCircle className="absolute -top-1 -right-1 w-5 h-5 text-blue-500 bg-white dark:bg-gray-800 rounded-full" />
+                              )}
+                            </div>
                           </div>
-                          </div>
+                        </div>
                         
                         <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                           <Label value="Example cURL Command" className="mb-2 block" />

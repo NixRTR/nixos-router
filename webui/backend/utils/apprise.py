@@ -4,6 +4,7 @@ Utility functions for Apprise notifications
 import re
 import os
 import logging
+from urllib.parse import quote, urlparse, urlunparse, parse_qs, urlencode
 from typing import Optional, List, Tuple
 from apprise import Apprise
 from ..config import settings
@@ -50,6 +51,68 @@ def is_apprise_enabled() -> bool:
     return os.path.exists(config_path)
 
 
+def url_encode_password_in_url(url: str) -> str:
+    """URL-encode passwords and tokens in Apprise service URLs
+    
+    This function properly encodes special characters in passwords/tokens
+    that appear in URLs (e.g., mailto://user:pass@host, discord://id/token)
+    
+    Args:
+        url: Service URL that may contain unencoded passwords/tokens
+        
+    Returns:
+        URL with properly encoded passwords/tokens
+    """
+    try:
+        # Parse the URL
+        parsed = urlparse(url)
+        
+        # If there's user info (user:pass), encode the password part
+        if parsed.username or '@' in parsed.netloc:
+            # Split netloc into userinfo and host:port
+            if '@' in parsed.netloc:
+                userinfo, hostport = parsed.netloc.rsplit('@', 1)
+                if ':' in userinfo:
+                    username, password = userinfo.split(':', 1)
+                    # URL-encode the password
+                    encoded_password = quote(password, safe='')
+                    # Reconstruct netloc
+                    encoded_netloc = f"{username}:{encoded_password}@{hostport}"
+                else:
+                    encoded_netloc = parsed.netloc
+            else:
+                encoded_netloc = parsed.netloc
+        else:
+            encoded_netloc = parsed.netloc
+        
+        # For paths that might contain tokens (like discord://id/token)
+        # We need to be careful - Apprise URLs can have tokens in the path
+        # For now, we'll encode the entire path if it looks like it contains tokens
+        encoded_path = parsed.path
+        if encoded_path and '/' in encoded_path:
+            # Split path into segments
+            path_parts = encoded_path.split('/')
+            # URL-encode each segment (tokens might be in path segments)
+            encoded_path = '/'.join(quote(part, safe='') for part in path_parts if part)
+            if not encoded_path.startswith('/'):
+                encoded_path = '/' + encoded_path
+        
+        # Reconstruct URL
+        encoded_url = urlunparse((
+            parsed.scheme,
+            encoded_netloc,
+            encoded_path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment
+        ))
+        
+        return encoded_url
+    except Exception as e:
+        logger.warning(f"Failed to URL-encode password in URL, using original: {str(e)}")
+        return url
+
+
 def load_apprise_config(config_path: Optional[str] = None) -> Apprise:
     """Load Apprise configuration from file
     
@@ -67,14 +130,35 @@ def load_apprise_config(config_path: Optional[str] = None) -> Apprise:
     
     # Load configuration from file
     if os.path.exists(config_path):
+        logger.debug(f"Loading Apprise config from: {config_path}")
         with open(config_path, 'r') as f:
+            lines = f.readlines()
+            logger.debug(f"Config file has {len(lines)} lines")
             # Read all lines, filter out empty lines and comments
-            for line in f:
+            for line_num, line in enumerate(lines, 1):
+                original_line = line
                 line = line.strip()
                 if line and not line.startswith('#'):
-                    # Add each service URL to Apprise
-                    apobj.add(line)
+                    # Check if line contains sops placeholder (not replaced)
+                    if '${' in line or '${' in line:
+                        logger.warning(f"Line {line_num} contains unprocessed placeholder: {line[:100]}...")
+                    
+                    # URL-encode passwords/tokens in the URL before adding to Apprise
+                    encoded_url = url_encode_password_in_url(line)
+                    logger.debug(f"Line {line_num} - Original: {line[:50]}... (masked)")
+                    logger.debug(f"Line {line_num} - Encoded: {encoded_url[:50]}... (masked)")
+                    
+                    try:
+                        # Add each service URL to Apprise
+                        apobj.add(encoded_url)
+                        logger.debug(f"Successfully added service from line {line_num}")
+                    except Exception as add_error:
+                        logger.error(f"Failed to add service from line {line_num}: {type(add_error).__name__}: {str(add_error)}")
+                        logger.error(f"Problematic URL: {line[:100]}... (masked)")
+    else:
+        logger.warning(f"Apprise config file does not exist: {config_path}")
     
+    logger.debug(f"Apprise object contains {len(apobj)} service(s)")
     return apobj
 
 
@@ -226,8 +310,12 @@ def test_service(
         logger.debug(f"Creating Apprise object and adding service: {get_service_name_from_url(raw_url)}")
         apobj = Apprise()
         
+        # URL-encode passwords/tokens in the URL
+        encoded_url = url_encode_password_in_url(raw_url)
+        logger.debug(f"URL-encoded service URL: {encoded_url[:50]}... (masked)")
+        
         try:
-            apobj.add(raw_url)
+            apobj.add(encoded_url)
             logger.debug(f"Successfully added service to Apprise object")
         except Exception as add_error:
             logger.error(f"Failed to add service URL to Apprise: {type(add_error).__name__}: {str(add_error)}")
