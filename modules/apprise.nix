@@ -6,6 +6,37 @@ let
   cfg = config.services.apprise-api;
   routerConfig = import ../router-config.nix;
   
+  # Build custom paho-mqtt package pinned to version 1.6.1 (required by apprise-api)
+  # nixpkgs has 2.1.0, but apprise-api requires < 2.0.0
+  paho-mqtt-1-6-1 = pkgs.python311Packages.buildPythonPackage rec {
+    pname = "paho-mqtt";
+    version = "1.6.1";
+    
+    src = pkgs.python311Packages.fetchPypi {
+      inherit pname version;
+      sha256 = "0vy2xy78nqqqwbgk96cfrb5lgivjldc5ba5mf81w1bi32v4930ia";
+    };
+    
+    format = "setuptools";
+    
+    propagatedBuildInputs = with pkgs.python311Packages; [
+      # paho-mqtt has minimal dependencies
+    ];
+    
+    nativeBuildInputs = with pkgs.python311Packages; [
+      setuptools
+      wheel
+    ];
+    
+    doCheck = false;
+    
+    meta = with lib; {
+      description = "MQTT version 5.0/3.1.1 client class";
+      homepage = "https://www.eclipse.org/paho/";
+      license = licenses.epl20;
+    };
+  };
+  
   # Build custom apprise package pinned to version 1.9.4 (required by apprise-api)
   # nixpkgs has 1.9.5, but apprise-api requires exactly 1.9.4
   apprise-1-9-4 = pkgs.python311Packages.buildPythonPackage rec {
@@ -69,7 +100,7 @@ let
       # Optional dependencies that apprise-api supports
       django
       gevent
-      paho-mqtt
+      paho-mqtt-1-6-1  # Use our custom paho-mqtt < 2.0.0 package
       gntp
       django-prometheus
     ];
