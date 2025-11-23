@@ -137,7 +137,7 @@ in
     
     # Service to copy config to apprise config directory
     # This runs before router-webui-backend starts
-    systemd.services.apprise-api-config-init = {
+    systemd.services.apprise-config-init = {
       description = "Initialize Apprise configuration";
       wantedBy = [ "router-webui-backend.service" ];
       before = [ "router-webui-backend.service" ];
