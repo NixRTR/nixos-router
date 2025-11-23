@@ -4,7 +4,7 @@ Utility functions for Apprise notifications
 import re
 import os
 import logging
-from urllib.parse import quote, urlparse, urlunparse, parse_qs, urlencode
+from urllib.parse import quote, unquote, urlparse, urlunparse, parse_qs, urlencode
 from typing import Optional, List, Tuple
 from apprise import Apprise
 from ..config import settings
@@ -55,7 +55,20 @@ def url_encode_password_in_url(url: str) -> str:
     """URL-encode passwords and tokens in Apprise service URLs
     
     This function properly encodes special characters in passwords/tokens
-    that appear in URLs (e.g., mailto://user:pass@host, discord://id/token)
+    that appear in URLs according to Apprise requirements. It handles:
+    - Square brackets ([ and ]): %5B and %5D
+    - Percent sign (%): %25
+    - Ampersand (&): %26
+    - Question mark (?): %3F
+    - At symbol (@): %40
+    - Colon (:): %3A (when in username/password fields)
+    - Spaces: %20
+    - Slashes (/): %2F (in path segments, not as delimiters)
+    - Plus sign (+): %2B
+    - Commas (,): %2C
+    
+    The function decodes any existing percent-encoding first to avoid
+    double-encoding, then re-encodes everything properly.
     
     Args:
         url: Service URL that may contain unencoded passwords/tokens
@@ -66,7 +79,7 @@ def url_encode_password_in_url(url: str) -> str:
     try:
         # For mailto URLs, we need special handling because they can have query parameters
         # that also need encoding (like &from=email@domain.com)
-        if url.startswith('mailto://'):
+        if url.startswith('mailto://') or url.startswith('mailtos://'):
             # Parse mailto URL manually since urlparse might not handle it correctly
             # Format: mailto://user:pass@host:port?to=email&from=email
             scheme_end = url.find('://')
@@ -90,18 +103,28 @@ def url_encode_password_in_url(url: str) -> str:
                 userinfo, hostport = url_part.rsplit('@', 1)
                 if ':' in userinfo:
                     username, password = userinfo.split(':', 1)
-                    # URL-encode the password (decode first in case it's partially encoded)
+                    # Decode any existing encoding first to avoid double-encoding
                     try:
-                        # Try to decode first to avoid double-encoding
-                        decoded_password = password
-                        # URL-encode the password
-                        encoded_password = quote(decoded_password, safe='')
+                        decoded_username = unquote(username, encoding='utf-8', errors='strict')
+                        decoded_password = unquote(password, encoding='utf-8', errors='strict')
                     except:
-                        encoded_password = quote(password, safe='')
+                        decoded_username = username
+                        decoded_password = password
+                    
+                    # URL-encode username and password (no safe characters for credentials)
+                    encoded_username = quote(decoded_username, safe='')
+                    encoded_password = quote(decoded_password, safe='')
+                    
                     # Reconstruct URL part
-                    encoded_url_part = f"{username}:{encoded_password}@{hostport}"
+                    encoded_url_part = f"{encoded_username}:{encoded_password}@{hostport}"
                 else:
-                    encoded_url_part = url_part
+                    # Username only, no password
+                    try:
+                        decoded_username = unquote(userinfo, encoding='utf-8', errors='strict')
+                        encoded_username = quote(decoded_username, safe='')
+                        encoded_url_part = f"{encoded_username}@{hostport}"
+                    except:
+                        encoded_url_part = url_part
             else:
                 encoded_url_part = url_part
             
@@ -112,8 +135,12 @@ def url_encode_password_in_url(url: str) -> str:
                 for param in query_part.split('&'):
                     if '=' in param:
                         key, value = param.split('=', 1)
-                        # URL-encode the value
-                        encoded_value = quote(value, safe='')
+                        # Decode first to avoid double-encoding
+                        try:
+                            decoded_value = unquote(value, encoding='utf-8', errors='strict')
+                            encoded_value = quote(decoded_value, safe='')
+                        except:
+                            encoded_value = quote(value, safe='')
                         query_params.append(f"{key}={encoded_value}")
                     else:
                         query_params.append(param)
@@ -125,32 +152,60 @@ def url_encode_password_in_url(url: str) -> str:
         # For other URL types, use standard URL parsing
         parsed = urlparse(url)
         
-        # If there's user info (user:pass), encode the password part
+        # If there's user info (user:pass), encode both username and password
         if parsed.username or '@' in parsed.netloc:
             # Split netloc into userinfo and host:port
             if '@' in parsed.netloc:
                 userinfo, hostport = parsed.netloc.rsplit('@', 1)
                 if ':' in userinfo:
                     username, password = userinfo.split(':', 1)
-                    # URL-encode the password
-                    encoded_password = quote(password, safe='')
+                    # Decode first to avoid double-encoding
+                    try:
+                        decoded_username = unquote(username, encoding='utf-8', errors='strict')
+                        decoded_password = unquote(password, encoding='utf-8', errors='strict')
+                    except:
+                        decoded_username = username
+                        decoded_password = password
+                    
+                    # URL-encode both username and password
+                    encoded_username = quote(decoded_username, safe='')
+                    encoded_password = quote(decoded_password, safe='')
+                    
                     # Reconstruct netloc
-                    encoded_netloc = f"{username}:{encoded_password}@{hostport}"
+                    encoded_netloc = f"{encoded_username}:{encoded_password}@{hostport}"
                 else:
-                    encoded_netloc = parsed.netloc
+                    # Username only
+                    try:
+                        decoded_username = unquote(userinfo, encoding='utf-8', errors='strict')
+                        encoded_username = quote(decoded_username, safe='')
+                        encoded_netloc = f"{encoded_username}@{hostport}"
+                    except:
+                        encoded_netloc = parsed.netloc
             else:
                 encoded_netloc = parsed.netloc
         else:
             encoded_netloc = parsed.netloc
         
-        # For paths that might contain tokens (like discord://id/token)
-        # We need to be careful - Apprise URLs can have tokens in the path
+        # For paths that might contain tokens (like discord://id/token, hassio://host:port/token)
+        # We need to encode each path segment individually
         encoded_path = parsed.path
         if encoded_path and '/' in encoded_path:
             # Split path into segments
             path_parts = encoded_path.split('/')
-            # URL-encode each segment (tokens might be in path segments)
-            encoded_path = '/'.join(quote(part, safe='') for part in path_parts if part)
+            encoded_parts = []
+            for part in path_parts:
+                if part:
+                    # Decode first to avoid double-encoding
+                    try:
+                        decoded_part = unquote(part, encoding='utf-8', errors='strict')
+                        encoded_parts.append(quote(decoded_part, safe=''))
+                    except:
+                        encoded_parts.append(quote(part, safe=''))
+                else:
+                    encoded_parts.append('')
+            
+            # Reconstruct path with slashes (slashes are delimiters, not encoded)
+            encoded_path = '/'.join(encoded_parts)
             if not encoded_path.startswith('/'):
                 encoded_path = '/' + encoded_path
         
