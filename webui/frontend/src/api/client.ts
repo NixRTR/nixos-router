@@ -212,6 +212,12 @@ class APIClient {
     return response.data;
   }
 
+  // Apprise Notifications
+  async getAppriseStatus(): Promise<{ enabled: boolean }> {
+    const response = await this.client.get<{ enabled: boolean }>('/api/apprise/status');
+    return response.data;
+  }
+
   async getCakeHistory(
     range: string = '1h',
     interfaceName?: string
