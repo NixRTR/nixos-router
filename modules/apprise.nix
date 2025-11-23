@@ -124,13 +124,23 @@ let
       # Fix any other "from core." imports in the codebase
       find apprise_api -name "*.py" -type f -exec sed -i 's/^from core\./from apprise_api.core./g' {} +
       
-      # Fix Django INSTALLED_APPS - change standalone "api" to "apprise_api.api"
-      # Need to be careful not to change "apprise_api.api" back
+      # Fix Django INSTALLED_APPS using Python for more reliable replacement
       if [ -f "apprise_api/core/settings/__init__.py" ]; then
-        # Replace standalone 'api' or "api" (not part of apprise_api.api)
-        # Use word boundaries to avoid changing apprise_api.api
-        sed -i "s/\\b'api'\\b/'apprise_api.api'/g" apprise_api/core/settings/__init__.py
-        sed -i 's/\b"api"\b/"apprise_api.api"/g' apprise_api/core/settings/__init__.py
+        ${pkgs.python3}/bin/python3 << 'PYTHON'
+import re
+
+settings_file = "apprise_api/core/settings/__init__.py"
+with open(settings_file, 'r') as f:
+    content = f.read()
+
+# Replace standalone 'api' or "api" in INSTALLED_APPS, but not apprise_api.api
+# Match 'api' or "api" that's not part of apprise_api.api
+# Use negative lookbehind to avoid matching apprise_api.api
+content = re.sub(r"(?<!apprise_api\.)(['\"])api\1", r"\1apprise_api.api\1", content)
+
+with open(settings_file, 'w') as f:
+    f.write(content)
+PYTHON
       fi
       
       # Fix AppConfig.name in apps.py files
