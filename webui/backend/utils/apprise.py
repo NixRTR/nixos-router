@@ -256,10 +256,7 @@ def load_apprise_config(config_path: Optional[str] = None) -> Apprise:
             non_empty_lines = [line.strip() for line in lines if line.strip() and not line.strip().startswith('#')]
             logger.debug(f"Found {len(non_empty_lines)} non-empty, non-comment lines")
             for idx, line in enumerate(non_empty_lines[:5], 1):
-                # Mask sensitive parts but show structure
-                masked = re.sub(r':([^:@/]+)@', r':***@', line)
-                masked = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked)
-                logger.debug(f"Line {idx} structure (masked): {masked[:100]}...")
+                logger.debug(f"Line {idx} structure (masked): {line}")
             
             # Read all lines, filter out empty lines and comments
             for line_num, line in enumerate(lines, 1):
