@@ -112,6 +112,17 @@ let
       pip
     ];
     
+    # Patch the incorrect import in settings/__init__.py
+    # The code uses "from core.themes" but should use "from apprise_api.core.themes"
+    postPatch = ''
+      # Fix import in settings/__init__.py
+      if [ -f "apprise_api/core/settings/__init__.py" ]; then
+        sed -i 's/from core\.themes/from apprise_api.core.themes/g' apprise_api/core/settings/__init__.py
+      fi
+      # Also check for any other "from core." imports that should be "from apprise_api.core."
+      find . -name "*.py" -type f -exec sed -i 's/from core\./from apprise_api.core./g' {} +
+    '';
+    
     doCheck = false; # Skip tests for now
     
     meta = with lib; {
