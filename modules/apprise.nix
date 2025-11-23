@@ -310,7 +310,7 @@ in
         User = "apprise";
         Group = "apprise";
         WorkingDirectory = "/var/lib/apprise";
-        ExecStart = "${pythonEnv}/bin/gunicorn --bind 127.0.0.1:${toString cfg.port} --workers 2 apprise_api.core.wsgi:app";
+        ExecStart = "${pythonEnv}/bin/gunicorn --bind 127.0.0.1:${toString cfg.port} --workers 2 --log-level debug --capture-output apprise_api.core.wsgi:app";
         Restart = "always";
         RestartSec = "10s";
         
