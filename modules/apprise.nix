@@ -16,7 +16,7 @@ let
       owner = "caronc";
       repo = "apprise-api";
       rev = "v${version}";
-      sha256 = lib.fakeSha256; # Will be updated after first build
+      sha256 = "sha256-duGwg/zBtbdPv6fpNubNJ6yCqiv1JI9kYLIf799LzlI=";
     };
     
     format = "pyproject";
