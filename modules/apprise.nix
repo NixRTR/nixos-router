@@ -14,7 +14,7 @@ let
     
     src = pkgs.python311Packages.fetchPypi {
       inherit pname version;
-      sha256 = "JAYSEPZ7H47T6P3VH47T6PY2H56XS5CPPI7UKCZ7H5ND63BIH47Q2CQ=";
+      sha256 = "126951n9lnlqrw5lbsvs9xs7jzg33bqqxm7cfnqag2csw6p24ca8";
     };
     
     # Apprise uses setuptools, not pyproject
