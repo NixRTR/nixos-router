@@ -80,21 +80,31 @@ async def send_notification_endpoint(
             detail="Apprise is not enabled"
         )
     
-    success, error = send_notification(
-        body=request.body,
-        title=request.title,
-        notification_type=request.notification_type
-    )
-    
-    if success:
-        return NotificationResponse(
-            success=True,
-            message="Notification sent successfully"
+    try:
+        success, error = send_notification(
+            body=request.body,
+            title=request.title,
+            notification_type=request.notification_type
         )
-    else:
+        
+        if success:
+            return NotificationResponse(
+                success=True,
+                message="Notification sent successfully"
+            )
+        else:
+            # Return 200 with success=False so frontend can display the error
+            # This allows partial success (some services work, others don't)
+            return NotificationResponse(
+                success=False,
+                message=error or "Failed to send notification to all services",
+                details=error
+            )
+    except Exception as e:
+        logger.error(f"Exception in send_notification_endpoint: {type(e).__name__}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=error or "Failed to send notification"
+            detail=f"Internal server error: {type(e).__name__}: {str(e)}"
         )
 
 

@@ -64,7 +64,65 @@ def url_encode_password_in_url(url: str) -> str:
         URL with properly encoded passwords/tokens
     """
     try:
-        # Parse the URL
+        # For mailto URLs, we need special handling because they can have query parameters
+        # that also need encoding (like &from=email@domain.com)
+        if url.startswith('mailto://'):
+            # Parse mailto URL manually since urlparse might not handle it correctly
+            # Format: mailto://user:pass@host:port?to=email&from=email
+            scheme_end = url.find('://')
+            if scheme_end == -1:
+                return url
+            
+            scheme = url[:scheme_end + 3]  # Include ://
+            rest = url[scheme_end + 3:]
+            
+            # Find query string start
+            query_start = rest.find('?')
+            if query_start != -1:
+                url_part = rest[:query_start]
+                query_part = rest[query_start + 1:]
+            else:
+                url_part = rest
+                query_part = ""
+            
+            # Parse user:pass@host:port
+            if '@' in url_part:
+                userinfo, hostport = url_part.rsplit('@', 1)
+                if ':' in userinfo:
+                    username, password = userinfo.split(':', 1)
+                    # URL-encode the password (decode first in case it's partially encoded)
+                    try:
+                        # Try to decode first to avoid double-encoding
+                        decoded_password = password
+                        # URL-encode the password
+                        encoded_password = quote(decoded_password, safe='')
+                    except:
+                        encoded_password = quote(password, safe='')
+                    # Reconstruct URL part
+                    encoded_url_part = f"{username}:{encoded_password}@{hostport}"
+                else:
+                    encoded_url_part = url_part
+            else:
+                encoded_url_part = url_part
+            
+            # Encode query parameters
+            if query_part:
+                # Parse and encode query parameters
+                query_params = []
+                for param in query_part.split('&'):
+                    if '=' in param:
+                        key, value = param.split('=', 1)
+                        # URL-encode the value
+                        encoded_value = quote(value, safe='')
+                        query_params.append(f"{key}={encoded_value}")
+                    else:
+                        query_params.append(param)
+                encoded_query = '&'.join(query_params)
+                return f"{scheme}{encoded_url_part}?{encoded_query}"
+            else:
+                return f"{scheme}{encoded_url_part}"
+        
+        # For other URL types, use standard URL parsing
         parsed = urlparse(url)
         
         # If there's user info (user:pass), encode the password part
@@ -87,7 +145,6 @@ def url_encode_password_in_url(url: str) -> str:
         
         # For paths that might contain tokens (like discord://id/token)
         # We need to be careful - Apprise URLs can have tokens in the path
-        # For now, we'll encode the entire path if it looks like it contains tokens
         encoded_path = parsed.path
         if encoded_path and '/' in encoded_path:
             # Split path into segments
@@ -110,6 +167,7 @@ def url_encode_password_in_url(url: str) -> str:
         return encoded_url
     except Exception as e:
         logger.warning(f"Failed to URL-encode password in URL, using original: {str(e)}")
+        logger.debug(f"Problematic URL: {url[:100]}... (masked)", exc_info=True)
         return url
 
 
@@ -154,7 +212,15 @@ def load_apprise_config(config_path: Optional[str] = None) -> Apprise:
                         logger.debug(f"Successfully added service from line {line_num}")
                     except Exception as add_error:
                         logger.error(f"Failed to add service from line {line_num}: {type(add_error).__name__}: {str(add_error)}")
-                        logger.error(f"Problematic URL: {line[:100]}... (masked)")
+                        logger.error(f"Problematic URL (original): {line[:100]}... (masked)")
+                        logger.error(f"Problematic URL (encoded): {encoded_url[:100]}... (masked)")
+                        # Try to add the original URL as a fallback
+                        try:
+                            logger.warning(f"Attempting to add original URL as fallback")
+                            apobj.add(line)
+                            logger.info(f"Successfully added original URL as fallback")
+                        except Exception as fallback_error:
+                            logger.error(f"Fallback also failed: {type(fallback_error).__name__}: {str(fallback_error)}")
     else:
         logger.warning(f"Apprise config file does not exist: {config_path}")
     
@@ -348,6 +414,23 @@ def test_service(
                 notify_type=apprise_type
             )
             logger.debug(f"Notification result: {result}")
+            
+            # Check if we can get more details about the result
+            # Apprise stores errors in the notification response
+            if not result:
+                # Try to get error details from Apprise
+                # Apprise doesn't expose this easily, but we can check if the service was added
+                logger.warning(f"Notification returned False for {get_service_name_from_url(raw_url)}")
+                # Check if the service was actually added to the Apprise object
+                service_count = len(apobj)
+                if service_count == 0:
+                    return (False, "Service URL could not be parsed", "The service URL format may be invalid or the credentials may contain invalid characters")
+                else:
+                    return (False, "Failed to send notification", "The service may be misconfigured, unreachable, or the credentials may be invalid. Check the Apprise logs for details.")
+            
+            logger.info(f"Successfully sent notification to {get_service_name_from_url(raw_url)}")
+            return (True, None, f"Notification sent successfully to {get_service_name_from_url(raw_url)}")
+            
         except Exception as notify_error:
             logger.error(f"Exception during notify(): {type(notify_error).__name__}: {str(notify_error)}", exc_info=True)
             error_msg = str(notify_error)
@@ -361,15 +444,6 @@ def test_service(
             else:
                 details = f"{error_type}: {error_msg}"
             return (False, error_msg, details)
-        
-        if result:
-            logger.info(f"Successfully sent notification to {get_service_name_from_url(raw_url)}")
-            return (True, None, f"Notification sent successfully to {get_service_name_from_url(raw_url)}")
-        else:
-            logger.warning(f"Notification returned False for {get_service_name_from_url(raw_url)}")
-            # Try to get more information about the failure
-            # Apprise doesn't expose detailed error messages easily
-            return (False, "Failed to send notification", "The service may be misconfigured, unreachable, or the credentials may be invalid")
             
     except Exception as e:
         logger.error(f"Unexpected exception in test_service: {type(e).__name__}: {str(e)}", exc_info=True)
