@@ -285,6 +285,8 @@ in
       environment = {
         APPRISE_CONFIG_DIR = cfg.configDir;
         APPRISE_ATTACH_SIZE = toString cfg.attachSize;
+        # Django settings module path
+        DJANGO_SETTINGS_MODULE = "apprise_api.core.settings";
       } // (optionalAttrs (cfg.attachmentsDir != null) {
         APPRISE_ATTACHMENTS = cfg.attachmentsDir;
       });
