@@ -105,17 +105,21 @@ in
       description = "Initialize Apprise configuration";
       wantedBy = [ "router-webui-backend.service" ];
       before = [ "router-webui-backend.service" ];
-      after = [ "local-fs.target" ];
+      after = [ "local-fs.target" "systemd-tmpfiles-setup.service" ];
       
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        User = "router-webui";
-        Group = "router-webui";
+        # Run as root to set permissions, then change ownership
       };
       
       script = ''
+        # Ensure directories exist with correct permissions
         mkdir -p ${cfg.configDir}
+        chown router-webui:router-webui ${cfg.configDir}
+        chmod 750 ${cfg.configDir}
+        
+        # Copy config file and set permissions
         cp ${config.sops.templates."apprise-config".path} ${cfg.configDir}/apprise
         chown router-webui:router-webui ${cfg.configDir}/apprise
         chmod 600 ${cfg.configDir}/apprise
