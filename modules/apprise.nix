@@ -53,9 +53,13 @@ let
       # Note: chatId is required for Telegram notifications
       telegramUrl = if services.telegram.enable or false then
         let
-          chatId = services.telegram.chatId or "";
+          # Get chatId, handling null, empty string, or missing value
+          chatId = if (services.telegram.chatId or null) != null then
+            toString (services.telegram.chatId)
+          else
+            "";
         in
-        if chatId != "" then
+        if chatId != "" && chatId != "null" then
           "tgram://${config.sops.placeholder."apprise-telegram-bot-token"}/${chatId}"
         else
           # If chatId is missing, still generate URL but it will fail at runtime
