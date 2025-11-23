@@ -31,8 +31,10 @@ export function Apprise() {
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ success: boolean; message: string } | null>(null);
   
-  // Test notification state
-  const [testingService, setTestingService] = useState<string | null>(null);
+  // Test notification state - track status per service index
+  const [testingServices, setTestingServices] = useState<Set<number>>(new Set());
+  const [testResults, setTestResults] = useState<Map<number, { success: boolean; message: string; details?: string }>>(new Map());
+  const [testErrors, setTestErrors] = useState<Map<number, string>>(new Map());
   
   const { connectionStatus } = useMetrics(token);
 
@@ -96,26 +98,42 @@ export function Apprise() {
     }
   };
 
-  const handleTestService = async (serviceUrl: string) => {
-    setTestingService(serviceUrl);
-    setSendResult(null);
+  const handleTestService = async (serviceIndex: number, serviceUrl: string) => {
+    setTestingServices(prev => new Set(prev).add(serviceIndex));
+    setTestErrors(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(serviceIndex);
+      return newMap;
+    });
+    setTestResults(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(serviceIndex);
+      return newMap;
+    });
     
     try {
-      // Note: This sends to all configured services, not just the selected one
-      // Individual service testing would require API changes
-      const result = await apiClient.sendAppriseNotification(
-        `This is a test notification from the NixOS Router WebUI. Testing service: ${getServiceName(serviceUrl)}`,
-        'Test Notification',
-        'info'
-      );
-      setSendResult(result);
+      const result = await apiClient.testAppriseService(serviceIndex);
+      setTestResults(prev => new Map(prev).set(serviceIndex, result));
+      
+      if (!result.success) {
+        const errorMsg = result.details 
+          ? `${result.message}: ${result.details}`
+          : result.message;
+        setTestErrors(prev => new Map(prev).set(serviceIndex, errorMsg));
+      }
     } catch (err: any) {
-      setSendResult({
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to send test notification';
+      setTestErrors(prev => new Map(prev).set(serviceIndex, errorMsg));
+      setTestResults(prev => new Map(prev).set(serviceIndex, {
         success: false,
-        message: err.response?.data?.detail || err.message || 'Failed to send test notification',
-      });
+        message: errorMsg,
+      }));
     } finally {
-      setTestingService(null);
+      setTestingServices(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(serviceIndex);
+        return newSet;
+      });
     }
   };
 
@@ -327,57 +345,84 @@ export function Apprise() {
                 </Alert>
               ) : (
                 <div className="space-y-4">
-                  {services.map((service, index) => (
-                    <Card key={index} className="bg-gray-50 dark:bg-gray-800">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge color="info">{getServiceName(service.url)}</Badge>
+                  {services.map((service, index) => {
+                    const isTesting = testingServices.has(index);
+                    const testResult = testResults.get(index);
+                    const testError = testErrors.get(index);
+                    const isSuccess = testResult?.success === true;
+                    
+                    return (
+                      <Card key={index} className="bg-gray-50 dark:bg-gray-800">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge color="info">{getServiceName(service.url)}</Badge>
+                              {isSuccess && (
+                                <HiCheckCircle className="w-5 h-5 text-green-500" title="Test successful" />
+                              )}
+                            </div>
+                            <code className="text-sm text-gray-600 dark:text-gray-400 break-all">
+                              {service.url}
+                            </code>
+                            {testError && (
+                              <Alert color="failure" className="mt-2">
+                                <div className="text-sm">
+                                  <strong>Test Error:</strong> {testError}
+                                </div>
+                              </Alert>
+                            )}
+                            {testResult?.success && testResult.details && (
+                              <Alert color="success" className="mt-2">
+                                <div className="text-sm">{testResult.details}</div>
+                              </Alert>
+                            )}
                           </div>
-                          <code className="text-sm text-gray-600 dark:text-gray-400 break-all">
-                            {service.url}
-                          </code>
+                          <div className="flex gap-2">
+                            <div className="relative">
+                              <Button
+                                size="sm"
+                                color={isSuccess ? "success" : "light"}
+                                onClick={() => handleTestService(index, service.url)}
+                                disabled={isTesting}
+                              >
+                                {isTesting ? 'Testing...' : isSuccess ? 'Test Again' : 'Test'}
+                              </Button>
+                              {isSuccess && !isTesting && (
+                                <HiCheckCircle className="absolute -top-1 -right-1 w-5 h-5 text-green-500 bg-white dark:bg-gray-800 rounded-full" />
+                              )}
+                            </div>
+                          </div>
+                          </div>
+                        
+                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                          <Label value="Example cURL Command" className="mb-2 block" />
+                          <div className="relative">
+                            <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-xs overflow-x-auto pr-20">
+                              <code>{getCurlCommand()}</code>
+                            </pre>
+                            <Button
+                              size="xs"
+                              color="light"
+                              className="absolute top-2 right-2"
+                              onClick={async () => {
+                                try {
+                                  await navigator.clipboard.writeText(getCurlCommand());
+                                  // You could add a toast notification here if desired
+                                } catch (err) {
+                                  console.error('Failed to copy:', err);
+                                }
+                              }}
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                            Replace the message body, title, and notification_type as needed.
+                          </p>
                         </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            color="light"
-                            onClick={() => handleTestService(service.url)}
-                            disabled={testingService === service.url}
-                          >
-                            {testingService === service.url ? 'Testing...' : 'Test'}
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                        <Label value="Example cURL Command" className="mb-2 block" />
-                        <div className="relative">
-                          <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-xs overflow-x-auto pr-20">
-                            <code>{getCurlCommand()}</code>
-                          </pre>
-                          <Button
-                            size="xs"
-                            color="light"
-                            className="absolute top-2 right-2"
-                            onClick={async () => {
-                              try {
-                                await navigator.clipboard.writeText(getCurlCommand());
-                                // You could add a toast notification here if desired
-                              } catch (err) {
-                                console.error('Failed to copy:', err);
-                              }
-                            }}
-                          >
-                            Copy
-                          </Button>
-                        </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                          Replace the message body, title, and notification_type as needed.
-                        </p>
-                      </div>
-                    </Card>
-                  ))}
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </Card>

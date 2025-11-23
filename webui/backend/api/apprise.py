@@ -10,7 +10,8 @@ from ..utils.apprise import (
     is_apprise_enabled,
     send_notification,
     get_configured_services,
-    load_apprise_config
+    load_apprise_config,
+    test_service
 )
 
 
@@ -36,6 +37,7 @@ class NotificationResponse(BaseModel):
     """Response model for notification requests"""
     success: bool
     message: str
+    details: Optional[str] = None
 
 
 class ServiceInfo(BaseModel):
@@ -107,6 +109,50 @@ async def get_services(
     
     services = get_configured_services()
     return [ServiceInfo(url=url) for url in services]
+
+
+@router.post("/test/{service_index}", response_model=NotificationResponse)
+async def test_service_endpoint(
+    service_index: int,
+    _: str = Depends(get_current_user)
+) -> NotificationResponse:
+    """Test a specific notification service by index
+    
+    Args:
+        service_index: Index of the service to test (0-based)
+        
+    Returns:
+        NotificationResponse: Success status and message
+    """
+    if not is_apprise_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="Apprise is not enabled"
+        )
+    
+    services = get_configured_services()
+    
+    if service_index < 0 or service_index >= len(services):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Service index {service_index} not found"
+        )
+    
+    service_url = services[service_index]
+    success, error, details = test_service(service_url)
+    
+    if success:
+        return NotificationResponse(
+            success=True,
+            message=f"Test notification sent successfully",
+            details=details
+        )
+    else:
+        return NotificationResponse(
+            success=False,
+            message=error or "Failed to send test notification",
+            details=details
+        )
 
 
 @router.get("/config")

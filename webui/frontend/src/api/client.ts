@@ -238,12 +238,17 @@ class APIClient {
     body: string,
     title?: string,
     notificationType?: string
-  ): Promise<{ success: boolean; message: string }> {
-    const response = await this.client.post<{ success: boolean; message: string }>('/api/apprise/notify', {
+  ): Promise<{ success: boolean; message: string; details?: string }> {
+    const response = await this.client.post<{ success: boolean; message: string; details?: string }>('/api/apprise/notify', {
       body,
       title,
       notification_type: notificationType,
     });
+    return response.data;
+  }
+
+  async testAppriseService(serviceIndex: number): Promise<{ success: boolean; message: string; details?: string }> {
+    const response = await this.client.post<{ success: boolean; message: string; details?: string }>(`/api/apprise/test/${serviceIndex}`);
     return response.data;
   }
 
