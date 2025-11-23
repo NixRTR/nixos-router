@@ -218,6 +218,35 @@ class APIClient {
     return response.data;
   }
 
+  async getAppriseServices(): Promise<{ url: string }[]> {
+    const response = await this.client.get<{ url: string }[]>('/api/apprise/services');
+    return response.data;
+  }
+
+  async getAppriseConfig(): Promise<{
+    enabled: boolean;
+    services_count: number;
+    config_file_exists: boolean;
+    services?: string[];
+    error?: string;
+  }> {
+    const response = await this.client.get('/api/apprise/config');
+    return response.data;
+  }
+
+  async sendAppriseNotification(
+    body: string,
+    title?: string,
+    notificationType?: string
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await this.client.post<{ success: boolean; message: string }>('/api/apprise/notify', {
+      body,
+      title,
+      notification_type: notificationType,
+    });
+    return response.data;
+  }
+
   async getCakeHistory(
     range: string = '1h',
     interfaceName?: string

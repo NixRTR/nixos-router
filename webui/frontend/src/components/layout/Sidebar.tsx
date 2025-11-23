@@ -175,6 +175,18 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
                 Speedtest
               </FlowbiteSidebar.Item>
 
+              {appriseEnabled && (
+                <FlowbiteSidebar.Item
+                  as={Link}
+                  to="/apprise"
+                  icon={HiBell}
+                  active={location.pathname === '/apprise'}
+                  onClick={handleItemClick}
+                >
+                  Apprise
+                </FlowbiteSidebar.Item>
+              )}
+
               {cakeEnabled && (
                 <FlowbiteSidebar.Item
                   as={Link}
@@ -222,19 +234,6 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
               >
                 Documentation
               </FlowbiteSidebar.Item>
-              {/* Apprise Notifications */}
-              {appriseEnabled && (
-                <FlowbiteSidebar.Item
-                  href="/apprise/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  icon={HiBell}
-                  as="a"
-                  onClick={handleItemClick}
-                >
-                  Apprise
-                </FlowbiteSidebar.Item>
-              )}
               {/* GitHub Links */}
               <FlowbiteSidebar.Item
                 href="https://github.com/BeardedTek/nixos-router"

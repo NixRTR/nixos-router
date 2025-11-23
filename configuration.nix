@@ -160,12 +160,10 @@ in
     };
   };
 
-  # Apprise API configuration (from router-config.nix)
+  # Apprise notification service configuration (from router-config.nix)
+  # Integrated with WebUI backend - no separate service needed
   services.apprise-api = lib.mkIf (routerConfig.apprise.enable or false) {
     enable = true;
-    port = routerConfig.apprise.port or 8001;
-    attachSize = routerConfig.apprise.attachSize or 0;
-    attachmentsDir = routerConfig.apprise.attachmentsDir or null;
   };
 
   # Enable SSH for remote administration
