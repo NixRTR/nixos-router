@@ -6,6 +6,44 @@ let
   cfg = config.services.apprise-api;
   routerConfig = import ../router-config.nix;
   
+  # Build custom apprise package pinned to version 1.9.4 (required by apprise-api)
+  # nixpkgs has 1.9.5, but apprise-api requires exactly 1.9.4
+  apprise-1-9-4 = pkgs.python311Packages.buildPythonPackage rec {
+    pname = "apprise";
+    version = "1.9.4";
+    
+    src = pkgs.python311Packages.fetchPypi {
+      inherit pname version;
+      sha256 = "sha256-483122aee19a89a7b075ecd48ef11ae37d79744f7aeb450bcf985a9a6c28c988";
+    };
+    
+    # Apprise uses setuptools, not pyproject
+    format = "setuptools";
+    
+    propagatedBuildInputs = with pkgs.python311Packages; [
+      requests
+      pyyaml
+      click
+      markdown
+      # Optional but commonly used dependencies
+      beautifulsoup4  # For HTML parsing in some notification services
+      cryptography    # For encrypted connections
+    ];
+    
+    nativeBuildInputs = with pkgs.python311Packages; [
+      setuptools
+      wheel
+    ];
+    
+    doCheck = false;
+    
+    meta = with lib; {
+      description = "Push Notifications that work with just about every platform";
+      homepage = "https://github.com/caronc/apprise";
+      license = licenses.bsd2;
+    };
+  };
+  
   # Build custom apprise-api package from GitHub
   # apprise-api is not available in nixpkgs, so we build it ourselves
   apprise-api-package = pkgs.python311Packages.buildPythonPackage rec {
@@ -22,7 +60,7 @@ let
     format = "pyproject";
     
     propagatedBuildInputs = with pkgs.python311Packages; [
-      apprise
+      apprise-1-9-4  # Use our custom apprise 1.9.4 package
       flask
       gunicorn
       pyyaml
@@ -39,14 +77,6 @@ let
     
     doCheck = false; # Skip tests for now
     
-    # Disable runtime dependency check - apprise-api has strict version requirements
-    # that don't match nixpkgs versions (expects 1.9.4, we have 1.9.5), and optional
-    # dependencies (django, gevent, etc.) that we don't need for basic functionality
-    # The runtime deps check is done by pythonRuntimeDepsCheckHook, override it
-    pythonRuntimeDepsCheckPhase = ''
-      echo "Skipping runtime dependency check for apprise-api (version mismatch and optional deps)"
-    '';
-    
     meta = with lib; {
       description = "A lightweight REST framework that wraps the Apprise Notification Library";
       homepage = "https://github.com/caronc/apprise-api";
@@ -55,9 +85,9 @@ let
   };
   
   # Python environment with apprise-api and dependencies
+  # Note: apprise-1-9-4 is included via apprise-api-package's propagatedBuildInputs
   pythonEnv = pkgs.python311.withPackages (ps: with ps; [
     apprise-api-package
-    apprise
     flask
     gunicorn
     pyyaml
