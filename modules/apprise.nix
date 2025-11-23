@@ -313,7 +313,7 @@ in
         # Use StandardError=journal to ensure errors are logged
         StandardError = "journal";
         StandardOutput = "journal";
-        ExecStart = "${pythonEnv}/bin/gunicorn --bind 127.0.0.1:${toString cfg.port} --workers 2 --log-level debug --capture-output --error-logfile /dev/stderr --access-logfile /dev/stdout apprise_api.core.wsgi:app";
+        ExecStart = "${pythonEnv}/bin/gunicorn --bind 127.0.0.1:${toString cfg.port} --workers 2 --log-level debug --capture-output --error-logfile - --access-logfile - apprise_api.core.wsgi:app";
         Restart = "always";
         RestartSec = "10s";
         
