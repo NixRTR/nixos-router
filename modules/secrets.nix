@@ -7,6 +7,16 @@ let
   pppoeEnabled = routerConfig.wan.type == "pppoe";
   dyndnsEnabled = routerConfig.dyndns.enable or false;
   appriseEnabled = routerConfig.apprise.enable or false;
+  appriseServices = routerConfig.apprise.services or {};
+  
+  # Check if individual apprise services are enabled
+  emailEnabled = appriseEnabled && (appriseServices.email.enable or false);
+  homeAssistantEnabled = appriseEnabled && (appriseServices.homeAssistant.enable or false);
+  discordEnabled = appriseEnabled && (appriseServices.discord.enable or false);
+  slackEnabled = appriseEnabled && (appriseServices.slack.enable or false);
+  telegramEnabled = appriseEnabled && (appriseServices.telegram.enable or false);
+  ntfyEnabled = appriseEnabled && (appriseServices.ntfy.enable or false);
+  ntfyAuthEnabled = ntfyEnabled && (appriseServices.ntfy.username or null) != null;
 
 in
 
@@ -46,16 +56,20 @@ in
         mode = "0400";
       };
     }
-    # Apprise API secrets (conditional)
-    // optionalAttrs appriseEnabled {
+    # Apprise API secrets (conditional on service enablement)
+    // optionalAttrs emailEnabled {
       apprise-email-password = {
         owner = "apprise";
         mode = "0400";
       };
+    }
+    // optionalAttrs homeAssistantEnabled {
       apprise-homeassistant-token = {
         owner = "apprise";
         mode = "0400";
       };
+    }
+    // optionalAttrs discordEnabled {
       apprise-discord-webhook-id = {
         owner = "apprise";
         mode = "0400";
@@ -64,6 +78,8 @@ in
         owner = "apprise";
         mode = "0400";
       };
+    }
+    // optionalAttrs slackEnabled {
       apprise-slack-token-a = {
         owner = "apprise";
         mode = "0400";
@@ -76,10 +92,14 @@ in
         owner = "apprise";
         mode = "0400";
       };
+    }
+    // optionalAttrs telegramEnabled {
       apprise-telegram-bot-token = {
         owner = "apprise";
         mode = "0400";
       };
+    }
+    // optionalAttrs ntfyAuthEnabled {
       apprise-ntfy-username = {
         owner = "apprise";
         mode = "0400";
