@@ -66,6 +66,12 @@ let
       pyyaml
       click
       requests
+      # Optional dependencies that apprise-api supports
+      django
+      gevent
+      paho-mqtt
+      gntp
+      django-prometheus
     ];
     
     # Apprise-api uses pyproject.toml, so we need to ensure it's properly built
