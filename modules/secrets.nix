@@ -57,55 +57,56 @@ in
       };
     }
     # Apprise API secrets (conditional on service enablement)
+    # Owner is router-webui since Apprise is integrated into the WebUI backend
     // optionalAttrs emailEnabled {
       apprise-email-password = {
-        owner = "apprise";
+        owner = "router-webui";
         mode = "0400";
       };
     }
     // optionalAttrs homeAssistantEnabled {
       apprise-homeassistant-token = {
-        owner = "apprise";
+        owner = "router-webui";
         mode = "0400";
       };
     }
     // optionalAttrs discordEnabled {
       apprise-discord-webhook-id = {
-        owner = "apprise";
+        owner = "router-webui";
         mode = "0400";
       };
       apprise-discord-webhook-token = {
-        owner = "apprise";
+        owner = "router-webui";
         mode = "0400";
       };
     }
     // optionalAttrs slackEnabled {
       apprise-slack-token-a = {
-        owner = "apprise";
+        owner = "router-webui";
         mode = "0400";
       };
       apprise-slack-token-b = {
-        owner = "apprise";
+        owner = "router-webui";
         mode = "0400";
       };
       apprise-slack-token-c = {
-        owner = "apprise";
+        owner = "router-webui";
         mode = "0400";
       };
     }
     // optionalAttrs telegramEnabled {
       apprise-telegram-bot-token = {
-        owner = "apprise";
+        owner = "router-webui";
         mode = "0400";
       };
     }
     // optionalAttrs ntfyAuthEnabled {
       apprise-ntfy-username = {
-        owner = "apprise";
+        owner = "router-webui";
         mode = "0400";
       };
       apprise-ntfy-password = {
-        owner = "apprise";
+        owner = "router-webui";
         mode = "0400";
       };
     };
