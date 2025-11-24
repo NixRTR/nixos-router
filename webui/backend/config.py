@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     # Historical Data Retention
     metrics_retention_days: int = 30
     
+    # Notifications
+    notification_check_interval: int = 30  # seconds between evaluation cycles
+    
     # CORS (for development - production serves from same origin via nginx)
     # In production, nginx serves everything from the same origin, so CORS is not needed
     # For development, allow localhost origins

@@ -17,6 +17,7 @@ const Documentation = lazy(() => import('./pages/Documentation').then(m => ({ de
 const Speedtest = lazy(() => import('./pages/Speedtest').then(m => ({ default: m.Speedtest })));
 const TrafficShaping = lazy(() => import('./pages/TrafficShaping').then(m => ({ default: m.TrafficShaping })));
 const Apprise = lazy(() => import('./pages/Apprise').then(m => ({ default: m.Apprise })));
+const Notifications = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -151,6 +152,16 @@ export default function App() {
             <ProtectedRoute>
               <Suspense fallback={<PageLoader />}>
                 <Apprise />
+              </Suspense>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoader />}>
+                <Notifications />
               </Suspense>
             </ProtectedRoute>
           }

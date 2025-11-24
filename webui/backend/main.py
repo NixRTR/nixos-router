@@ -29,7 +29,7 @@ apprise_logger.setLevel(logging.DEBUG)
 # Also enable debug for apprise.plugins and apprise.attachment modules
 logging.getLogger('apprise.plugins').setLevel(logging.DEBUG)
 logging.getLogger('apprise.attachment').setLevel(logging.DEBUG)
-from .database import init_db
+from .database import init_db, AsyncSessionLocal
 from .websocket import manager, websocket_endpoint
 from .api.auth import router as auth_router
 from .api.history import router as history_router
@@ -39,7 +39,11 @@ from .api.system import router as system_router
 from .api.speedtest import router as speedtest_router
 from .api.cake import router as cake_router
 from .api.apprise import router as apprise_router
+from .api.notifications import router as notifications_router
 from .collectors.aggregation import run_aggregation_job
+from .collectors.notifications import NotificationEvaluator
+
+notification_evaluator = NotificationEvaluator(AsyncSessionLocal)
 
 
 async def daily_aggregation_task():
@@ -72,6 +76,21 @@ async def daily_aggregation_task():
             await asyncio.sleep(3600)
 
 
+async def notification_evaluator_task():
+    """Background task that periodically evaluates notification rules"""
+    while True:
+        try:
+            await notification_evaluator.evaluate_all()
+            await asyncio.sleep(settings.notification_check_interval)
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logging.getLogger(__name__).error(
+                "Notification evaluator error: %s", exc, exc_info=True
+            )
+            await asyncio.sleep(settings.notification_check_interval)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager
@@ -92,6 +111,8 @@ async def lifespan(app: FastAPI):
     # Start daily aggregation task
     aggregation_task = asyncio.create_task(daily_aggregation_task())
     print("Daily aggregation task started")
+    notification_task = asyncio.create_task(notification_evaluator_task())
+    print("Notification evaluator task started")
     
     yield
     
@@ -103,6 +124,13 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
     print("Aggregation task stopped")
+
+    notification_task.cancel()
+    try:
+        await notification_task
+    except asyncio.CancelledError:
+        pass
+    print("Notification evaluator task stopped")
     
     await manager.stop_broadcasting()
     print("WebSocket broadcaster stopped")
@@ -137,6 +165,7 @@ app.include_router(system_router)
 app.include_router(speedtest_router)
 app.include_router(cake_router)
 app.include_router(apprise_router)
+app.include_router(notifications_router)
 
 
 @app.get("/api")

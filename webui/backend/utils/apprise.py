@@ -350,11 +350,40 @@ def load_apprise_config(config_path: Optional[str] = None) -> Apprise:
     return apobj
 
 
+def _build_apprise_for_services(
+    service_indices: Optional[List[int]],
+    config_path: Optional[str]
+) -> Tuple[Optional[Apprise], Optional[str]]:
+    """Return an Apprise instance filtered to selected services"""
+    if service_indices is None or len(service_indices) == 0:
+        return load_apprise_config(config_path), None
+
+    services = get_raw_service_urls(config_path)
+    if not services:
+        return None, "No notification services configured"
+
+    apobj = Apprise()
+    for idx in service_indices:
+        if idx < 0 or idx >= len(services):
+            logger.warning(f"Service index {idx} out of range while building notification payload")
+            continue
+        url = services[idx]['url']
+        encoded_url = url_encode_password_in_url(url)
+        try:
+            apobj.add(encoded_url)
+        except Exception as exc:
+            logger.error(f"Failed to add service at index {idx}: {exc}")
+    if len(apobj) == 0:
+        return None, "No valid services selected for notification"
+    return apobj, None
+
+
 def send_notification(
     body: str,
     title: Optional[str] = None,
     notification_type: Optional[str] = None,
-    config_path: Optional[str] = None
+    config_path: Optional[str] = None,
+    service_indices: Optional[List[int]] = None
 ) -> Tuple[bool, Optional[str]]:
     """Send notification using Apprise
     
@@ -368,8 +397,9 @@ def send_notification(
         Tuple of (success: bool, error_message: Optional[str])
     """
     try:
-        # Load Apprise configuration
-        apobj = load_apprise_config(config_path)
+        apobj, error = _build_apprise_for_services(service_indices, config_path)
+        if error:
+            return (False, error)
         
         # Check if any services are configured
         if not apobj:

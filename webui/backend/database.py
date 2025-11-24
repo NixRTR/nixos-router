@@ -3,8 +3,8 @@ Database connection and ORM models using SQLAlchemy
 """
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, Integer, Float, String, Boolean, BigInteger, DateTime, Text, Index, text
-from sqlalchemy.dialects.postgresql import INET, MACADDR, JSONB
+from sqlalchemy import Column, Integer, Float, String, Boolean, BigInteger, DateTime, Text, Index, text, ForeignKey
+from sqlalchemy.dialects.postgresql import INET, MACADDR, JSONB, ARRAY
 from datetime import datetime
 from typing import AsyncGenerator
 
@@ -283,6 +283,61 @@ class CakeStatsDB(Base):
         Index('idx_cake_stats_timestamp', 'timestamp', postgresql_using='btree'),
     )
 
+
+class NotificationRuleDB(Base):
+    """Notification rule definition"""
+    __tablename__ = "notification_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    enabled = Column(Boolean, default=True)
+    parameter_type = Column(String(64), nullable=False)
+    parameter_config = Column(JSONB)
+    threshold_info = Column(Float)
+    threshold_warning = Column(Float)
+    threshold_failure = Column(Float)
+    comparison_operator = Column(String(10), default='gt')
+    duration_seconds = Column(Integer, nullable=False)
+    cooldown_seconds = Column(Integer, nullable=False)
+    apprise_service_indices = Column(ARRAY(Integer))
+    message_template = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index('idx_notification_rules_enabled', 'enabled', postgresql_using='btree'),
+    )
+
+
+class NotificationStateDB(Base):
+    """Notification rule runtime state"""
+    __tablename__ = "notification_state"
+
+    rule_id = Column(Integer, ForeignKey('notification_rules.id', ondelete='CASCADE'), primary_key=True)
+    current_level = Column(String(20))
+    threshold_exceeded_at = Column(DateTime(timezone=True))
+    last_notification_at = Column(DateTime(timezone=True))
+    last_notification_level = Column(String(20))
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class NotificationHistoryDB(Base):
+    """Notification send history"""
+    __tablename__ = "notification_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    rule_id = Column(Integer, ForeignKey('notification_rules.id', ondelete='CASCADE'), nullable=False, index=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    level = Column(String(20), nullable=False)
+    value = Column(Float, nullable=False)
+    message = Column(Text)
+    sent_successfully = Column(Boolean, default=False)
+
+    __table_args__ = (
+        Index('idx_notification_history_rule_id', 'rule_id', postgresql_using='btree'),
+        Index('idx_notification_history_timestamp', 'timestamp', postgresql_using='btree'),
+    )
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting async database session"""
     async with AsyncSessionLocal() as session:
@@ -556,4 +611,67 @@ async def _apply_schema_updates(conn):
             """)
         )
         print("Created speedtest_results table")
+
+    # Migration 004: Notification system tables - ensure indexes and triggers exist
+    await conn.execute(
+        text("""
+            CREATE INDEX IF NOT EXISTS idx_notification_rules_enabled
+            ON notification_rules(enabled)
+        """)
+    )
+    await conn.execute(
+        text("""
+            CREATE INDEX IF NOT EXISTS idx_notification_history_rule_id
+            ON notification_history(rule_id)
+        """)
+    )
+    await conn.execute(
+        text("""
+            CREATE INDEX IF NOT EXISTS idx_notification_history_timestamp
+            ON notification_history(timestamp DESC)
+        """)
+    )
+
+    # Ensure trigger function exists
+    await conn.execute(
+        text("""
+            CREATE OR REPLACE FUNCTION set_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+              NEW.updated_at = NOW();
+              RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        """)
+    )
+
+    # Ensure notification_rules trigger exists
+    result = await conn.execute(
+        text("""
+            SELECT 1 FROM pg_trigger WHERE tgname = 'notification_rules_updated_at'
+        """)
+    )
+    if result.scalar() is None:
+        await conn.execute(
+            text("""
+                CREATE TRIGGER notification_rules_updated_at
+                BEFORE UPDATE ON notification_rules
+                FOR EACH ROW EXECUTE PROCEDURE set_updated_at()
+            """)
+        )
+
+    # Ensure notification_state trigger exists
+    result = await conn.execute(
+        text("""
+            SELECT 1 FROM pg_trigger WHERE tgname = 'notification_state_updated_at'
+        """)
+    )
+    if result.scalar() is None:
+        await conn.execute(
+            text("""
+                CREATE TRIGGER notification_state_updated_at
+                BEFORE UPDATE ON notification_state
+                FOR EACH ROW EXECUTE PROCEDURE set_updated_at()
+            """)
+        )
 
