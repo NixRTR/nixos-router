@@ -503,43 +503,64 @@ def test_service(
     
     try:
         # Create Apprise object with just this service
+        # Use the exact same approach as load_apprise_config for consistency
         logger.debug(f"Creating Apprise object and adding service: {get_service_name_from_url(service_url)}")
         apobj = Apprise()
         
-        # URL-encode passwords/tokens in the URL (same as load_apprise_config does)
-        encoded_url = url_encode_password_in_url(service_url)
-        masked_encoded = re.sub(r':([^:@/]+)@', r':***@', encoded_url)
-        masked_encoded = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_encoded)
-        logger.debug(f"URL-encoded service URL (masked): {masked_encoded[:80]}...")
+        # Process URL exactly like load_apprise_config does
+        url = service_url.strip()
+        
+        # Log the raw line structure (masked) before encoding
+        masked_line = re.sub(r':([^:@/]+)@', r':***@', url)
+        masked_line = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_line)
+        logger.debug(f"Raw URL (masked): {masked_line[:80]}...")
+        
+        # URL-encode passwords/tokens in the URL before adding to Apprise
+        encoded_url = url_encode_password_in_url(url)
+        if encoded_url != url:
+            masked_encoded = re.sub(r':([^:@/]+)@', r':***@', encoded_url)
+            masked_encoded = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_encoded)
+            logger.debug(f"Encoded URL (masked): {masked_encoded[:80]}...")
         
         try:
             # Store count before adding
             count_before = len(apobj)
-            apobj.add(encoded_url)
-            count_after = len(apobj)
             
+            # Add service URL to Apprise (same as load_apprise_config)
+            apobj.add(encoded_url)
+            
+            # Check if service was actually added
+            count_after = len(apobj)
             if count_after > count_before:
-                logger.debug(f"Successfully added service to Apprise object")
+                logger.info(f"Successfully added service to Apprise object (Apprise now has {count_after} service(s))")
             else:
                 logger.warning(f"Service was not added to Apprise (count unchanged: {count_before})")
-                # Try adding the original URL as fallback (same as load_apprise_config)
+                logger.warning(f"This usually means Apprise rejected the URL format. Check Apprise logs above.")
+                # Try to add the original URL as a fallback (same as load_apprise_config)
                 try:
                     logger.warning(f"Attempting to add original URL as fallback")
-                    apobj.add(service_url)
+                    apobj.add(url)
                     if len(apobj) > count_before:
                         logger.info(f"Successfully added original URL as fallback")
                     else:
                         logger.error(f"Fallback also failed - URL format may be incorrect")
-                        return (False, "Invalid service URL", "Service URL could not be parsed by Apprise")
+                        return (False, "Invalid service URL", "Service URL could not be parsed by Apprise. The URL format may be invalid or the credentials may contain invalid characters.")
                 except Exception as fallback_error:
                     logger.error(f"Fallback also failed: {type(fallback_error).__name__}: {str(fallback_error)}")
                     return (False, f"Invalid service URL: {str(fallback_error)}", f"Failed to parse service URL: {type(fallback_error).__name__}")
         except Exception as add_error:
             logger.error(f"Failed to add service URL to Apprise: {type(add_error).__name__}: {str(add_error)}")
-            # Try adding the original URL as fallback
+            # Show more context about the URL structure
+            masked_orig = re.sub(r':([^:@/]+)@', r':***@', url)
+            masked_orig = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_orig)
+            masked_enc = re.sub(r':([^:@/]+)@', r':***@', encoded_url)
+            masked_enc = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_enc)
+            logger.error(f"Problematic URL (original, masked): {masked_orig[:100]}...")
+            logger.error(f"Problematic URL (encoded, masked): {masked_enc[:100]}...")
+            # Try to add the original URL as a fallback
             try:
                 logger.warning(f"Attempting to add original URL as fallback")
-                apobj.add(service_url)
+                apobj.add(url)
                 if len(apobj) > 0:
                     logger.info(f"Successfully added original URL as fallback")
                 else:
@@ -569,6 +590,8 @@ def test_service(
         # Send notification
         logger.info(f"Sending test notification to {get_service_name_from_url(service_url)}")
         try:
+            # Try to get more detailed error information from Apprise
+            # Apprise's notify() returns False on failure, but we can check the service status
             result = apobj.notify(
                 body=body,
                 title=title,
@@ -577,17 +600,35 @@ def test_service(
             logger.debug(f"Notification result: {result}")
             
             # Check if we can get more details about the result
-            # Apprise stores errors in the notification response
             if not result:
-                # Try to get error details from Apprise
-                # Apprise doesn't expose this easily, but we can check if the service was added
-                logger.warning(f"Notification returned False for {get_service_name_from_url(service_url)}")
+                # Apprise doesn't expose detailed errors easily, but we can try to get them
                 # Check if the service was actually added to the Apprise object
                 service_count = len(apobj)
                 if service_count == 0:
                     return (False, "Service URL could not be parsed", "The service URL format may be invalid or the credentials may contain invalid characters")
-                else:
-                    return (False, "Failed to send notification", "The service may be misconfigured, unreachable, or the credentials may be invalid. Check the Apprise logs for details.")
+                
+                # Try to get error details from Apprise's internal state
+                # Apprise stores errors in the notification response, but they're not easily accessible
+                # However, we can check if there are any services that failed
+                try:
+                    # Try to access Apprise's internal error information
+                    # This is a workaround - Apprise doesn't expose errors directly
+                    # But we can try to re-notify with a different approach to get more info
+                    logger.warning(f"Notification returned False for {get_service_name_from_url(service_url)}")
+                    logger.warning(f"Service was added successfully (count: {service_count}), but notify() returned False")
+                    logger.warning(f"This could indicate: network issues, authentication problems, or service unavailability")
+                    
+                    # Try to get more info by checking if we can access the service directly
+                    # Note: This is a limitation of Apprise - it doesn't expose detailed error info
+                    return (False, "Failed to send notification", 
+                           f"The service '{get_service_name_from_url(service_url)}' was configured correctly, but the notification failed. "
+                           f"This could be due to: network connectivity issues, invalid credentials, service unavailability, or rate limiting. "
+                           f"Try sending a regular notification to all services - if that works, the service may be temporarily unavailable.")
+                except Exception as error_check:
+                    logger.error(f"Error checking service status: {type(error_check).__name__}: {str(error_check)}")
+                    return (False, "Failed to send notification", 
+                           f"Service may be misconfigured, unreachable, or credentials may be invalid. "
+                           f"Error details: {str(error_check)}")
             
             logger.info(f"Successfully sent notification to {get_service_name_from_url(service_url)}")
             return (True, None, f"Notification sent successfully to {get_service_name_from_url(service_url)}")
