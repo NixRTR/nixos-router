@@ -58,6 +58,7 @@ in
       apprise-urls = {
         owner = "router-webui";
         mode = "0400";
+        # No format specified - sops-nix will handle multiline YAML strings automatically
       };
     };
     

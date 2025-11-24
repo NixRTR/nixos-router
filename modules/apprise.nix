@@ -25,13 +25,7 @@ in
       "d ${cfg.configDir} 0750 router-webui router-webui -"
     ];
     
-    # Define apprise-urls secret (managed by sops)
-    sops.secrets."apprise-urls" = {
-      owner = "router-webui";
-      group = "router-webui";
-      mode = "0400";
-      format = "binary";  # Treat as binary to preserve newlines
-    };
+    # Note: apprise-urls secret is defined in modules/secrets.nix
     
     # Service to copy config to apprise config directory
     # This runs before router-webui-backend starts
