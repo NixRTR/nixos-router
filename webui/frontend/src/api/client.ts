@@ -212,6 +212,63 @@ class APIClient {
     return response.data;
   }
 
+  // Apprise Notifications
+  async getAppriseStatus(): Promise<{ enabled: boolean }> {
+    const response = await this.client.get<{ enabled: boolean }>('/api/apprise/status');
+    return response.data;
+  }
+
+  async getAppriseServices(): Promise<{ url: string; description: string }[]> {
+    const response = await this.client.get<{ url: string; description: string }[]>('/api/apprise/services');
+    return response.data;
+  }
+
+  async getAppriseConfig(): Promise<{
+    enabled: boolean;
+    services_count: number;
+    config_file_exists: boolean;
+    services?: string[];
+    error?: string;
+  }> {
+    const response = await this.client.get('/api/apprise/config');
+    return response.data;
+  }
+
+  async sendAppriseNotification(
+    body: string,
+    title?: string,
+    notificationType?: string
+  ): Promise<{ success: boolean; message: string; details?: string }> {
+    const response = await this.client.post<{ success: boolean; message: string; details?: string }>('/api/apprise/notify', {
+      body,
+      title,
+      notification_type: notificationType,
+    });
+    return response.data;
+  }
+
+  async testAppriseService(serviceIndex: number): Promise<{ success: boolean; message: string; details?: string }> {
+    const response = await this.client.post<{ success: boolean; message: string; details?: string }>(`/api/apprise/test/${serviceIndex}`);
+    return response.data;
+  }
+
+  async sendAppriseNotificationToService(
+    serviceIndex: number,
+    body: string,
+    title?: string,
+    notificationType?: string
+  ): Promise<{ success: boolean; message: string; details?: string }> {
+    const response = await this.client.post<{ success: boolean; message: string; details?: string }>(
+      `/api/apprise/send/${serviceIndex}`,
+      {
+        body,
+        title,
+        notification_type: notificationType,
+      }
+    );
+    return response.data;
+  }
+
   async getCakeHistory(
     range: string = '1h',
     interfaceName?: string

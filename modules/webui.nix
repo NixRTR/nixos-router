@@ -23,6 +23,7 @@ let
     pamela  # PAM authentication support
     manuf  # MAC address OUI vendor lookup
     httpx  # HTTP client for GitHub API requests
+    apprise  # Notification service integration
   ]);
   
   # Backend source
@@ -90,6 +91,12 @@ in
       type = types.nullOr types.path;
       default = null;
       description = "Path to JWT secret key file (managed by sops)";
+    };
+    
+    debug = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Enable debug mode (verbose logging, auto-reload, etc.)";
     };
   };
   
@@ -292,6 +299,9 @@ in
         ExecStart = "${pythonEnv}/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port ${toString cfg.backendPort}";
         Restart = "always";
         RestartSec = "10s";
+        
+        # Set debug mode via environment variable
+        Environment = [ "DEBUG=${if cfg.debug then "true" else "false"}" ];
         
         # Security hardening
         NoNewPrivileges = true;

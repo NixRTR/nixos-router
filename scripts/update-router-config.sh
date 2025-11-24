@@ -387,6 +387,160 @@ edit_webui() {
     log_success "Web UI settings updated"
 }
 
+edit_apprise() {
+    echo
+    echo "=== Apprise API Configuration ==="
+    
+    current_apprise_enable=$(extract_block_value 'apprise' 'enable' 'false')
+    current_apprise_port=$(extract_block_value 'apprise' 'port' '8001')
+    current_apprise_attachsize=$(extract_block_value 'apprise' 'attachSize' '0')
+    
+    read -p "Enable Apprise API? (y/N) [$( [[ $current_apprise_enable == "true" ]] && echo y || echo N )]: " apprise_enable_input
+    apprise_enable=$( [[ ${apprise_enable_input:-$( [[ $current_apprise_enable == "true" ]] && echo y || echo n )} =~ ^[Yy]$ ]] && echo "true" || echo "false" )
+    
+    if [[ "$apprise_enable" == "true" ]]; then
+        read -p "Port [$current_apprise_port]: " apprise_port_input
+        apprise_port="${apprise_port_input:-$current_apprise_port}"
+        
+        read -p "Max attachment size (MB, 0 = disabled) [$current_apprise_attachsize]: " apprise_attachsize_input
+        apprise_attachsize="${apprise_attachsize_input:-$current_apprise_attachsize}"
+        
+        echo
+        echo "=== Notification Services ==="
+        log_info "Configure individual notification services"
+        log_warning "Secrets (passwords, tokens) must be configured via sops (option 's')"
+        echo
+        
+        # Email
+        current_email_enable=$(extract_block_value 'apprise.services.email' 'enable' 'false')
+        read -p "Enable Email notifications? (y/N) [$( [[ $current_email_enable == "true" ]] && echo y || echo N )]: " email_enable_input
+        email_enable=$( [[ ${email_enable_input:-$( [[ $current_email_enable == "true" ]] && echo y || echo n )} =~ ^[Yy]$ ]] && echo "true" || echo "false" )
+        
+        email_smtp=""
+        email_port=""
+        email_user=""
+        email_to=""
+        if [[ "$email_enable" == "true" ]]; then
+            current_email_smtp=$(extract_block_value 'apprise.services.email' 'smtpHost' 'smtp.gmail.com')
+            current_email_port=$(extract_block_value 'apprise.services.email' 'smtpPort' '587')
+            current_email_user=$(extract_block_value 'apprise.services.email' 'username' 'your-email@gmail.com')
+            current_email_to=$(extract_block_value 'apprise.services.email' 'to' 'recipient@example.com')
+            
+            read -p "SMTP host [$current_email_smtp]: " email_smtp_input
+            email_smtp="${email_smtp_input:-$current_email_smtp}"
+            
+            read -p "SMTP port [$current_email_port]: " email_port_input
+            email_port="${email_port_input:-$current_email_port}"
+            
+            read -p "Email username [$current_email_user]: " email_user_input
+            email_user="${email_user_input:-$current_email_user}"
+            
+            read -p "Recipient email [$current_email_to]: " email_to_input
+            email_to="${email_to_input:-$current_email_to}"
+            
+            log_warning "Email password must be set in secrets/secrets.yaml as 'apprise-email-password'"
+        fi
+        
+        # Home Assistant
+        current_ha_enable=$(extract_block_value 'apprise.services.homeAssistant' 'enable' 'false')
+        read -p "Enable Home Assistant notifications? (y/N) [$( [[ $current_ha_enable == "true" ]] && echo y || echo N )]: " ha_enable_input
+        ha_enable=$( [[ ${ha_enable_input:-$( [[ $current_ha_enable == "true" ]] && echo y || echo n )} =~ ^[Yy]$ ]] && echo "true" || echo "false" )
+        
+        ha_host=""
+        ha_port=""
+        if [[ "$ha_enable" == "true" ]]; then
+            current_ha_host=$(extract_block_value 'apprise.services.homeAssistant' 'host' 'homeassistant.local')
+            current_ha_port=$(extract_block_value 'apprise.services.homeAssistant' 'port' '8123')
+            
+            read -p "Home Assistant host [$current_ha_host]: " ha_host_input
+            ha_host="${ha_host_input:-$current_ha_host}"
+            
+            read -p "Home Assistant port [$current_ha_port]: " ha_port_input
+            ha_port="${ha_port_input:-$current_ha_port}"
+            
+            log_warning "Home Assistant access token must be set in secrets/secrets.yaml as 'apprise-homeassistant-token'"
+        fi
+        
+        # Discord
+        current_discord_enable=$(extract_block_value 'apprise.services.discord' 'enable' 'false')
+        read -p "Enable Discord notifications? (y/N) [$( [[ $current_discord_enable == "true" ]] && echo y || echo N )]: " discord_enable_input
+        discord_enable=$( [[ ${discord_enable_input:-$( [[ $current_discord_enable == "true" ]] && echo y || echo n )} =~ ^[Yy]$ ]] && echo "true" || echo "false" )
+        
+        if [[ "$discord_enable" == "true" ]]; then
+            log_warning "Discord webhook credentials must be set in secrets/secrets.yaml:"
+            log_info "  - 'apprise-discord-webhook-id'"
+            log_info "  - 'apprise-discord-webhook-token'"
+        fi
+        
+        # Slack
+        current_slack_enable=$(extract_block_value 'apprise.services.slack' 'enable' 'false')
+        read -p "Enable Slack notifications? (y/N) [$( [[ $current_slack_enable == "true" ]] && echo y || echo N )]: " slack_enable_input
+        slack_enable=$( [[ ${slack_enable_input:-$( [[ $current_slack_enable == "true" ]] && echo y || echo n )} =~ ^[Yy]$ ]] && echo "true" || echo "false" )
+        
+        if [[ "$slack_enable" == "true" ]]; then
+            log_warning "Slack tokens must be set in secrets/secrets.yaml:"
+            log_info "  - 'apprise-slack-token-a'"
+            log_info "  - 'apprise-slack-token-b'"
+            log_info "  - 'apprise-slack-token-c'"
+        fi
+        
+        # Telegram
+        current_telegram_enable=$(extract_block_value 'apprise.services.telegram' 'enable' 'false')
+        read -p "Enable Telegram notifications? (y/N) [$( [[ $current_telegram_enable == "true" ]] && echo y || echo N )]: " telegram_enable_input
+        telegram_enable=$( [[ ${telegram_enable_input:-$( [[ $current_telegram_enable == "true" ]] && echo y || echo n )} =~ ^[Yy]$ ]] && echo "true" || echo "false" )
+        
+        telegram_chatid=""
+        if [[ "$telegram_enable" == "true" ]]; then
+            current_telegram_chatid=$(extract_block_value 'apprise.services.telegram' 'chatId' '123456789')
+            read -p "Telegram chat ID [$current_telegram_chatid]: " telegram_chatid_input
+            telegram_chatid="${telegram_chatid_input:-$current_telegram_chatid}"
+            
+            log_warning "Telegram bot token must be set in secrets/secrets.yaml as 'apprise-telegram-bot-token'"
+        fi
+        
+        # ntfy
+        current_ntfy_enable=$(extract_block_value 'apprise.services.ntfy' 'enable' 'false')
+        read -p "Enable ntfy notifications? (y/N) [$( [[ $current_ntfy_enable == "true" ]] && echo y || echo N )]: " ntfy_enable_input
+        ntfy_enable=$( [[ ${ntfy_enable_input:-$( [[ $current_ntfy_enable == "true" ]] && echo y || echo n )} =~ ^[Yy]$ ]] && echo "true" || echo "false" )
+        
+        ntfy_topic=""
+        ntfy_server=""
+        if [[ "$ntfy_enable" == "true" ]]; then
+            current_ntfy_topic=$(extract_block_value 'apprise.services.ntfy' 'topic' 'router-notifications')
+            read -p "ntfy topic [$current_ntfy_topic]: " ntfy_topic_input
+            ntfy_topic="${ntfy_topic_input:-$current_ntfy_topic}"
+            
+            read -p "ntfy server (optional, default: ntfy.sh): " ntfy_server_input
+            ntfy_server="${ntfy_server_input:-}"
+        fi
+        
+        # Store values
+        APPRISE_ENABLE="$apprise_enable"
+        APPRISE_PORT="$apprise_port"
+        APPRISE_ATTACHSIZE="$apprise_attachsize"
+        APPRISE_EMAIL_ENABLE="$email_enable"
+        APPRISE_EMAIL_SMTP="$email_smtp"
+        APPRISE_EMAIL_PORT="$email_port"
+        APPRISE_EMAIL_USER="$email_user"
+        APPRISE_EMAIL_TO="$email_to"
+        APPRISE_HA_ENABLE="$ha_enable"
+        APPRISE_HA_HOST="$ha_host"
+        APPRISE_HA_PORT="$ha_port"
+        APPRISE_DISCORD_ENABLE="$discord_enable"
+        APPRISE_SLACK_ENABLE="$slack_enable"
+        APPRISE_TELEGRAM_ENABLE="$telegram_enable"
+        APPRISE_TELEGRAM_CHATID="$telegram_chatid"
+        APPRISE_NTFY_ENABLE="$ntfy_enable"
+        APPRISE_NTFY_TOPIC="$ntfy_topic"
+        APPRISE_NTFY_SERVER="$ntfy_server"
+    else
+        APPRISE_ENABLE="false"
+    fi
+    
+    log_success "Apprise API settings updated"
+    log_warning "Remember to configure secrets via sops (option 's') for enabled services"
+}
+
 # Main menu
 show_main_menu() {
     echo
@@ -402,7 +556,8 @@ show_main_menu() {
     echo "6) Port Forwarding (view only - edit manually)"
     echo "7) Dynamic DNS"
     echo "8) Web UI Configuration"
-    echo "9) View/Edit Secrets"
+    echo "9) Apprise API Configuration"
+    echo "s) View/Edit Secrets"
     echo "a) Save and Rebuild"
     echo "0) Exit without saving"
     echo
@@ -445,6 +600,24 @@ main() {
     WEBUI_PORT=""
     WEBUI_INTERVAL=""
     WEBUI_RETENTION=""
+    APPRISE_ENABLE=""
+    APPRISE_PORT=""
+    APPRISE_ATTACHSIZE=""
+    APPRISE_EMAIL_ENABLE=""
+    APPRISE_EMAIL_SMTP=""
+    APPRISE_EMAIL_PORT=""
+    APPRISE_EMAIL_USER=""
+    APPRISE_EMAIL_TO=""
+    APPRISE_HA_ENABLE=""
+    APPRISE_HA_HOST=""
+    APPRISE_HA_PORT=""
+    APPRISE_DISCORD_ENABLE=""
+    APPRISE_SLACK_ENABLE=""
+    APPRISE_TELEGRAM_ENABLE=""
+    APPRISE_TELEGRAM_CHATID=""
+    APPRISE_NTFY_ENABLE=""
+    APPRISE_NTFY_TOPIC=""
+    APPRISE_NTFY_SERVER=""
     
     CHANGES_MADE=false
     
@@ -484,6 +657,10 @@ main() {
                 CHANGES_MADE=true
                 ;;
             9)
+                edit_apprise
+                CHANGES_MADE=true
+                ;;
+            s|S)
                 if [[ -f "$SECRETS_PATH" ]]; then
                     echo
                     read -p "View decrypted secrets? [y/N]: " view_secrets

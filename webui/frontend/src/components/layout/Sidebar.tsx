@@ -14,6 +14,7 @@ import {
   HiBookOpen,
   HiLightningBolt,
   HiTrendingUp,
+  HiBell,
 } from 'react-icons/hi';
 import { FaGithub } from 'react-icons/fa';
 import { apiClient } from '../../api/client';
@@ -28,6 +29,7 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const [githubStats, setGitHubStats] = useState<{ stars: number; forks: number } | null>(null);
   const [cakeEnabled, setCakeEnabled] = useState(false);
+  const [appriseEnabled, setAppriseEnabled] = useState(false);
 
   useEffect(() => {
     // Fetch GitHub stats on mount
@@ -61,6 +63,26 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
     checkCakeStatus();
     // Re-check every minute
     const interval = setInterval(checkCakeStatus, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    // Check Apprise status on mount
+    const checkAppriseStatus = async () => {
+      try {
+        console.log('Checking Apprise status...');
+        const status = await apiClient.getAppriseStatus();
+        console.log('Apprise status response:', status);
+        setAppriseEnabled(status.enabled);
+      } catch (error) {
+        console.error('Failed to check Apprise status:', error);
+        console.error('Error details:', error);
+        setAppriseEnabled(false);
+      }
+    };
+    checkAppriseStatus();
+    // Re-check every minute
+    const interval = setInterval(checkAppriseStatus, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -152,6 +174,18 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
               >
                 Speedtest
               </FlowbiteSidebar.Item>
+
+              {appriseEnabled && (
+                <FlowbiteSidebar.Item
+                  as={Link}
+                  to="/apprise"
+                  icon={HiBell}
+                  active={location.pathname === '/apprise'}
+                  onClick={handleItemClick}
+                >
+                  Apprise
+                </FlowbiteSidebar.Item>
+              )}
 
               {cakeEnabled && (
                 <FlowbiteSidebar.Item

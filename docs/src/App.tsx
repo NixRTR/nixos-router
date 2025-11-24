@@ -18,6 +18,7 @@ const WebUIDeviceUsage = lazy(() => import('./pages/webui/DeviceUsage').then(m =
 const WebUISystem = lazy(() => import('./pages/webui/System').then(m => ({ default: m.System })));
 const WebUISpeedtest = lazy(() => import('./pages/webui/Speedtest').then(m => ({ default: m.Speedtest })));
 const WebUISystemInfo = lazy(() => import('./pages/webui/SystemInfo').then(m => ({ default: m.SystemInfo })));
+const WebUIApprise = lazy(() => import('./pages/webui/Apprise').then(m => ({ default: m.Apprise })));
 const SystemConfig = lazy(() => import('./pages/configuration/System').then(m => ({ default: m.SystemConfig })));
 const WanConfig = lazy(() => import('./pages/configuration/Wan').then(m => ({ default: m.WanConfig })));
 const CakeConfig = lazy(() => import('./pages/configuration/Cake').then(m => ({ default: m.CakeConfig })));
@@ -28,6 +29,7 @@ const PortForwardingConfig = lazy(() => import('./pages/configuration/PortForwar
 const DynDnsConfig = lazy(() => import('./pages/configuration/DynDns').then(m => ({ default: m.DynDnsConfig })));
 const GlobalDnsConfig = lazy(() => import('./pages/configuration/GlobalDns').then(m => ({ default: m.GlobalDnsConfig })));
 const WebuiConfig = lazy(() => import('./pages/configuration/Webui').then(m => ({ default: m.WebuiConfig })));
+const AppriseConfig = lazy(() => import('./pages/configuration/Apprise').then(m => ({ default: m.AppriseConfig })));
 
 // Component to handle trailing slash redirects for GitHub Pages
 function TrailingSlashHandler() {
@@ -74,6 +76,7 @@ function App() {
             <Route path="/webui/system" element={<WebUISystem />} />
             <Route path="/webui/speedtest" element={<WebUISpeedtest />} />
             <Route path="/webui/system-info" element={<WebUISystemInfo />} />
+            <Route path="/webui/apprise" element={<WebUIApprise />} />
             <Route path="/configuration" element={<Configuration />} />
             <Route path="/configuration/system" element={<SystemConfig />} />
             <Route path="/configuration/wan" element={<WanConfig />} />
@@ -85,6 +88,7 @@ function App() {
             <Route path="/configuration/dyndns" element={<DynDnsConfig />} />
             <Route path="/configuration/global-dns" element={<GlobalDnsConfig />} />
             <Route path="/configuration/webui" element={<WebuiConfig />} />
+            <Route path="/configuration/apprise" element={<AppriseConfig />} />
           </Routes>
         </Suspense>
       </Layout>

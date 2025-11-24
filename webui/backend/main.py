@@ -1,6 +1,8 @@
 """
 Main FastAPI application for Router WebUI
 """
+import logging
+import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +11,24 @@ import asyncio
 from datetime import datetime, time, timedelta, timezone
 
 from .config import settings
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG if settings.debug else logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+# Enable verbose logging for Apprise (equivalent to -vvvv)
+# Set Apprise logger to DEBUG level for maximum verbosity
+apprise_logger = logging.getLogger('apprise')
+apprise_logger.setLevel(logging.DEBUG)
+
+# Also enable debug for apprise.plugins and apprise.attachment modules
+logging.getLogger('apprise.plugins').setLevel(logging.DEBUG)
+logging.getLogger('apprise.attachment').setLevel(logging.DEBUG)
 from .database import init_db
 from .websocket import manager, websocket_endpoint
 from .api.auth import router as auth_router
@@ -18,6 +38,7 @@ from .api.devices import router as devices_router
 from .api.system import router as system_router
 from .api.speedtest import router as speedtest_router
 from .api.cake import router as cake_router
+from .api.apprise import router as apprise_router
 from .collectors.aggregation import run_aggregation_job
 
 
@@ -115,6 +136,7 @@ app.include_router(devices_router)
 app.include_router(system_router)
 app.include_router(speedtest_router)
 app.include_router(cake_router)
+app.include_router(apprise_router)
 
 
 @app.get("/api")

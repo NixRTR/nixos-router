@@ -16,6 +16,7 @@ This section covers all configuration options for the NixOS Router.
 - [Dynamic DNS](/configuration/dyndns) - Dynamic DNS configuration
 - [Global DNS](/configuration/global-dns) - Global DNS settings
 - [WebUI](/configuration/webui) - Web dashboard configuration
+- [Apprise](/configuration/apprise) - Notification service configuration
 `;
 
 export function Configuration() {

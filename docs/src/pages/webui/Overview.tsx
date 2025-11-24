@@ -88,6 +88,9 @@ Run internet speed tests and view historical results with charts and detailed ta
 ### [System Info](/webui/system-info)
 Detailed system information including OS version, hardware specs, network configuration, and service status.
 
+### [Apprise](/webui/apprise)
+Send notifications to 80+ services including email, Discord, Slack, Telegram, Home Assistant, and more.
+
 ## Getting Started
 
 1. **Access the WebUI**: Navigate to your router's IP address (default: \`http://192.168.2.1:8080\`)
