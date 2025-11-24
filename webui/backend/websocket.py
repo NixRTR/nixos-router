@@ -218,6 +218,8 @@ class ConnectionManager:
                     session.add(service_db)
                 
                 # Update DHCP leases (upsert based on MAC+network or IP+network)
+                # Process all leases first to identify conflicts, then resolve them
+                leases_to_process = []
                 for lease in dhcp_leases:
                     # First check if device (MAC) exists in this network
                     result_mac = await session.execute(
@@ -237,8 +239,21 @@ class ConnectionManager:
                     )
                     existing_by_ip = result_ip.scalar_one_or_none()
                     
+                    leases_to_process.append((lease, existing_by_mac, existing_by_ip))
+                
+                # Now process leases and handle conflicts
+                for lease, existing_by_mac, existing_by_ip in leases_to_process:
                     if existing_by_mac:
                         # Update existing device lease (IP may have changed)
+                        # Check if the new IP is already assigned to a different device
+                        if existing_by_mac.ip_address != lease.ip_address:
+                            # IP is changing - check if new IP conflicts with another device
+                            if existing_by_ip and existing_by_ip.id != existing_by_mac.id:
+                                # IP was reassigned to a different device - delete the conflicting record
+                                await session.delete(existing_by_ip)
+                                # Flush to ensure deletion is visible before update
+                                await session.flush()
+                        
                         existing_by_mac.ip_address = lease.ip_address
                         existing_by_mac.hostname = lease.hostname
                         existing_by_mac.lease_start = lease.lease_start
@@ -363,7 +378,17 @@ class ConnectionManager:
                 await session.commit()
                 
         except Exception as e:
+            # Log the full error for debugging
+            import traceback
+            error_details = traceback.format_exc()
             print(f"Error storing metrics: {e}")
+            print(f"Error details: {error_details}")
+            
+            # If it's a constraint violation, try to provide more context
+            if "UniqueViolationError" in str(type(e)) or "duplicate key" in str(e).lower():
+                print("This appears to be a database constraint violation.")
+                print("If you see 'dhcp_leases_ip_address_key', the old constraint may still exist.")
+                print("Run the migration: webui/backend/migrations/001_mac_based_tracking.sql")
 
 
 # Global connection manager instance
