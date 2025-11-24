@@ -411,6 +411,9 @@ def _map_ip_to_mac(ip: str, arp_table: Dict[str, Dict[str, str]], dhcp_leases: L
     return None
 
 
+# Global state for client rotation (to ensure all clients are processed over time)
+_last_processed_index = 0
+
 def collect_client_bandwidth() -> List[Dict]:
     """Collect per-client bandwidth statistics
     
@@ -427,8 +430,13 @@ def collect_client_bandwidth() -> List[Dict]:
             'timestamp': datetime
         }
     """
+    global _last_processed_index
+    
     # Check CPU threshold
     if not _check_cpu_threshold():
+        # Log when collection is skipped due to CPU
+        cpu_usage = _get_cpu_usage()
+        print(f"Bandwidth collection skipped: CPU usage {cpu_usage:.1f}% exceeds threshold {settings.bandwidth_max_cpu_percent}%")
         return []
     
     # Set process priority (nice value)
@@ -468,11 +476,21 @@ def collect_client_bandwidth() -> List[Dict]:
         current_counters = _read_nftables_counters()
         
         # Process clients (limit to max_clients_per_cycle for CPU governance)
-        # Process both counters and known IPs (even if no counters yet)
+        # Use rotation to ensure all clients are processed over time
         processed = 0
         
-        # First process IPs with counters
-        for ip, counter_data in current_counters.items():
+        # Convert counters dict to list for rotation
+        counter_items = list(current_counters.items())
+        total_clients = len(counter_items)
+        
+        # Rotate starting position to process different clients each cycle
+        if total_clients > settings.bandwidth_max_clients_per_cycle:
+            start_index = _last_processed_index % total_clients
+            # Rotate the list to start from last processed position
+            counter_items = counter_items[start_index:] + counter_items[:start_index]
+        
+        # First process IPs with counters (up to max_clients_per_cycle)
+        for ip, counter_data in counter_items:
             if processed >= settings.bandwidth_max_clients_per_cycle:
                 break
             
@@ -525,9 +543,20 @@ def collect_client_bandwidth() -> List[Dict]:
             
             processed += 1
         
+        # Update rotation index for next cycle
+        if total_clients > 0:
+            _last_processed_index = (_last_processed_index + processed) % total_clients
+        
         # Also process IPs that are known but don't have counters yet (no traffic)
         # This ensures we track them even if they haven't sent/received data
-        for ip in all_known_ips:
+        # Convert to list and rotate if needed
+        known_ips_list = list(all_known_ips)
+        if len(known_ips_list) > settings.bandwidth_max_clients_per_cycle - processed:
+            # Rotate known IPs list too
+            start_index = _last_processed_index % len(known_ips_list) if len(known_ips_list) > 0 else 0
+            known_ips_list = known_ips_list[start_index:] + known_ips_list[:start_index]
+        
+        for ip in known_ips_list:
             if processed >= settings.bandwidth_max_clients_per_cycle:
                 break
             
@@ -570,7 +599,12 @@ def collect_client_bandwidth() -> List[Dict]:
         _known_ips.intersection_update(all_known_ips)
     
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         print(f"Error collecting client bandwidth: {e}")
+        print(f"Error details: {error_details}")
+        # Return empty list on error to avoid breaking the collection cycle
+        return []
     
     return results
 
