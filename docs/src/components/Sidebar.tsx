@@ -72,6 +72,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { path: '/webui/speedtest', label: 'Speedtest' },
         { path: '/webui/system-info', label: 'System Info' },
         { path: '/webui/apprise', label: 'Apprise' },
+        { path: '/webui/notifications', label: 'Notifications' },
       ],
     },
   ];

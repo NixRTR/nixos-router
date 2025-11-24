@@ -91,6 +91,9 @@ Detailed system information including OS version, hardware specs, network config
 ### [Apprise](/webui/apprise)
 Send notifications to 80+ services including email, Discord, Slack, Telegram, Home Assistant, and more.
 
+### [Notifications](/webui/notifications)
+Create automated alert rules based on monitored parameters. Set thresholds for CPU, memory, network, temperature, services, and disk usage with custom Jinja2 message templates.
+
 ## Getting Started
 
 1. **Access the WebUI**: Navigate to your router's IP address (default: \`http://192.168.2.1:8080\`)

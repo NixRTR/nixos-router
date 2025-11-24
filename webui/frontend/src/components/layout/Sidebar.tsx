@@ -177,15 +177,27 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
               </FlowbiteSidebar.Item>
 
               {appriseEnabled && (
-                <FlowbiteSidebar.Item
-                  as={Link}
-                  to="/apprise"
-                  icon={HiBell}
-                  active={location.pathname === '/apprise'}
-                  onClick={handleItemClick}
-                >
-                  Apprise
-                </FlowbiteSidebar.Item>
+                <>
+                  <FlowbiteSidebar.Item
+                    as={Link}
+                    to="/apprise"
+                    icon={HiBell}
+                    active={location.pathname === '/apprise'}
+                    onClick={handleItemClick}
+                  >
+                    Apprise
+                  </FlowbiteSidebar.Item>
+
+                  <FlowbiteSidebar.Item
+                    as={Link}
+                    to="/notifications"
+                    icon={HiClipboardCheck}
+                    active={location.pathname === '/notifications'}
+                    onClick={handleItemClick}
+                  >
+                    Notifications
+                  </FlowbiteSidebar.Item>
+                </>
               )}
 
               {cakeEnabled && (
@@ -199,16 +211,6 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
                   Traffic Shaping
                 </FlowbiteSidebar.Item>
               )}
-
-              <FlowbiteSidebar.Item
-                as={Link}
-                to="/notifications"
-                icon={HiClipboardCheck}
-                active={location.pathname === '/notifications'}
-                onClick={handleItemClick}
-              >
-                Notifications
-              </FlowbiteSidebar.Item>
             </FlowbiteSidebar.ItemGroup>
 
             <FlowbiteSidebar.ItemGroup>

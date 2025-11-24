@@ -42,6 +42,8 @@ The sidebar provides navigation to all major sections of the WebUI.
 - **Device Usage**: Per-device bandwidth statistics
 - **System**: System resource monitoring with historical charts
 - **Speedtest**: Internet speed testing and results
+- **Apprise**: Send notifications to 80+ services (shown when Apprise is enabled)
+- **Notifications**: Automated alert rules based on monitored parameters (shown when Apprise is enabled)
 
 **System Section**:
 - **System Info**: Detailed system information and configuration
