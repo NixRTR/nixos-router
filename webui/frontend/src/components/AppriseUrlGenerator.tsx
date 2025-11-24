@@ -1,12 +1,29 @@
 /**
  * Apprise URL Generator Component
  * Allows users to generate Apprise notification service URLs through a form
+ * Supports 30+ popular notification services
  */
 import { useState } from 'react';
 import { Card, Button, Label, TextInput, Select, Alert } from 'flowbite-react';
 import { HiClipboard, HiCheckCircle } from 'react-icons/hi';
 
-type ServiceType = 'email' | 'homeassistant' | 'discord' | 'slack' | 'telegram' | 'ntfy';
+type ServiceType = 
+  // Email
+  | 'email' 
+  // Chat/Messaging
+  | 'discord' | 'slack' | 'telegram' | 'matrix' | 'mattermost' | 'rocketchat' | 'msteams' | 'googlechat' | 'zulip' | 'line'
+  // Push Notifications
+  | 'pushover' | 'pushbullet' | 'gotify' | 'ntfy' | 'prowl' | 'join'
+  // Home Automation
+  | 'homeassistant'
+  // SMS
+  | 'twilio'
+  // Cloud Services
+  | 'awssns' | 'gcm' | 'fcm'
+  // Webhooks
+  | 'webhook' | 'json'
+  // Other
+  | 'ifttt' | 'xmpp' | 'kodi' | 'apprise';
 
 interface ServiceConfig {
   [key: string]: string | number | boolean;
@@ -18,13 +35,50 @@ export function AppriseUrlGenerator() {
   const [generatedUrl, setGeneratedUrl] = useState<string>('');
   const [copied, setCopied] = useState(false);
 
-  const serviceTypes: { value: ServiceType; label: string }[] = [
-    { value: 'email', label: 'Email (SMTP)' },
-    { value: 'homeassistant', label: 'Home Assistant' },
-    { value: 'discord', label: 'Discord' },
-    { value: 'slack', label: 'Slack' },
-    { value: 'telegram', label: 'Telegram' },
-    { value: 'ntfy', label: 'ntfy' },
+  const serviceTypes: { value: ServiceType; label: string; category?: string }[] = [
+    // Email
+    { value: 'email', label: 'Email (SMTP)', category: 'Email' },
+    
+    // Chat/Messaging
+    { value: 'discord', label: 'Discord', category: 'Chat' },
+    { value: 'slack', label: 'Slack', category: 'Chat' },
+    { value: 'telegram', label: 'Telegram', category: 'Chat' },
+    { value: 'matrix', label: 'Matrix', category: 'Chat' },
+    { value: 'mattermost', label: 'Mattermost', category: 'Chat' },
+    { value: 'rocketchat', label: 'Rocket.Chat', category: 'Chat' },
+    { value: 'msteams', label: 'Microsoft Teams', category: 'Chat' },
+    { value: 'googlechat', label: 'Google Chat', category: 'Chat' },
+    { value: 'zulip', label: 'Zulip', category: 'Chat' },
+    { value: 'line', label: 'Line', category: 'Chat' },
+    
+    // Push Notifications
+    { value: 'pushover', label: 'Pushover', category: 'Push' },
+    { value: 'pushbullet', label: 'Pushbullet', category: 'Push' },
+    { value: 'gotify', label: 'Gotify', category: 'Push' },
+    { value: 'ntfy', label: 'ntfy', category: 'Push' },
+    { value: 'prowl', label: 'Prowl', category: 'Push' },
+    { value: 'join', label: 'Join', category: 'Push' },
+    
+    // Home Automation
+    { value: 'homeassistant', label: 'Home Assistant', category: 'Home Automation' },
+    
+    // SMS
+    { value: 'twilio', label: 'Twilio (SMS)', category: 'SMS' },
+    
+    // Cloud Services
+    { value: 'awssns', label: 'AWS SNS', category: 'Cloud' },
+    { value: 'gcm', label: 'Google Cloud Messaging', category: 'Cloud' },
+    { value: 'fcm', label: 'Firebase Cloud Messaging', category: 'Cloud' },
+    
+    // Webhooks
+    { value: 'webhook', label: 'Generic Webhook', category: 'Webhook' },
+    { value: 'json', label: 'JSON Webhook', category: 'Webhook' },
+    
+    // Other
+    { value: 'ifttt', label: 'IFTTT', category: 'Other' },
+    { value: 'xmpp', label: 'XMPP', category: 'Other' },
+    { value: 'kodi', label: 'Kodi', category: 'Other' },
+    { value: 'apprise', label: 'Apprise API', category: 'Other' },
   ];
 
   const urlEncode = (str: string): string => {
@@ -44,8 +98,6 @@ export function AppriseUrlGenerator() {
         const port = String(config.port || '587');
         const to = String(config.to || '');
         const from = String(config.from || username);
-        
-        // Use mailtos:// for port 465 (SSL/TLS), mailto:// for others
         const scheme = port === '465' ? 'mailtos' : 'mailto';
         url = `${scheme}://${urlEncode(username)}:${urlEncode(password)}@${smtpHost}:${port}?to=${urlEncode(to)}&from=${urlEncode(from)}`;
         break;
@@ -92,6 +144,238 @@ export function AppriseUrlGenerator() {
           url = `ntfy://${urlEncode(username)}:${urlEncode(password)}@${server}/${topic}`;
         } else {
           url = `ntfy://${server}/${topic}`;
+        }
+        break;
+      }
+
+      case 'pushover': {
+        const userKey = String(config.userKey || '');
+        const token = String(config.token || '');
+        url = `pover://${userKey}@${token}`;
+        break;
+      }
+
+      case 'pushbullet': {
+        const token = String(config.token || '');
+        const deviceId = String(config.deviceId || '');
+        if (deviceId) {
+          url = `pbul://${token}/${deviceId}`;
+        } else {
+          url = `pbul://${token}`;
+        }
+        break;
+      }
+
+      case 'gotify': {
+        const host = String(config.host || '');
+        const token = String(config.token || '');
+        const port = String(config.port || '80');
+        const useHttps = Boolean(config.useHttps);
+        const scheme = useHttps ? 'gotifys' : 'gotify';
+        url = `${scheme}://${host}:${port}/${token}`;
+        break;
+      }
+
+      case 'matrix': {
+        const host = String(config.host || '');
+        const token = String(config.token || '');
+        const room = String(config.room || '');
+        const useHttps = Boolean(config.useHttps);
+        const scheme = useHttps ? 'matrixs' : 'matrix';
+        if (room) {
+          url = `${scheme}://${host}/${room}?token=${urlEncode(token)}`;
+        } else {
+          url = `${scheme}://${host}?token=${urlEncode(token)}`;
+        }
+        break;
+      }
+
+      case 'mattermost': {
+        const host = String(config.host || '');
+        const token = String(config.token || '');
+        const channel = String(config.channel || '');
+        const useHttps = Boolean(config.useHttps);
+        const scheme = useHttps ? 'mmosts' : 'mmost';
+        if (channel) {
+          url = `${scheme}://${host}/${channel}?token=${urlEncode(token)}`;
+        } else {
+          url = `${scheme}://${host}?token=${urlEncode(token)}`;
+        }
+        break;
+      }
+
+      case 'rocketchat': {
+        const host = String(config.host || '');
+        const user = String(config.user || '');
+        const password = String(config.password || '');
+        const channel = String(config.channel || '');
+        const useHttps = Boolean(config.useHttps);
+        const scheme = useHttps ? 'rockets' : 'rocket';
+        if (channel) {
+          url = `${scheme}://${urlEncode(user)}:${urlEncode(password)}@${host}/${channel}`;
+        } else {
+          url = `${scheme}://${urlEncode(user)}:${urlEncode(password)}@${host}`;
+        }
+        break;
+      }
+
+      case 'msteams': {
+        const webhookUrl = String(config.webhookUrl || '');
+        if (webhookUrl.startsWith('http')) {
+          url = `msteams://${webhookUrl.replace(/^https?:\/\//, '')}`;
+        } else {
+          url = `msteams://${webhookUrl}`;
+        }
+        break;
+      }
+
+      case 'googlechat': {
+        const webhookUrl = String(config.webhookUrl || '');
+        if (webhookUrl.startsWith('http')) {
+          url = `gchat://${webhookUrl.replace(/^https?:\/\//, '')}`;
+        } else {
+          url = `gchat://${webhookUrl}`;
+        }
+        break;
+      }
+
+      case 'zulip': {
+        const host = String(config.host || '');
+        const botEmail = String(config.botEmail || '');
+        const botKey = String(config.botKey || '');
+        const stream = String(config.stream || '');
+        const topic = String(config.topic || '');
+        const useHttps = Boolean(config.useHttps);
+        const scheme = useHttps ? 'zulips' : 'zulip';
+        let queryParams = `bot=${urlEncode(botEmail)}&key=${urlEncode(botKey)}`;
+        if (stream) queryParams += `&stream=${urlEncode(stream)}`;
+        if (topic) queryParams += `&topic=${urlEncode(topic)}`;
+        url = `${scheme}://${host}?${queryParams}`;
+        break;
+      }
+
+      case 'line': {
+        const token = String(config.token || '');
+        url = `line://${token}`;
+        break;
+      }
+
+      case 'prowl': {
+        const apikey = String(config.apikey || '');
+        const providerKey = String(config.providerKey || '');
+        if (providerKey) {
+          url = `prowl://${apikey}@${providerKey}`;
+        } else {
+          url = `prowl://${apikey}`;
+        }
+        break;
+      }
+
+      case 'join': {
+        const deviceId = String(config.deviceId || '');
+        const apikey = String(config.apikey || '');
+        url = `join://${deviceId}?apikey=${urlEncode(apikey)}`;
+        break;
+      }
+
+      case 'twilio': {
+        const accountSid = String(config.accountSid || '');
+        const authToken = String(config.authToken || '');
+        const fromNumber = String(config.fromNumber || '');
+        const toNumber = String(config.toNumber || '');
+        url = `twilio://${accountSid}:${urlEncode(authToken)}@${fromNumber}/${toNumber}`;
+        break;
+      }
+
+      case 'awssns': {
+        const region = String(config.region || 'us-east-1');
+        const topicArn = String(config.topicArn || '');
+        const accessKeyId = String(config.accessKeyId || '');
+        const secretAccessKey = String(config.secretAccessKey || '');
+        url = `sns://${urlEncode(accessKeyId)}:${urlEncode(secretAccessKey)}@${region}/${topicArn}`;
+        break;
+      }
+
+      case 'gcm': {
+        const projectId = String(config.projectId || '');
+        const apiKey = String(config.apiKey || '');
+        const registrationId = String(config.registrationId || '');
+        url = `gcm://${urlEncode(apiKey)}@${projectId}/${registrationId}`;
+        break;
+      }
+
+      case 'fcm': {
+        const projectId = String(config.projectId || '');
+        const apikey = String(config.apikey || '');
+        const deviceToken = String(config.deviceToken || '');
+        url = `fcm://${urlEncode(apikey)}@${projectId}/${deviceToken}`;
+        break;
+      }
+
+      case 'webhook': {
+        const urlValue = String(config.url || '');
+        const method = String(config.method || 'POST').toUpperCase();
+        if (urlValue.startsWith('http')) {
+          url = `webhook${method === 'GET' ? 's' : ''}://${urlValue.replace(/^https?:\/\//, '')}`;
+        } else {
+          url = `webhook${method === 'GET' ? 's' : ''}://${urlValue}`;
+        }
+        break;
+      }
+
+      case 'json': {
+        const urlValue = String(config.url || '');
+        if (urlValue.startsWith('http')) {
+          url = `json://${urlValue.replace(/^https?:\/\//, '')}`;
+        } else {
+          url = `json://${urlValue}`;
+        }
+        break;
+      }
+
+      case 'ifttt': {
+        const webhookId = String(config.webhookId || '');
+        const eventName = String(config.eventName || '');
+        url = `ifttt://${webhookId}/${eventName}`;
+        break;
+      }
+
+      case 'xmpp': {
+        const user = String(config.user || '');
+        const password = String(config.password || '');
+        const host = String(config.host || '');
+        const target = String(config.target || '');
+        if (target) {
+          url = `xmpp://${urlEncode(user)}:${urlEncode(password)}@${host}/${target}`;
+        } else {
+          url = `xmpp://${urlEncode(user)}:${urlEncode(password)}@${host}`;
+        }
+        break;
+      }
+
+      case 'kodi': {
+        const host = String(config.host || '');
+        const port = String(config.port || '8080');
+        const user = String(config.user || '');
+        const password = String(config.password || '');
+        if (user && password) {
+          url = `kodi://${urlEncode(user)}:${urlEncode(password)}@${host}:${port}`;
+        } else {
+          url = `kodi://${host}:${port}`;
+        }
+        break;
+      }
+
+      case 'apprise': {
+        const host = String(config.host || '');
+        const port = String(config.port || '8000');
+        const token = String(config.token || '');
+        const useHttps = Boolean(config.useHttps);
+        const scheme = useHttps ? 'apprises' : 'apprise';
+        if (token) {
+          url = `${scheme}://${host}:${port}/${token}`;
+        } else {
+          url = `${scheme}://${host}:${port}`;
         }
         break;
       }
@@ -400,10 +684,847 @@ export function AppriseUrlGenerator() {
           </div>
         );
 
+      case 'pushover':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="userKey">User Key</Label>
+              <TextInput
+                id="userKey"
+                type="text"
+                placeholder="Enter user key"
+                value={String(config.userKey || '')}
+                onChange={(e) => handleConfigChange('userKey', e.target.value)}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Get from pushover.net
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="token">Application Token</Label>
+              <TextInput
+                id="token"
+                type="password"
+                placeholder="Enter application token"
+                value={String(config.token || '')}
+                onChange={(e) => handleConfigChange('token', e.target.value)}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Create an application at pushover.net
+              </p>
+            </div>
+          </div>
+        );
+
+      case 'pushbullet':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="token">Access Token</Label>
+              <TextInput
+                id="token"
+                type="password"
+                placeholder="Enter access token"
+                value={String(config.token || '')}
+                onChange={(e) => handleConfigChange('token', e.target.value)}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Get from pushbullet.com → Settings → Access Tokens
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="deviceId">Device ID (Optional)</Label>
+              <TextInput
+                id="deviceId"
+                type="text"
+                placeholder="device_iden"
+                value={String(config.deviceId || '')}
+                onChange={(e) => handleConfigChange('deviceId', e.target.value)}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Leave empty to send to all devices
+              </p>
+            </div>
+          </div>
+        );
+
+      case 'gotify':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="host">Gotify Server Host</Label>
+              <TextInput
+                id="host"
+                type="text"
+                placeholder="gotify.example.com"
+                value={String(config.host || '')}
+                onChange={(e) => handleConfigChange('host', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="port">Port</Label>
+              <TextInput
+                id="port"
+                type="text"
+                placeholder="80"
+                value={String(config.port || '80')}
+                onChange={(e) => handleConfigChange('port', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="token">Application Token</Label>
+              <TextInput
+                id="token"
+                type="password"
+                placeholder="Enter application token"
+                value={String(config.token || '')}
+                onChange={(e) => handleConfigChange('token', e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="useHttps"
+                checked={Boolean(config.useHttps)}
+                onChange={(e) => handleConfigChange('useHttps', e.target.checked)}
+                className="rounded"
+              />
+              <Label htmlFor="useHttps">Use HTTPS</Label>
+            </div>
+          </div>
+        );
+
+      case 'matrix':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="host">Matrix Server</Label>
+              <TextInput
+                id="host"
+                type="text"
+                placeholder="matrix.example.com"
+                value={String(config.host || '')}
+                onChange={(e) => handleConfigChange('host', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="token">Access Token</Label>
+              <TextInput
+                id="token"
+                type="password"
+                placeholder="Enter access token"
+                value={String(config.token || '')}
+                onChange={(e) => handleConfigChange('token', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="room">Room ID (Optional)</Label>
+              <TextInput
+                id="room"
+                type="text"
+                placeholder="!roomid:example.com"
+                value={String(config.room || '')}
+                onChange={(e) => handleConfigChange('room', e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="useHttps"
+                checked={Boolean(config.useHttps)}
+                onChange={(e) => handleConfigChange('useHttps', e.target.checked)}
+                className="rounded"
+              />
+              <Label htmlFor="useHttps">Use HTTPS</Label>
+            </div>
+          </div>
+        );
+
+      case 'mattermost':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="host">Mattermost Server</Label>
+              <TextInput
+                id="host"
+                type="text"
+                placeholder="mattermost.example.com"
+                value={String(config.host || '')}
+                onChange={(e) => handleConfigChange('host', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="token">Personal Access Token</Label>
+              <TextInput
+                id="token"
+                type="password"
+                placeholder="Enter access token"
+                value={String(config.token || '')}
+                onChange={(e) => handleConfigChange('token', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="channel">Channel Name (Optional)</Label>
+              <TextInput
+                id="channel"
+                type="text"
+                placeholder="general"
+                value={String(config.channel || '')}
+                onChange={(e) => handleConfigChange('channel', e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="useHttps"
+                checked={Boolean(config.useHttps)}
+                onChange={(e) => handleConfigChange('useHttps', e.target.checked)}
+                className="rounded"
+              />
+              <Label htmlFor="useHttps">Use HTTPS</Label>
+            </div>
+          </div>
+        );
+
+      case 'rocketchat':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="host">Rocket.Chat Server</Label>
+              <TextInput
+                id="host"
+                type="text"
+                placeholder="rocketchat.example.com"
+                value={String(config.host || '')}
+                onChange={(e) => handleConfigChange('host', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="user">Username</Label>
+              <TextInput
+                id="user"
+                type="text"
+                placeholder="bot_user"
+                value={String(config.user || '')}
+                onChange={(e) => handleConfigChange('user', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="password">Password</Label>
+              <TextInput
+                id="password"
+                type="password"
+                placeholder="Enter password"
+                value={String(config.password || '')}
+                onChange={(e) => handleConfigChange('password', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="channel">Channel (Optional)</Label>
+              <TextInput
+                id="channel"
+                type="text"
+                placeholder="#general"
+                value={String(config.channel || '')}
+                onChange={(e) => handleConfigChange('channel', e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="useHttps"
+                checked={Boolean(config.useHttps)}
+                onChange={(e) => handleConfigChange('useHttps', e.target.checked)}
+                className="rounded"
+              />
+              <Label htmlFor="useHttps">Use HTTPS</Label>
+            </div>
+          </div>
+        );
+
+      case 'msteams':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="webhookUrl">Webhook URL</Label>
+              <TextInput
+                id="webhookUrl"
+                type="text"
+                placeholder="https://outlook.office.com/webhook/..."
+                value={String(config.webhookUrl || '')}
+                onChange={(e) => handleConfigChange('webhookUrl', e.target.value)}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Get from Teams: Channel → Connectors → Incoming Webhook
+              </p>
+            </div>
+          </div>
+        );
+
+      case 'googlechat':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="webhookUrl">Webhook URL</Label>
+              <TextInput
+                id="webhookUrl"
+                type="text"
+                placeholder="https://chat.googleapis.com/v1/spaces/..."
+                value={String(config.webhookUrl || '')}
+                onChange={(e) => handleConfigChange('webhookUrl', e.target.value)}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Get from Google Chat: Space → Configure Webhooks
+              </p>
+            </div>
+          </div>
+        );
+
+      case 'zulip':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="host">Zulip Server</Label>
+              <TextInput
+                id="host"
+                type="text"
+                placeholder="zulip.example.com"
+                value={String(config.host || '')}
+                onChange={(e) => handleConfigChange('host', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="botEmail">Bot Email</Label>
+              <TextInput
+                id="botEmail"
+                type="email"
+                placeholder="bot@example.com"
+                value={String(config.botEmail || '')}
+                onChange={(e) => handleConfigChange('botEmail', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="botKey">Bot API Key</Label>
+              <TextInput
+                id="botKey"
+                type="password"
+                placeholder="Enter bot API key"
+                value={String(config.botKey || '')}
+                onChange={(e) => handleConfigChange('botKey', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="stream">Stream Name (Optional)</Label>
+              <TextInput
+                id="stream"
+                type="text"
+                placeholder="general"
+                value={String(config.stream || '')}
+                onChange={(e) => handleConfigChange('stream', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="topic">Topic (Optional)</Label>
+              <TextInput
+                id="topic"
+                type="text"
+                placeholder="notifications"
+                value={String(config.topic || '')}
+                onChange={(e) => handleConfigChange('topic', e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="useHttps"
+                checked={Boolean(config.useHttps)}
+                onChange={(e) => handleConfigChange('useHttps', e.target.checked)}
+                className="rounded"
+              />
+              <Label htmlFor="useHttps">Use HTTPS</Label>
+            </div>
+          </div>
+        );
+
+      case 'line':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="token">Channel Access Token</Label>
+              <TextInput
+                id="token"
+                type="password"
+                placeholder="Enter channel access token"
+                value={String(config.token || '')}
+                onChange={(e) => handleConfigChange('token', e.target.value)}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Get from Line Developers Console
+              </p>
+            </div>
+          </div>
+        );
+
+      case 'prowl':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="apikey">API Key</Label>
+              <TextInput
+                id="apikey"
+                type="password"
+                placeholder="Enter API key"
+                value={String(config.apikey || '')}
+                onChange={(e) => handleConfigChange('apikey', e.target.value)}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Get from prowlapp.com
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="providerKey">Provider Key (Optional)</Label>
+              <TextInput
+                id="providerKey"
+                type="password"
+                placeholder="Enter provider key"
+                value={String(config.providerKey || '')}
+                onChange={(e) => handleConfigChange('providerKey', e.target.value)}
+              />
+            </div>
+          </div>
+        );
+
+      case 'join':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="deviceId">Device ID</Label>
+              <TextInput
+                id="deviceId"
+                type="text"
+                placeholder="device_iden"
+                value={String(config.deviceId || '')}
+                onChange={(e) => handleConfigChange('deviceId', e.target.value)}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Get from joinjoaomgcd.app → My Devices
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="apikey">API Key</Label>
+              <TextInput
+                id="apikey"
+                type="password"
+                placeholder="Enter API key"
+                value={String(config.apikey || '')}
+                onChange={(e) => handleConfigChange('apikey', e.target.value)}
+              />
+            </div>
+          </div>
+        );
+
+      case 'twilio':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="accountSid">Account SID</Label>
+              <TextInput
+                id="accountSid"
+                type="text"
+                placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                value={String(config.accountSid || '')}
+                onChange={(e) => handleConfigChange('accountSid', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="authToken">Auth Token</Label>
+              <TextInput
+                id="authToken"
+                type="password"
+                placeholder="Enter auth token"
+                value={String(config.authToken || '')}
+                onChange={(e) => handleConfigChange('authToken', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="fromNumber">From Phone Number</Label>
+              <TextInput
+                id="fromNumber"
+                type="text"
+                placeholder="+1234567890"
+                value={String(config.fromNumber || '')}
+                onChange={(e) => handleConfigChange('fromNumber', e.target.value)}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Your Twilio phone number (E.164 format)
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="toNumber">To Phone Number</Label>
+              <TextInput
+                id="toNumber"
+                type="text"
+                placeholder="+1234567890"
+                value={String(config.toNumber || '')}
+                onChange={(e) => handleConfigChange('toNumber', e.target.value)}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Recipient phone number (E.164 format)
+              </p>
+            </div>
+          </div>
+        );
+
+      case 'awssns':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="region">AWS Region</Label>
+              <TextInput
+                id="region"
+                type="text"
+                placeholder="us-east-1"
+                value={String(config.region || 'us-east-1')}
+                onChange={(e) => handleConfigChange('region', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="topicArn">Topic ARN</Label>
+              <TextInput
+                id="topicArn"
+                type="text"
+                placeholder="arn:aws:sns:us-east-1:123456789012:MyTopic"
+                value={String(config.topicArn || '')}
+                onChange={(e) => handleConfigChange('topicArn', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="accessKeyId">Access Key ID</Label>
+              <TextInput
+                id="accessKeyId"
+                type="text"
+                placeholder="Enter access key ID"
+                value={String(config.accessKeyId || '')}
+                onChange={(e) => handleConfigChange('accessKeyId', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="secretAccessKey">Secret Access Key</Label>
+              <TextInput
+                id="secretAccessKey"
+                type="password"
+                placeholder="Enter secret access key"
+                value={String(config.secretAccessKey || '')}
+                onChange={(e) => handleConfigChange('secretAccessKey', e.target.value)}
+              />
+            </div>
+          </div>
+        );
+
+      case 'gcm':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="projectId">Project ID</Label>
+              <TextInput
+                id="projectId"
+                type="text"
+                placeholder="my-project-id"
+                value={String(config.projectId || '')}
+                onChange={(e) => handleConfigChange('projectId', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="apiKey">API Key</Label>
+              <TextInput
+                id="apiKey"
+                type="password"
+                placeholder="Enter API key"
+                value={String(config.apiKey || '')}
+                onChange={(e) => handleConfigChange('apiKey', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="registrationId">Registration ID</Label>
+              <TextInput
+                id="registrationId"
+                type="text"
+                placeholder="Enter registration ID"
+                value={String(config.registrationId || '')}
+                onChange={(e) => handleConfigChange('registrationId', e.target.value)}
+              />
+            </div>
+          </div>
+        );
+
+      case 'fcm':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="projectId">Project ID</Label>
+              <TextInput
+                id="projectId"
+                type="text"
+                placeholder="my-project-id"
+                value={String(config.projectId || '')}
+                onChange={(e) => handleConfigChange('projectId', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="apikey">Server Key</Label>
+              <TextInput
+                id="apikey"
+                type="password"
+                placeholder="Enter server key"
+                value={String(config.apikey || '')}
+                onChange={(e) => handleConfigChange('apikey', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="deviceToken">Device Token</Label>
+              <TextInput
+                id="deviceToken"
+                type="text"
+                placeholder="Enter device token"
+                value={String(config.deviceToken || '')}
+                onChange={(e) => handleConfigChange('deviceToken', e.target.value)}
+              />
+            </div>
+          </div>
+        );
+
+      case 'webhook':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="url">Webhook URL</Label>
+              <TextInput
+                id="url"
+                type="text"
+                placeholder="https://example.com/webhook"
+                value={String(config.url || '')}
+                onChange={(e) => handleConfigChange('url', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="method">HTTP Method</Label>
+              <Select
+                id="method"
+                value={String(config.method || 'POST')}
+                onChange={(e) => handleConfigChange('method', e.target.value)}
+              >
+                <option value="POST">POST</option>
+                <option value="GET">GET</option>
+                <option value="PUT">PUT</option>
+                <option value="PATCH">PATCH</option>
+              </Select>
+            </div>
+          </div>
+        );
+
+      case 'json':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="url">JSON Webhook URL</Label>
+              <TextInput
+                id="url"
+                type="text"
+                placeholder="https://example.com/webhook"
+                value={String(config.url || '')}
+                onChange={(e) => handleConfigChange('url', e.target.value)}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                URL that accepts JSON POST requests
+              </p>
+            </div>
+          </div>
+        );
+
+      case 'ifttt':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="webhookId">Webhook ID</Label>
+              <TextInput
+                id="webhookId"
+                type="text"
+                placeholder="Enter webhook ID"
+                value={String(config.webhookId || '')}
+                onChange={(e) => handleConfigChange('webhookId', e.target.value)}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Get from ifttt.com → My Applets → Webhooks → Settings
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="eventName">Event Name</Label>
+              <TextInput
+                id="eventName"
+                type="text"
+                placeholder="notification"
+                value={String(config.eventName || '')}
+                onChange={(e) => handleConfigChange('eventName', e.target.value)}
+              />
+            </div>
+          </div>
+        );
+
+      case 'xmpp':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="host">XMPP Server</Label>
+              <TextInput
+                id="host"
+                type="text"
+                placeholder="xmpp.example.com"
+                value={String(config.host || '')}
+                onChange={(e) => handleConfigChange('host', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="user">Username (JID)</Label>
+              <TextInput
+                id="user"
+                type="text"
+                placeholder="user@example.com"
+                value={String(config.user || '')}
+                onChange={(e) => handleConfigChange('user', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="password">Password</Label>
+              <TextInput
+                id="password"
+                type="password"
+                placeholder="Enter password"
+                value={String(config.password || '')}
+                onChange={(e) => handleConfigChange('password', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="target">Target JID (Optional)</Label>
+              <TextInput
+                id="target"
+                type="text"
+                placeholder="recipient@example.com"
+                value={String(config.target || '')}
+                onChange={(e) => handleConfigChange('target', e.target.value)}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Leave empty to send to yourself
+              </p>
+            </div>
+          </div>
+        );
+
+      case 'kodi':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="host">Kodi Host</Label>
+              <TextInput
+                id="host"
+                type="text"
+                placeholder="192.168.1.100"
+                value={String(config.host || '')}
+                onChange={(e) => handleConfigChange('host', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="port">Port</Label>
+              <TextInput
+                id="port"
+                type="text"
+                placeholder="8080"
+                value={String(config.port || '8080')}
+                onChange={(e) => handleConfigChange('port', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="user">Username (Optional)</Label>
+              <TextInput
+                id="user"
+                type="text"
+                placeholder="kodi"
+                value={String(config.user || '')}
+                onChange={(e) => handleConfigChange('user', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="password">Password (Optional)</Label>
+              <TextInput
+                id="password"
+                type="password"
+                placeholder="Enter password"
+                value={String(config.password || '')}
+                onChange={(e) => handleConfigChange('password', e.target.value)}
+              />
+            </div>
+          </div>
+        );
+
+      case 'apprise':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="host">Apprise API Host</Label>
+              <TextInput
+                id="host"
+                type="text"
+                placeholder="apprise.example.com"
+                value={String(config.host || '')}
+                onChange={(e) => handleConfigChange('host', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="port">Port</Label>
+              <TextInput
+                id="port"
+                type="text"
+                placeholder="8000"
+                value={String(config.port || '8000')}
+                onChange={(e) => handleConfigChange('port', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="token">Token (Optional)</Label>
+              <TextInput
+                id="token"
+                type="password"
+                placeholder="Enter token"
+                value={String(config.token || '')}
+                onChange={(e) => handleConfigChange('token', e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="useHttps"
+                checked={Boolean(config.useHttps)}
+                onChange={(e) => handleConfigChange('useHttps', e.target.checked)}
+                className="rounded"
+              />
+              <Label htmlFor="useHttps">Use HTTPS</Label>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
   };
+
+  // Group services by category for better organization
+  const groupedServices = serviceTypes.reduce((acc, service) => {
+    const category = service.category || 'Other';
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(service);
+    return acc;
+  }, {} as Record<string, typeof serviceTypes>);
 
   return (
     <Card className="bg-gray-50 dark:bg-gray-800">
@@ -422,10 +1543,14 @@ export function AppriseUrlGenerator() {
             }}
           >
             <option value="">Select a service...</option>
-            {serviceTypes.map((type) => (
-              <option key={type.value} value={type.value}>
-                {type.label}
-              </option>
+            {Object.entries(groupedServices).map(([category, services]) => (
+              <optgroup key={category} label={category}>
+                {services.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </Select>
         </div>
@@ -485,4 +1610,3 @@ export function AppriseUrlGenerator() {
     </Card>
   );
 }
-
