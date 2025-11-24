@@ -208,6 +208,51 @@ CREATE TABLE IF NOT EXISTS cake_stats (
 CREATE INDEX IF NOT EXISTS idx_cake_stats_interface_time ON cake_stats(interface, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_cake_stats_timestamp ON cake_stats(timestamp DESC);
 
+-- Notification rules
+CREATE TABLE IF NOT EXISTS notification_rules (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    enabled BOOLEAN DEFAULT TRUE,
+    parameter_type VARCHAR(64) NOT NULL,
+    parameter_config JSONB,
+    threshold_info REAL,
+    threshold_warning REAL,
+    threshold_failure REAL,
+    comparison_operator VARCHAR(10) DEFAULT 'gt',
+    duration_seconds INTEGER NOT NULL,
+    cooldown_seconds INTEGER NOT NULL,
+    apprise_service_indices INTEGER[],
+    message_template TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notification_rules_enabled ON notification_rules(enabled);
+
+-- Notification rule state
+CREATE TABLE IF NOT EXISTS notification_state (
+    rule_id INTEGER PRIMARY KEY REFERENCES notification_rules(id) ON DELETE CASCADE,
+    current_level VARCHAR(20),
+    threshold_exceeded_at TIMESTAMPTZ,
+    last_notification_at TIMESTAMPTZ,
+    last_notification_level VARCHAR(20),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Notification history
+CREATE TABLE IF NOT EXISTS notification_history (
+    id SERIAL PRIMARY KEY,
+    rule_id INTEGER REFERENCES notification_rules(id) ON DELETE CASCADE,
+    timestamp TIMESTAMPTZ NOT NULL,
+    level VARCHAR(20) NOT NULL,
+    value REAL NOT NULL,
+    message TEXT,
+    sent_successfully BOOLEAN DEFAULT FALSE
+);
+
+CREATE INDEX IF NOT EXISTS idx_notification_history_rule_id ON notification_history(rule_id);
+CREATE INDEX IF NOT EXISTS idx_notification_history_timestamp ON notification_history(timestamp DESC);
+
 -- Create hypertable for time-series data (if using TimescaleDB extension)
 -- Uncomment if TimescaleDB is available:
 -- SELECT create_hypertable('system_metrics', 'timestamp', if_not_exists => TRUE);

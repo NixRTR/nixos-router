@@ -3,6 +3,14 @@
  */
 import axios, { AxiosInstance } from 'axios';
 import type { LoginRequest, LoginResponse, HistoricalDataPoint } from '../types/metrics';
+import type {
+  NotificationRule,
+  NotificationRuleCreate,
+  NotificationRuleUpdate,
+  NotificationHistory,
+  NotificationParameterMetadata,
+  NotificationTestResponse,
+} from '../types/notifications';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -209,6 +217,43 @@ class APIClient {
 
   async getCurrentCakeStats(): Promise<any> {
     const response = await this.client.get('/api/cake/current');
+    return response.data;
+  }
+
+  // Notification rules
+  async getNotificationRules(): Promise<NotificationRule[]> {
+    const response = await this.client.get<NotificationRule[]>('/api/notifications/rules');
+    return response.data;
+  }
+
+  async getNotificationParameters(): Promise<NotificationParameterMetadata[]> {
+    const response = await this.client.get<NotificationParameterMetadata[]>('/api/notifications/parameters');
+    return response.data;
+  }
+
+  async createNotificationRule(payload: NotificationRuleCreate): Promise<NotificationRule> {
+    const response = await this.client.post<NotificationRule>('/api/notifications/rules', payload);
+    return response.data;
+  }
+
+  async updateNotificationRule(ruleId: number, payload: NotificationRuleUpdate): Promise<NotificationRule> {
+    const response = await this.client.put<NotificationRule>(`/api/notifications/rules/${ruleId}`, payload);
+    return response.data;
+  }
+
+  async deleteNotificationRule(ruleId: number): Promise<void> {
+    await this.client.delete(`/api/notifications/rules/${ruleId}`);
+  }
+
+  async getNotificationHistory(ruleId: number, limit: number = 50): Promise<NotificationHistory> {
+    const response = await this.client.get<NotificationHistory>(`/api/notifications/rules/${ruleId}/history`, {
+      params: { limit },
+    });
+    return response.data;
+  }
+
+  async testNotificationRule(ruleId: number): Promise<NotificationTestResponse> {
+    const response = await this.client.post<NotificationTestResponse>(`/api/notifications/rules/${ruleId}/test`, {});
     return response.data;
   }
 

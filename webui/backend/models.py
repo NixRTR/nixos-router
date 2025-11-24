@@ -2,7 +2,8 @@
 Pydantic models for data validation and serialization
 """
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
+from enum import Enum
 from pydantic import BaseModel, Field, field_validator
 from ipaddress import IPv4Address
 import re
@@ -370,3 +371,103 @@ class CakeStatus(BaseModel):
     enabled: bool
     interface: Optional[str] = None
 
+
+class ParameterType(str, Enum):
+    """Supported notification parameter types"""
+    CPU_PERCENT = "cpu_percent"
+    MEMORY_PERCENT = "memory_percent"
+    LOAD_AVG_1M = "load_avg_1m"
+    LOAD_AVG_5M = "load_avg_5m"
+    LOAD_AVG_15M = "load_avg_15m"
+    INTERFACE_RX_BYTES = "interface_rx_bytes"
+    INTERFACE_TX_BYTES = "interface_tx_bytes"
+    INTERFACE_RX_ERRORS = "interface_rx_errors"
+    INTERFACE_TX_ERRORS = "interface_tx_errors"
+    TEMPERATURE_C = "temperature_c"
+    SERVICE_ACTIVE = "service_active"
+    SERVICE_ENABLED = "service_enabled"
+    DISK_USAGE_PERCENT = "disk_usage_percent"
+
+
+class NotificationParameterConfigField(BaseModel):
+    """Configuration requirement for a parameter"""
+    name: str
+    label: str
+    field_type: Literal['text', 'select'] = 'text'
+    description: Optional[str] = None
+    options: Optional[List[Dict[str, Any]]] = None
+
+
+class NotificationParameterMetadata(BaseModel):
+    """Metadata describing a parameter that can be monitored"""
+    type: str
+    label: str
+    unit: Optional[str] = None
+    description: Optional[str] = None
+    requires_config: bool = False
+    config_fields: List[NotificationParameterConfigField] = Field(default_factory=list)
+    variables: List[str] = Field(default_factory=list)
+
+
+class NotificationRuleBase(BaseModel):
+    """Shared fields for notification rules"""
+    name: str = Field(..., max_length=255)
+    enabled: bool = True
+    parameter_type: str = Field(..., max_length=64)
+    parameter_config: Optional[Dict[str, Any]] = None
+    threshold_info: Optional[float] = None
+    threshold_warning: Optional[float] = None
+    threshold_failure: Optional[float] = None
+    comparison_operator: Literal['gt', 'lt'] = 'gt'
+    duration_seconds: int = Field(..., gt=0)
+    cooldown_seconds: int = Field(..., ge=0)
+    apprise_service_indices: List[int] = Field(default_factory=list)
+    message_template: str
+
+
+class NotificationRuleCreate(NotificationRuleBase):
+    """Request body for creating a notification rule"""
+    pass
+
+
+class NotificationRuleUpdate(BaseModel):
+    """Request body for updating a notification rule"""
+    name: Optional[str] = Field(default=None, max_length=255)
+    enabled: Optional[bool] = None
+    parameter_type: Optional[str] = Field(default=None, max_length=64)
+    parameter_config: Optional[Dict[str, Any]] = None
+    threshold_info: Optional[float] = None
+    threshold_warning: Optional[float] = None
+    threshold_failure: Optional[float] = None
+    comparison_operator: Optional[Literal['gt', 'lt']] = None
+    duration_seconds: Optional[int] = Field(default=None, gt=0)
+    cooldown_seconds: Optional[int] = Field(default=None, ge=0)
+    apprise_service_indices: Optional[List[int]] = None
+    message_template: Optional[str] = None
+
+
+class NotificationRule(NotificationRuleBase):
+    """Notification rule response model"""
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    current_level: Optional[str] = None
+    last_notification_at: Optional[datetime] = None
+    last_notification_level: Optional[str] = None
+
+
+class NotificationHistoryRecord(BaseModel):
+    """Single notification history entry"""
+    id: int
+    rule_id: int
+    timestamp: datetime
+    level: str
+    value: float
+    message: Optional[str] = None
+    sent_successfully: bool
+
+
+class NotificationHistory(BaseModel):
+    """Notification history list"""
+    rule_id: int
+    items: List[NotificationHistoryRecord]

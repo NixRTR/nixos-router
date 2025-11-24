@@ -15,6 +15,7 @@ import {
   HiLightningBolt,
   HiTrendingUp,
   HiBell,
+  HiClipboardCheck,
 } from 'react-icons/hi';
 import { FaGithub } from 'react-icons/fa';
 import { apiClient } from '../../api/client';
@@ -198,6 +199,16 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
                   Traffic Shaping
                 </FlowbiteSidebar.Item>
               )}
+
+              <FlowbiteSidebar.Item
+                as={Link}
+                to="/notifications"
+                icon={HiClipboardCheck}
+                active={location.pathname === '/notifications'}
+                onClick={handleItemClick}
+              >
+                Notifications
+              </FlowbiteSidebar.Item>
             </FlowbiteSidebar.ItemGroup>
 
             <FlowbiteSidebar.ItemGroup>
