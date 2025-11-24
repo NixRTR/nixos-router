@@ -239,6 +239,11 @@ class ConnectionManager:
                     
                     if existing_by_mac:
                         # Update existing device lease (IP may have changed)
+                        # Check if the new IP is already assigned to a different device
+                        if existing_by_mac.ip_address != lease.ip_address and existing_by_ip and existing_by_ip.id != existing_by_mac.id:
+                            # IP was reassigned - delete the old IP assignment first
+                            await session.delete(existing_by_ip)
+                        
                         existing_by_mac.ip_address = lease.ip_address
                         existing_by_mac.hostname = lease.hostname
                         existing_by_mac.lease_start = lease.lease_start
