@@ -273,9 +273,16 @@ def load_apprise_config(config_path: Optional[str] = None) -> Apprise:
                 original_line = line
                 line = line.strip()
                 if line and not line.startswith('#'):
+                    # Parse description|url format (extract just the URL part)
+                    if '|' in line:
+                        _, url = line.split('|', 1)
+                        url = url.strip()
+                    else:
+                        url = line
+                    
                     # Check if line contains sops placeholder (not replaced)
-                    if '${' in line:
-                        logger.error(f"Line {line_num} contains UNREPLACED sops placeholder: {line[:100]}...")
+                    if '${' in url:
+                        logger.error(f"Line {line_num} contains UNREPLACED sops placeholder: {url[:100]}...")
                         logger.error(f"This means sops-nix did not replace the placeholder. Check:")
                         logger.error(f"  1. Is the secret defined in modules/secrets.nix?")
                         logger.error(f"  2. Does the secret exist in secrets/secrets.yaml?")
@@ -283,12 +290,12 @@ def load_apprise_config(config_path: Optional[str] = None) -> Apprise:
                         continue  # Skip this line - it won't work
                     
                     # Log the raw line structure (masked) before encoding
-                    masked_line = re.sub(r':([^:@/]+)@', r':***@', line)
+                    masked_line = re.sub(r':([^:@/]+)@', r':***@', url)
                     masked_line = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_line)
                     logger.debug(f"Line {line_num} - Raw (masked): {masked_line[:80]}...")
                     
                     # URL-encode passwords/tokens in the URL before adding to Apprise
-                    encoded_url = url_encode_password_in_url(line)
+                    encoded_url = url_encode_password_in_url(url)
                     if encoded_url != line:
                         masked_encoded = re.sub(r':([^:@/]+)@', r':***@', encoded_url)
                         masked_encoded = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_encoded)
@@ -321,7 +328,7 @@ def load_apprise_config(config_path: Optional[str] = None) -> Apprise:
                     except Exception as add_error:
                         logger.error(f"Failed to add service from line {line_num}: {type(add_error).__name__}: {str(add_error)}")
                         # Show more context about the URL structure
-                        masked_orig = re.sub(r':([^:@/]+)@', r':***@', line)
+                        masked_orig = re.sub(r':([^:@/]+)@', r':***@', url)
                         masked_orig = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_orig)
                         masked_enc = re.sub(r':([^:@/]+)@', r':***@', encoded_url)
                         masked_enc = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_enc)
@@ -330,7 +337,7 @@ def load_apprise_config(config_path: Optional[str] = None) -> Apprise:
                         # Try to add the original URL as a fallback
                         try:
                             logger.warning(f"Attempting to add original URL as fallback")
-                            apobj.add(line)
+                            apobj.add(url)
                             logger.info(f"Successfully added original URL as fallback")
                         except Exception as fallback_error:
                             logger.error(f"Fallback also failed: {type(fallback_error).__name__}: {str(fallback_error)}")
@@ -395,14 +402,14 @@ def send_notification(
         return (False, str(e))
 
 
-def get_configured_services(config_path: Optional[str] = None) -> List[str]:
-    """Get list of configured service URLs
+def get_configured_services(config_path: Optional[str] = None) -> List[dict]:
+    """Get list of configured service URLs with descriptions
     
     Args:
         config_path: Optional path to apprise config file
         
     Returns:
-        List of service URLs (with sensitive parts masked)
+        List of dicts with 'url' and 'description' keys (with sensitive parts masked)
     """
     if config_path is None:
         config_path = os.getenv('APPRISE_CONFIG_FILE', DEFAULT_APPRISE_CONFIG)
@@ -413,23 +420,36 @@ def get_configured_services(config_path: Optional[str] = None) -> List[str]:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith('#'):
+                    # Parse description|url format
+                    if '|' in line:
+                        description, url = line.split('|', 1)
+                        description = description.strip()
+                        url = url.strip()
+                    else:
+                        # Backward compatibility: extract service name from URL
+                        url = line
+                        description = get_service_name_from_url(url)
+                    
                     # Mask passwords/tokens in URLs for display
-                    # Format: scheme://user:***@host/path
-                    masked = re.sub(r':([^:@/]+)@', r':***@', line)
-                    masked = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked)
-                    services.append(masked)
+                    masked_url = re.sub(r':([^:@/]+)@', r':***@', url)
+                    masked_url = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_url)
+                    
+                    services.append({
+                        'url': masked_url,
+                        'description': description
+                    })
     
     return services
 
 
-def get_raw_service_urls(config_path: Optional[str] = None) -> List[str]:
-    """Get list of raw (unmasked) service URLs from config file
+def get_raw_service_urls(config_path: Optional[str] = None) -> List[dict]:
+    """Get list of raw (unmasked) service URLs with descriptions from config file
     
     Args:
         config_path: Optional path to apprise config file
         
     Returns:
-        List of raw service URLs
+        List of dicts with 'url' and 'description' keys
     """
     if config_path is None:
         config_path = os.getenv('APPRISE_CONFIG_FILE', DEFAULT_APPRISE_CONFIG)
@@ -440,7 +460,20 @@ def get_raw_service_urls(config_path: Optional[str] = None) -> List[str]:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith('#'):
-                    services.append(line)
+                    # Parse description|url format
+                    if '|' in line:
+                        description, url = line.split('|', 1)
+                        description = description.strip()
+                        url = url.strip()
+                    else:
+                        # Backward compatibility: extract service name from URL
+                        url = line
+                        description = get_service_name_from_url(url)
+                    
+                    services.append({
+                        'url': url,
+                        'description': description
+                    })
     
     return services
 
@@ -466,15 +499,15 @@ def test_service(
     try:
         # Get raw service URLs to find the matching one
         logger.debug("Fetching raw and masked service URLs")
-        raw_urls = get_raw_service_urls()
-        masked_urls = get_configured_services()
-        logger.debug(f"Found {len(raw_urls)} raw URLs and {len(masked_urls)} masked URLs")
+        raw_services = get_raw_service_urls()
+        masked_services = get_configured_services()
+        logger.debug(f"Found {len(raw_services)} raw services and {len(masked_services)} masked services")
         
         # Find the matching raw URL
         raw_url = None
-        for i, masked_url in enumerate(masked_urls):
-            if masked_url == service_url and i < len(raw_urls):
-                raw_url = raw_urls[i]
+        for i, masked_service in enumerate(masked_services):
+            if masked_service['url'] == service_url and i < len(raw_services):
+                raw_url = raw_services[i]['url']
                 logger.debug(f"Matched masked URL at index {i} to raw URL: {raw_url[:50]}... (masked)")
                 break
         

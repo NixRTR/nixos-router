@@ -9,9 +9,11 @@ import { Navbar } from '../components/layout/Navbar';
 import { useMetrics } from '../hooks/useMetrics';
 import { apiClient } from '../api/client';
 import { HiBell, HiCheckCircle, HiXCircle, HiInformationCircle } from 'react-icons/hi';
+import { AppriseUrlGenerator } from '../components/AppriseUrlGenerator';
 
 interface ServiceInfo {
   url: string;
+  description: string;
 }
 
 export function Apprise() {
@@ -59,7 +61,10 @@ export function Apprise() {
       setEnabled(status.enabled);
       
       if (config.enabled && config.services) {
-        setServices(config.services.map(url => ({ url })));
+        // Handle legacy format (array of strings) or new format (array of objects)
+        setServices(config.services.map((s: any) => 
+          typeof s === 'string' ? { url: s, description: getServiceName(s) } : s
+        ));
       } else {
         const serviceList = await apiClient.getAppriseServices();
         setServices(serviceList);
@@ -336,6 +341,11 @@ export function Apprise() {
               </div>
             </Card>
 
+            {/* URL Generator Section */}
+            <div className="mb-6">
+              <AppriseUrlGenerator />
+            </div>
+
             {/* Send Notification Section */}
             <Card className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Send Notification</h2>
@@ -415,7 +425,7 @@ export function Apprise() {
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
-                              <Badge color="info">{getServiceName(service.url)}</Badge>
+                              <Badge color="info">{service.description}</Badge>
                               {isTestSuccess && (
                                 <HiCheckCircle className="w-5 h-5 text-green-500" title="Test successful" />
                               )}

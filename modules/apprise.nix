@@ -4,106 +4,6 @@ with lib;
 
 let
   cfg = config.services.apprise-api;
-  routerConfig = import ../router-config.nix;
-
-  # Generate apprise service URLs from router-config.nix
-  # Format: one service URL per line
-  generateAppriseConfig = services:
-    let
-      # Email: mailto://user:pass@smtp:port?to=recipient&from=sender
-      # For port 465 (SSL/TLS), use mailtos:// scheme
-      # For port 587 (STARTTLS), use mailto:// scheme
-      emailUrl = if services.email.enable or false then
-        let
-          fromEmail = services.email.from or services.email.username;
-          fromParam = "&from=${fromEmail}";
-          # Handle port - convert string to int if needed, default to 587
-          smtpPort = if builtins.isString (services.email.smtpPort or "") then
-            builtins.toInt (services.email.smtpPort)
-          else
-            (services.email.smtpPort or 587);
-          # Use mailtos:// for port 465 (SSL/TLS), mailto:// for others
-          scheme = if smtpPort == 465 then "mailtos" else "mailto";
-        in
-        "${scheme}://${services.email.username}:${config.sops.placeholder."apprise-email-password"}@${services.email.smtpHost}:${toString smtpPort}?to=${services.email.to}${fromParam}"
-      else "";
-      
-      # Home Assistant: hassio://host:port/token or hassios://host:port/token
-      # Format: hassio://host:port/long-lived-access-token (HTTP)
-      #         hassios://host:port/long-lived-access-token (HTTPS)
-      # If useHttps is true, default port is 443; otherwise default is 8123
-      homeAssistantUrl = if services.homeAssistant.enable or false then
-        let
-          host = services.homeAssistant.host;
-          useHttps = services.homeAssistant.useHttps or false;
-          # If port is explicitly set, use it; otherwise default based on HTTPS
-          port = if (services.homeAssistant.port or null) != null then
-            toString services.homeAssistant.port
-          else if useHttps then
-            "443"
-          else
-            "8123";
-          protocol = if useHttps then "hassios" else "hassio";
-        in
-        "${protocol}://${host}:${port}/${config.sops.placeholder."apprise-homeassistant-token"}"
-      else "";
-      
-      # Discord: discord://webhook_id/webhook_token
-      discordUrl = if services.discord.enable or false then
-        "discord://${config.sops.placeholder."apprise-discord-webhook-id"}/${config.sops.placeholder."apprise-discord-webhook-token"}"
-      else "";
-      
-      # Slack: slack://tokenA/tokenB/tokenC
-      slackUrl = if services.slack.enable or false then
-        "slack://${config.sops.placeholder."apprise-slack-token-a"}/${config.sops.placeholder."apprise-slack-token-b"}/${config.sops.placeholder."apprise-slack-token-c"}"
-      else "";
-      
-      # Telegram: tgram://bot_token/chat_id
-      # Note: chatId is required for Telegram notifications
-      # Supports both chatId (camelCase) and chatID (capital ID) for compatibility
-      telegramUrl = if services.telegram.enable or false then
-        let
-          # Get chatId, handling both chatId and chatID field names
-          # Try chatId first (preferred), then chatID (for backwards compatibility)
-          chatId = if (services.telegram.chatId or null) != null then
-            toString (services.telegram.chatId)
-          else if (services.telegram.chatID or null) != null then
-            toString (services.telegram.chatID)
-          else
-            "";
-        in
-        if chatId != "" && chatId != "null" then
-          "tgram://${config.sops.placeholder."apprise-telegram-bot-token"}/${chatId}"
-        else
-          # If chatId is missing, still generate URL but it will fail at runtime
-          # This allows the error to be caught and reported
-          "tgram://${config.sops.placeholder."apprise-telegram-bot-token"}/"
-      else "";
-      
-      # ntfy: ntfy://topic or ntfy://user:pass@server/topic
-      ntfyUrl = if services.ntfy.enable or false then
-        let
-          server = services.ntfy.server or "ntfy.sh";
-          topic = services.ntfy.topic or "";
-          auth = if (services.ntfy.username or null) != null then
-            "${config.sops.placeholder."apprise-ntfy-username"}:${config.sops.placeholder."apprise-ntfy-password"}@"
-          else "";
-        in
-        "ntfy://${auth}${server}/${topic}"
-      else "";
-      
-      urls = filter (x: x != "") [
-        emailUrl
-        homeAssistantUrl
-        discordUrl
-        slackUrl
-        telegramUrl
-        ntfyUrl
-      ];
-    in
-    concatStringsSep "\n" urls;
-
-  appriseServices = routerConfig.apprise.services or {};
 
 in
 
@@ -125,14 +25,12 @@ in
       "d ${cfg.configDir} 0750 router-webui router-webui -"
     ];
     
-    # Generate apprise configuration file from router-config.nix
-    # Apprise expects a file with one service URL per line
-    # Use sops template to ensure placeholders are replaced at runtime
-    sops.templates."apprise-config" = {
-      content = generateAppriseConfig appriseServices;
+    # Define apprise-urls secret (managed by sops)
+    sops.secrets."apprise-urls" = {
       owner = "router-webui";
       group = "router-webui";
-      mode = "0600";
+      mode = "0400";
+      format = "binary";  # Treat as binary to preserve newlines
     };
     
     # Service to copy config to apprise config directory
@@ -146,7 +44,6 @@ in
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        # Run as root to set permissions, then change ownership
       };
       
       script = ''
@@ -155,8 +52,8 @@ in
         chown router-webui:router-webui ${cfg.configDir}
         chmod 750 ${cfg.configDir}
         
-        # Copy config file and set permissions
-        cp ${config.sops.templates."apprise-config".path} ${cfg.configDir}/apprise
+        # Copy secret file to apprise config location
+        cp ${config.sops.secrets."apprise-urls".path} ${cfg.configDir}/apprise
         chown router-webui:router-webui ${cfg.configDir}/apprise
         chmod 600 ${cfg.configDir}/apprise
       '';

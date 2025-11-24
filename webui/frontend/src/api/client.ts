@@ -218,8 +218,8 @@ class APIClient {
     return response.data;
   }
 
-  async getAppriseServices(): Promise<{ url: string }[]> {
-    const response = await this.client.get<{ url: string }[]>('/api/apprise/services');
+  async getAppriseServices(): Promise<{ url: string; description: string }[]> {
+    const response = await this.client.get<{ url: string; description: string }[]>('/api/apprise/services');
     return response.data;
   }
 

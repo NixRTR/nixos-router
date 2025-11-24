@@ -46,6 +46,7 @@ class NotificationResponse(BaseModel):
 class ServiceInfo(BaseModel):
     """Information about a configured service"""
     url: str
+    description: str
 
 
 @router.get("/status", response_model=AppriseStatus)
@@ -121,7 +122,7 @@ async def get_services(
         return []
     
     services = get_configured_services()
-    return [ServiceInfo(url=url) for url in services]
+    return [ServiceInfo(url=s['url'], description=s['description']) for s in services]
 
 
 @router.post("/send/{service_index}", response_model=NotificationResponse)
@@ -150,7 +151,7 @@ async def send_to_service_endpoint(
             )
         
         logger.debug("Fetching configured services")
-        services = get_configured_services()
+        services = get_raw_service_urls()
         logger.debug(f"Found {len(services)} configured services")
         
         if service_index < 0 or service_index >= len(services):
@@ -160,7 +161,7 @@ async def send_to_service_endpoint(
                 detail=f"Service index {service_index} not found. Available indices: 0-{len(services)-1}"
             )
         
-        service_url = services[service_index]
+        service_url = services[service_index]['url']
         logger.info(f"Sending notification to service at index {service_index}: {service_url[:50]}... (masked)")
         logger.debug(f"Notification details: title={request.title}, body={request.body[:50]}..., type={request.notification_type}")
         
@@ -227,7 +228,7 @@ async def test_service_endpoint(
             )
         
         logger.debug("Fetching configured services")
-        services = get_configured_services()
+        services = get_raw_service_urls()
         logger.debug(f"Found {len(services)} configured services")
         
         if service_index < 0 or service_index >= len(services):
@@ -237,7 +238,7 @@ async def test_service_endpoint(
                 detail=f"Service index {service_index} not found. Available indices: 0-{len(services)-1}"
             )
         
-        service_url = services[service_index]
+        service_url = services[service_index]['url']
         logger.info(f"Testing service at index {service_index}: {service_url[:50]}... (masked)")
         
         try:

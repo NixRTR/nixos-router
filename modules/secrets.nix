@@ -7,16 +7,6 @@ let
   pppoeEnabled = routerConfig.wan.type == "pppoe";
   dyndnsEnabled = routerConfig.dyndns.enable or false;
   appriseEnabled = routerConfig.apprise.enable or false;
-  appriseServices = routerConfig.apprise.services or {};
-  
-  # Check if individual apprise services are enabled
-  emailEnabled = appriseEnabled && (appriseServices.email.enable or false);
-  homeAssistantEnabled = appriseEnabled && (appriseServices.homeAssistant.enable or false);
-  discordEnabled = appriseEnabled && (appriseServices.discord.enable or false);
-  slackEnabled = appriseEnabled && (appriseServices.slack.enable or false);
-  telegramEnabled = appriseEnabled && (appriseServices.telegram.enable or false);
-  ntfyEnabled = appriseEnabled && (appriseServices.ntfy.enable or false);
-  ntfyAuthEnabled = ntfyEnabled && (appriseServices.ntfy.username or null) != null;
 
 in
 
@@ -56,56 +46,16 @@ in
         mode = "0400";
       };
     }
-    # Apprise API secrets (conditional on service enablement)
-    # Owner is router-webui since Apprise is integrated into the WebUI backend
-    // optionalAttrs emailEnabled {
-      apprise-email-password = {
-        owner = "router-webui";
-        mode = "0400";
-      };
-    }
-    // optionalAttrs homeAssistantEnabled {
-      apprise-homeassistant-token = {
-        owner = "router-webui";
-        mode = "0400";
-      };
-    }
-    // optionalAttrs discordEnabled {
-      apprise-discord-webhook-id = {
-        owner = "router-webui";
-        mode = "0400";
-      };
-      apprise-discord-webhook-token = {
-        owner = "router-webui";
-        mode = "0400";
-      };
-    }
-    // optionalAttrs slackEnabled {
-      apprise-slack-token-a = {
-        owner = "router-webui";
-        mode = "0400";
-      };
-      apprise-slack-token-b = {
-        owner = "router-webui";
-        mode = "0400";
-      };
-      apprise-slack-token-c = {
-        owner = "router-webui";
-        mode = "0400";
-      };
-    }
-    // optionalAttrs telegramEnabled {
-      apprise-telegram-bot-token = {
-        owner = "router-webui";
-        mode = "0400";
-      };
-    }
-    // optionalAttrs ntfyAuthEnabled {
-      apprise-ntfy-username = {
-        owner = "router-webui";
-        mode = "0400";
-      };
-      apprise-ntfy-password = {
+    # Apprise API URLs (conditional on apprise enablement)
+    # Contains newline-separated list of apprise service URLs
+    # Format: description|url (one per line)
+    # Example URLs:
+    #   mailto://user:pass@smtp:port?to=recipient
+    #   tgram://bot-token/chat-id
+    #   discord://webhook-id/webhook-token
+    #   ntfy://topic or ntfy://user:pass@server/topic
+    // optionalAttrs appriseEnabled {
+      apprise-urls = {
         owner = "router-webui";
         mode = "0400";
       };
