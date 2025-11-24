@@ -52,6 +52,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { path: '/configuration/dyndns', label: 'Dynamic DNS' },
         { path: '/configuration/global-dns', label: 'Global DNS' },
         { path: '/configuration/webui', label: 'WebUI' },
+        { path: '/configuration/apprise', label: 'Apprise' },
       ],
     },
     { path: '/upgrading', label: 'Upgrading' },
@@ -70,6 +71,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { path: '/webui/system', label: 'System' },
         { path: '/webui/speedtest', label: 'Speedtest' },
         { path: '/webui/system-info', label: 'System Info' },
+        { path: '/webui/apprise', label: 'Apprise' },
       ],
     },
   ];
