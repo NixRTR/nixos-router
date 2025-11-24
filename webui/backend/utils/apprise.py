@@ -487,7 +487,7 @@ def test_service(
     """Test a single notification service
     
     Args:
-        service_url: The service URL to test (can be masked or raw)
+        service_url: The raw service URL to test (should be unencoded from config file)
         body: Message body
         title: Message title
         notification_type: Optional notification type
@@ -496,46 +496,59 @@ def test_service(
         Tuple of (success: bool, error_message: Optional[str], details: Optional[str])
     """
     logger.info(f"Testing service with URL: {service_url[:50]}... (masked)")
+    
+    if not service_url:
+        logger.error("No service URL provided")
+        return (False, "No service URL provided", None)
+    
     try:
-        # Get raw service URLs to find the matching one
-        logger.debug("Fetching raw and masked service URLs")
-        raw_services = get_raw_service_urls()
-        masked_services = get_configured_services()
-        logger.debug(f"Found {len(raw_services)} raw services and {len(masked_services)} masked services")
-        
-        # Find the matching raw URL
-        raw_url = None
-        for i, masked_service in enumerate(masked_services):
-            if masked_service['url'] == service_url and i < len(raw_services):
-                raw_url = raw_services[i]['url']
-                logger.debug(f"Matched masked URL at index {i} to raw URL: {raw_url[:50]}... (masked)")
-                break
-        
-        # If not found, try using the service_url directly (might be raw)
-        if raw_url is None:
-            logger.warning(f"Could not find matching raw URL for masked URL, using service_url directly")
-            raw_url = service_url
-        
-        if not raw_url:
-            logger.error("No raw URL found or provided")
-            return (False, "No service URL provided", None)
-        
         # Create Apprise object with just this service
-        logger.debug(f"Creating Apprise object and adding service: {get_service_name_from_url(raw_url)}")
+        logger.debug(f"Creating Apprise object and adding service: {get_service_name_from_url(service_url)}")
         apobj = Apprise()
         
-        # URL-encode passwords/tokens in the URL
-        encoded_url = url_encode_password_in_url(raw_url)
-        logger.debug(f"URL-encoded service URL: {encoded_url[:50]}... (masked)")
+        # URL-encode passwords/tokens in the URL (same as load_apprise_config does)
+        encoded_url = url_encode_password_in_url(service_url)
+        masked_encoded = re.sub(r':([^:@/]+)@', r':***@', encoded_url)
+        masked_encoded = re.sub(r'/([^/]+)/([^/]+)/', r'/***/***/', masked_encoded)
+        logger.debug(f"URL-encoded service URL (masked): {masked_encoded[:80]}...")
         
         try:
+            # Store count before adding
+            count_before = len(apobj)
             apobj.add(encoded_url)
-            logger.debug(f"Successfully added service to Apprise object")
+            count_after = len(apobj)
+            
+            if count_after > count_before:
+                logger.debug(f"Successfully added service to Apprise object")
+            else:
+                logger.warning(f"Service was not added to Apprise (count unchanged: {count_before})")
+                # Try adding the original URL as fallback (same as load_apprise_config)
+                try:
+                    logger.warning(f"Attempting to add original URL as fallback")
+                    apobj.add(service_url)
+                    if len(apobj) > count_before:
+                        logger.info(f"Successfully added original URL as fallback")
+                    else:
+                        logger.error(f"Fallback also failed - URL format may be incorrect")
+                        return (False, "Invalid service URL", "Service URL could not be parsed by Apprise")
+                except Exception as fallback_error:
+                    logger.error(f"Fallback also failed: {type(fallback_error).__name__}: {str(fallback_error)}")
+                    return (False, f"Invalid service URL: {str(fallback_error)}", f"Failed to parse service URL: {type(fallback_error).__name__}")
         except Exception as add_error:
             logger.error(f"Failed to add service URL to Apprise: {type(add_error).__name__}: {str(add_error)}")
-            return (False, f"Invalid service URL: {str(add_error)}", f"Failed to parse service URL: {type(add_error).__name__}")
+            # Try adding the original URL as fallback
+            try:
+                logger.warning(f"Attempting to add original URL as fallback")
+                apobj.add(service_url)
+                if len(apobj) > 0:
+                    logger.info(f"Successfully added original URL as fallback")
+                else:
+                    return (False, f"Invalid service URL: {str(add_error)}", f"Failed to parse service URL: {type(add_error).__name__}")
+            except Exception as fallback_error:
+                logger.error(f"Fallback also failed: {type(fallback_error).__name__}: {str(fallback_error)}")
+                return (False, f"Invalid service URL: {str(add_error)}", f"Failed to parse service URL: {type(add_error).__name__}")
         
-        if not apobj:
+        if not apobj or len(apobj) == 0:
             logger.error("Apprise object is empty after adding service")
             return (False, "Invalid service URL", "Service URL could not be added to Apprise")
         
@@ -554,7 +567,7 @@ def test_service(
             logger.debug(f"Mapped notification type '{notification_type}' to '{apprise_type}'")
         
         # Send notification
-        logger.info(f"Sending test notification to {get_service_name_from_url(raw_url)}")
+        logger.info(f"Sending test notification to {get_service_name_from_url(service_url)}")
         try:
             result = apobj.notify(
                 body=body,
@@ -568,7 +581,7 @@ def test_service(
             if not result:
                 # Try to get error details from Apprise
                 # Apprise doesn't expose this easily, but we can check if the service was added
-                logger.warning(f"Notification returned False for {get_service_name_from_url(raw_url)}")
+                logger.warning(f"Notification returned False for {get_service_name_from_url(service_url)}")
                 # Check if the service was actually added to the Apprise object
                 service_count = len(apobj)
                 if service_count == 0:
@@ -576,8 +589,8 @@ def test_service(
                 else:
                     return (False, "Failed to send notification", "The service may be misconfigured, unreachable, or the credentials may be invalid. Check the Apprise logs for details.")
             
-            logger.info(f"Successfully sent notification to {get_service_name_from_url(raw_url)}")
-            return (True, None, f"Notification sent successfully to {get_service_name_from_url(raw_url)}")
+            logger.info(f"Successfully sent notification to {get_service_name_from_url(service_url)}")
+            return (True, None, f"Notification sent successfully to {get_service_name_from_url(service_url)}")
             
         except Exception as notify_error:
             logger.error(f"Exception during notify(): {type(notify_error).__name__}: {str(notify_error)}", exc_info=True)

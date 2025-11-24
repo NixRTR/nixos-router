@@ -43,6 +43,9 @@ export function Apprise() {
   const [sendResults, setSendResults] = useState<Map<number, { success: boolean; message: string; details?: string }>>(new Map());
   const [sendErrors, setSendErrors] = useState<Map<number, string>>(new Map());
   
+  // Copy to clipboard state
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  
   const { connectionStatus } = useMetrics(token);
 
   useEffect(() => {
@@ -196,11 +199,16 @@ export function Apprise() {
     }
   };
 
-  const getCurlCommand = () => {
+  const getCurlCommand = (serviceIndex?: number) => {
     const baseUrl = window.location.origin;
     const authToken = localStorage.getItem('access_token');
     
-    return `curl -X POST ${baseUrl}/api/apprise/notify \\
+    // Use service-specific endpoint if index is provided
+    const endpoint = serviceIndex !== undefined 
+      ? `${baseUrl}/api/apprise/send/${serviceIndex}`
+      : `${baseUrl}/api/apprise/notify`;
+    
+    return `curl -X POST ${endpoint} \\
   -H "Authorization: Bearer ${authToken}" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -208,6 +216,57 @@ export function Apprise() {
     "title": "Notification Title (optional)",
     "notification_type": "info"
   }'`;
+  };
+
+  const copyCurlCommand = async (index: number) => {
+    const command = getCurlCommand(index);
+    try {
+      // Try modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(command);
+        setCopiedIndex(index);
+        setTimeout(() => setCopiedIndex(null), 2000);
+      } else {
+        // Fallback for older browsers or non-HTTPS contexts
+        const textArea = document.createElement('textarea');
+        textArea.value = command;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          setCopiedIndex(index);
+          setTimeout(() => setCopiedIndex(null), 2000);
+        } catch (err) {
+          console.error('Fallback copy failed:', err);
+          alert('Failed to copy. Please select and copy manually.');
+        }
+        document.body.removeChild(textArea);
+      }
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      // Fallback: try the old method
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = command;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopiedIndex(index);
+        setTimeout(() => setCopiedIndex(null), 2000);
+      } catch (fallbackErr) {
+        console.error('Fallback copy also failed:', fallbackErr);
+        alert('Failed to copy. Please select and copy manually.');
+      }
+    }
   };
 
   const getServiceName = (url: string): string => {
@@ -495,22 +554,19 @@ export function Apprise() {
                           <Label value="Example cURL Command" className="mb-2 block" />
                           <div className="relative">
                             <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-xs overflow-x-auto pr-20">
-                              <code>{getCurlCommand()}</code>
+                              <code>{getCurlCommand(index)}</code>
                             </pre>
                             <Button
                               size="xs"
-                              color="light"
+                              color={copiedIndex === index ? "success" : "light"}
                               className="absolute top-2 right-2"
-                              onClick={async () => {
-                                try {
-                                  await navigator.clipboard.writeText(getCurlCommand());
-                                  // You could add a toast notification here if desired
-                                } catch (err) {
-                                  console.error('Failed to copy:', err);
-                                }
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                copyCurlCommand(index);
                               }}
                             >
-                              Copy
+                              {copiedIndex === index ? 'Copied!' : 'Copy'}
                             </Button>
                           </div>
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
