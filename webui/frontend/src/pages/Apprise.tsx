@@ -112,7 +112,7 @@ export function Apprise() {
     });
     
     try {
-      const result = await apiClient.sendAppriseNotificationToService(
+      const result = await apiClient.sendAppriseNotificationToServiceById(
         serviceId,
         notificationBody,
         notificationTitle || undefined,

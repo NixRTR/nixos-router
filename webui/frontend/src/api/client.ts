@@ -343,6 +343,23 @@ class APIClient {
     return response.data;
   }
 
+  async sendAppriseNotificationToServiceById(
+    serviceId: number,
+    body: string,
+    title?: string,
+    notificationType?: string
+  ): Promise<{ success: boolean; message: string; details?: string }> {
+    const response = await this.client.post<{ success: boolean; message: string; details?: string }>(
+      `/api/apprise/services/${serviceId}/send`,
+      {
+        body,
+        title,
+        notification_type: notificationType,
+      }
+    );
+    return response.data;
+  }
+
   async getCakeHistory(
     range: string = '1h',
     interfaceName?: string

@@ -506,6 +506,66 @@ async def delete_service(
     return {"message": f"Service {service_id} deleted successfully"}
 
 
+@router.post("/services/{service_id}/send", response_model=NotificationResponse)
+async def send_to_service_by_id(
+    service_id: int,
+    request: NotificationRequest,
+    _: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> NotificationResponse:
+    """Send a notification to a specific service by ID
+    
+    Args:
+        service_id: Service ID
+        request: Notification request with body, optional title and type
+        
+    Returns:
+        NotificationResponse: Success status and message
+    """
+    result = await db.execute(
+        select(AppriseServiceDB).where(AppriseServiceDB.id == service_id)
+    )
+    service = result.scalar_one_or_none()
+    
+    if not service:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Service {service_id} not found"
+        )
+    
+    if not service.enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="Service is disabled"
+        )
+    
+    try:
+        success, error, details = test_service(
+            service.url,
+            body=request.body,
+            title=request.title,
+            notification_type=request.notification_type
+        )
+        
+        if success:
+            return NotificationResponse(
+                success=True,
+                message="Notification sent successfully",
+                details=details
+            )
+        else:
+            return NotificationResponse(
+                success=False,
+                message=error or "Failed to send notification",
+                details=details
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error sending notification: {str(e)}"
+        )
+
+
 @router.post("/services/{service_id}/test", response_model=NotificationResponse)
 async def test_service_by_id(
     service_id: int,

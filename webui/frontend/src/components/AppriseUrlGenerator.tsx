@@ -1867,6 +1867,6 @@ export function AppriseUrlGenerator({ onServiceSaved }: AppriseUrlGeneratorProps
             </Button>
           </Modal.Footer>
         </Modal>
-      </div>
+    </div>
   );
 }
