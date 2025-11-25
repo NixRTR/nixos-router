@@ -31,6 +31,7 @@ export function Apprise() {
   const [editEnabled, setEditEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [urlGeneratorModalOpen, setUrlGeneratorModalOpen] = useState(false);
   
   // Notification form state
   const [notificationBody, setNotificationBody] = useState('');
@@ -288,9 +289,17 @@ export function Apprise() {
         
         <main className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-900">
           <div className="max-w-7xl mx-auto">
-            <div className="flex items-center gap-3 mb-6">
-              <HiBell className="w-8 h-8 text-gray-900 dark:text-white" />
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Apprise Notifications</h1>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <HiBell className="w-8 h-8 text-gray-900 dark:text-white" />
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Apprise Notifications</h1>
+              </div>
+              <Button
+                color="blue"
+                onClick={() => setUrlGeneratorModalOpen(true)}
+              >
+                New Service
+              </Button>
             </div>
 
             {error && (
@@ -332,11 +341,6 @@ export function Apprise() {
                 </ul>
               </div>
             </Card>
-
-            {/* URL Generator Section */}
-            <div className="mb-6">
-              <AppriseUrlGenerator />
-            </div>
 
             {/* Send Notification Section */}
             <Card className="mb-6">
@@ -467,6 +471,21 @@ export function Apprise() {
                 </Table>
               )}
             </Card>
+
+            {/* URL Generator Modal */}
+            <Modal show={urlGeneratorModalOpen} onClose={() => setUrlGeneratorModalOpen(false)} size="6xl">
+              <Modal.Header>Create New Apprise Service</Modal.Header>
+              <Modal.Body>
+                <div className="max-h-[70vh] overflow-y-auto">
+                  <AppriseUrlGenerator 
+                    onServiceSaved={() => {
+                      setUrlGeneratorModalOpen(false);
+                      fetchAppriseStatus();
+                    }}
+                  />
+                </div>
+              </Modal.Body>
+            </Modal>
 
             {/* Edit Service Modal */}
             <Modal show={editModalOpen} onClose={() => setEditModalOpen(false)} size="lg">
