@@ -52,39 +52,71 @@ def parse_nix_config() -> Dict:
         with open(config_path, 'r') as f:
             content = f.read()
         
-        # Extract homelab DNS section
-        homelab_match = re.search(
-            r'homelab\s*=\s*\{[^}]*dns\s*=\s*\{[^}]*a_records\s*=\s*\{([^}]*)\}',
-            content,
-            re.DOTALL
-        )
-        if homelab_match:
-            config['homelab']['a_records'] = _parse_a_records(homelab_match.group(1))
+        # Helper function to extract content between matching braces
+        def extract_braced_content(text: str, start_pos: int) -> tuple[Optional[str], int]:
+            """Extract content between matching braces, returning content and end position"""
+            if start_pos >= len(text) or text[start_pos] != '{':
+                return None, start_pos
+            depth = 0
+            start = start_pos + 1
+            i = start_pos
+            while i < len(text):
+                if text[i] == '{':
+                    depth += 1
+                elif text[i] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        return text[start:i].strip(), i + 1
+                i += 1
+            return None, start_pos
         
-        homelab_cname_match = re.search(
-            r'homelab\s*=\s*\{[^}]*dns\s*=\s*\{[^}]*cname_records\s*=\s*\{([^}]*)\}',
-            content,
-            re.DOTALL
-        )
-        if homelab_cname_match:
-            config['homelab']['cname_records'] = _parse_cname_records(homelab_cname_match.group(1))
+        # Find homelab section
+        homelab_start = content.find('homelab =')
+        if homelab_start != -1:
+            # Find dns = within homelab
+            homelab_dns_start = content.find('dns =', homelab_start)
+            if homelab_dns_start != -1:
+                # Find a_records = within dns
+                a_records_start = content.find('a_records =', homelab_dns_start)
+                if a_records_start != -1:
+                    brace_start = content.find('{', a_records_start)
+                    if brace_start != -1:
+                        a_content, _ = extract_braced_content(content, brace_start)
+                        if a_content:
+                            config['homelab']['a_records'] = _parse_a_records(a_content)
+                
+                # Find cname_records = within dns
+                cname_records_start = content.find('cname_records =', homelab_dns_start)
+                if cname_records_start != -1:
+                    brace_start = content.find('{', cname_records_start)
+                    if brace_start != -1:
+                        cname_content, _ = extract_braced_content(content, brace_start)
+                        if cname_content:
+                            config['homelab']['cname_records'] = _parse_cname_records(cname_content)
         
-        # Extract LAN DNS section
-        lan_match = re.search(
-            r'lan\s*=\s*\{[^}]*dns\s*=\s*\{[^}]*a_records\s*=\s*\{([^}]*)\}',
-            content,
-            re.DOTALL
-        )
-        if lan_match:
-            config['lan']['a_records'] = _parse_a_records(lan_match.group(1))
-        
-        lan_cname_match = re.search(
-            r'lan\s*=\s*\{[^}]*dns\s*=\s*\{[^}]*cname_records\s*=\s*\{([^}]*)\}',
-            content,
-            re.DOTALL
-        )
-        if lan_cname_match:
-            config['lan']['cname_records'] = _parse_cname_records(lan_cname_match.group(1))
+        # Find lan section
+        lan_start = content.find('lan =')
+        if lan_start != -1:
+            # Find dns = within lan
+            lan_dns_start = content.find('dns =', lan_start)
+            if lan_dns_start != -1:
+                # Find a_records = within dns
+                a_records_start = content.find('a_records =', lan_dns_start)
+                if a_records_start != -1:
+                    brace_start = content.find('{', a_records_start)
+                    if brace_start != -1:
+                        a_content, _ = extract_braced_content(content, brace_start)
+                        if a_content:
+                            config['lan']['a_records'] = _parse_a_records(a_content)
+                
+                # Find cname_records = within dns
+                cname_records_start = content.find('cname_records =', lan_dns_start)
+                if cname_records_start != -1:
+                    brace_start = content.find('{', cname_records_start)
+                    if brace_start != -1:
+                        cname_content, _ = extract_braced_content(content, brace_start)
+                        if cname_content:
+                            config['lan']['cname_records'] = _parse_cname_records(cname_content)
         
         logger.info(f"Parsed DNS config: homelab={len(config['homelab']['a_records'])} A, {len(config['homelab']['cname_records'])} CNAME; "
                    f"lan={len(config['lan']['a_records'])} A, {len(config['lan']['cname_records'])} CNAME")
@@ -106,10 +138,15 @@ def _parse_a_records(content: str) -> Dict[str, Dict[str, str]]:
         Dictionary mapping hostname -> {ip, comment}
     """
     records = {}
-    # Match: "hostname" = { ip = "192.168.1.1"; comment = "description"; };
-    pattern = r'"([^"]+)"\s*=\s*\{\s*ip\s*=\s*"([^"]+)";\s*(?:comment\s*=\s*"([^"]*)";)?\s*\}'
+    # Match multiline format:
+    # "hostname" = {
+    #   ip = "192.168.1.1";
+    #   comment = "description";
+    # };
+    # Also handles single-line format and records without comments
+    pattern = r'"([^"]+)"\s*=\s*\{[^}]*ip\s*=\s*"([^"]+)";[^}]*(?:comment\s*=\s*"([^"]*)";)?[^}]*\}'
     
-    for match in re.finditer(pattern, content):
+    for match in re.finditer(pattern, content, re.DOTALL):
         hostname = match.group(1)
         ip = match.group(2)
         comment = match.group(3) if match.group(3) else None
@@ -128,10 +165,15 @@ def _parse_cname_records(content: str) -> Dict[str, Dict[str, str]]:
         Dictionary mapping hostname -> {target, comment}
     """
     records = {}
-    # Match: "hostname" = { target = "target.hostname"; comment = "description"; };
-    pattern = r'"([^"]+)"\s*=\s*\{\s*target\s*=\s*"([^"]+)";\s*(?:comment\s*=\s*"([^"]*)";)?\s*\}'
+    # Match multiline format:
+    # "hostname" = {
+    #   target = "target.hostname";
+    #   comment = "description";
+    # };
+    # Also handles single-line format and records without comments
+    pattern = r'"([^"]+)"\s*=\s*\{[^}]*target\s*=\s*"([^"]+)";[^}]*(?:comment\s*=\s*"([^"]*)";)?[^}]*\}'
     
-    for match in re.finditer(pattern, content):
+    for match in re.finditer(pattern, content, re.DOTALL):
         hostname = match.group(1)
         target = match.group(2)
         comment = match.group(3) if match.group(3) else None
