@@ -157,52 +157,23 @@ async def get_bandwidth_history(
         speedtest_result = await session.execute(speedtest_query)
         speedtests = speedtest_result.scalars().all()
         
-        # Build a list of speedtest connection bytes with timestamps
-        # We'll match these to interface stats intervals
-        speedtest_connections: List[Dict] = []
+        # Build a set of time windows to exclude for speedtests
+        # Since router-initiated connections aren't tracked in client_connection_stats,
+        # we'll exclude time periods around speedtests
+        speedtest_exclude_windows: List[Tuple[datetime, datetime]] = []
         
         if (interface is None or interface == 'ppp0') and speedtests:
-            # For each speedtest, create a time window (2 min before to 1 min after)
+            # For each speedtest, estimate the duration and create an exclusion window
             for st in speedtests:
-                window_start = st.timestamp - timedelta(minutes=2)
-                window_end = st.timestamp + timedelta(minutes=1)
-                
-                # Query connection stats during this window
-                # Look for high-bandwidth external connections (likely speedtest traffic)
-                # Note: We need to identify router-initiated connections
-                # Router connections won't have client_ip in private ranges (192.168.x.x)
-                conn_query = select(ClientConnectionStatsDB).where(
-                    ClientConnectionStatsDB.timestamp >= window_start,
-                    ClientConnectionStatsDB.timestamp <= window_end,
-                    ClientConnectionStatsDB.aggregation_level == 'raw'  # Use raw data for precision
-                )
-                
-                conn_result = await session.execute(conn_query)
-                connections = conn_result.scalars().all()
-                
-                for conn in connections:
-                    # Check if this is likely a speedtest connection:
-                    # 1. High bandwidth (> 10 MB in interval = ~16 Mbps over 5 seconds)
-                    # 2. External IP (not private range)
-                    # 3. Router-initiated: client_ip is NOT in private ranges (router's WAN IP)
-                    remote_ip_str = str(conn.remote_ip)
-                    client_ip_str = str(conn.client_ip)
-                    is_remote_private = _is_private_ip(remote_ip_str)
-                    is_client_private = _is_private_ip(client_ip_str)
-                    
-                    # High bandwidth threshold: 10 MB in 5 seconds = ~16 Mbps
-                    # Speedtests are typically 50-1000+ Mbps, so this is conservative
-                    high_bandwidth = (conn.rx_bytes > 10_000_000) or (conn.tx_bytes > 10_000_000)
-                    
-                    # Router-initiated speedtest: client_ip is external (router's WAN IP), remote_ip is external (speedtest server)
-                    if not is_remote_private and not is_client_private and high_bandwidth:
-                        # This is likely a router-initiated speedtest connection
-                        # Store with timestamp for interval matching
-                        speedtest_connections.append({
-                            'timestamp': conn.timestamp,
-                            'rx_bytes': conn.rx_bytes,  # interval bytes
-                            'tx_bytes': conn.tx_bytes,   # interval bytes
-                        })
+                # Estimate speedtest duration based on typical values:
+                # - Ping: ~1 second
+                # - Download test: typically 10-30 seconds depending on speed
+                # - Upload test: typically 10-30 seconds depending on speed
+                # Total: ~30-60 seconds, we'll use 90 seconds to be safe
+                # Start 10 seconds before (for connection setup) and end 10 seconds after
+                window_start = st.timestamp - timedelta(seconds=10)
+                window_end = st.timestamp + timedelta(seconds=90)
+                speedtest_exclude_windows.append((window_start, window_end))
     
     # Group by interface
     interfaces = {}
@@ -236,26 +207,35 @@ async def get_bandwidth_history(
                 prev = data_points[i - 1]
                 curr = data_points[i]
                 
+                # For WAN interface, check if this interval overlaps with any speedtest window
+                # If so, skip this data point (set rate to 0 or interpolate)
+                if iface == 'ppp0' and speedtest_exclude_windows:
+                    # Check if the interval [prev.timestamp, curr.timestamp] overlaps with any speedtest window
+                    interval_start = prev['timestamp']
+                    interval_end = curr['timestamp']
+                    
+                    should_exclude = False
+                    for window_start, window_end in speedtest_exclude_windows:
+                        # Check if intervals overlap
+                        if not (interval_end < window_start or interval_start > window_end):
+                            should_exclude = True
+                            break
+                    
+                    if should_exclude:
+                        # Exclude this interval - set rate to 0
+                        # This creates a gap in the chart, which is better than showing inflated values
+                        processed_points.append(InterfaceDataPoint(
+                            timestamp=curr['timestamp'],
+                            rx_mbps=0.0,
+                            tx_mbps=0.0
+                        ))
+                        continue
+                
                 time_diff = (curr['timestamp'] - prev['timestamp']).total_seconds()
                 if time_diff > 0:
                     # Calculate delta (interval bytes)
                     rx_delta = curr['rx_bytes'] - prev['rx_bytes']
                     tx_delta = curr['tx_bytes'] - prev['tx_bytes']
-                    
-                    # For WAN interface, subtract speedtest interval bytes that fall in this interval
-                    if iface == 'ppp0' and speedtest_connections:
-                        # Sum speedtest bytes that fall between prev.timestamp and curr.timestamp
-                        speedtest_rx_sum = 0
-                        speedtest_tx_sum = 0
-                        for st_conn in speedtest_connections:
-                            # Speedtest connection timestamp falls in this interval
-                            if prev['timestamp'] < st_conn['timestamp'] <= curr['timestamp']:
-                                speedtest_rx_sum += st_conn['rx_bytes']
-                                speedtest_tx_sum += st_conn['tx_bytes']
-                        
-                        # Subtract speedtest bytes from delta
-                        rx_delta = max(0, rx_delta - speedtest_rx_sum)
-                        tx_delta = max(0, tx_delta - speedtest_tx_sum)
                     
                     # Bytes per second -> Megabits per second
                     rx_mbps = (rx_delta * 8) / (time_diff * 1_000_000)
