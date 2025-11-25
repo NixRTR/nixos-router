@@ -319,8 +319,82 @@ export function Apprise() {
               </Alert>
             )}
 
-            {/* Configured Services Section */}
+            {/* How It Works Section */}
             <Card className="mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">How It Works</h2>
+              <div className="space-y-3 text-gray-700 dark:text-gray-300">
+                <p>
+                  Apprise is integrated into the NixOS Router WebUI backend, allowing you to send notifications
+                  to multiple services configured in <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">router-config.nix</code>.
+                </p>
+                <p>
+                  Notifications can be sent to all configured services simultaneously, or to individual services.
+                </p>
+                <p>
+                  <strong>Notification Types:</strong>
+                </p>
+                <ul className="list-disc list-inside ml-4 space-y-1">
+                  <li><strong>info</strong> - General information (default)</li>
+                  <li><strong>success</strong> - Success messages</li>
+                  <li><strong>warning</strong> - Warning messages</li>
+                  <li><strong>failure</strong> - Error/failure messages</li>
+                </ul>
+              </div>
+            </Card>
+
+            {/* Send Notification Section */}
+            <Card className="mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Send Notification</h2>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="title" value="Title (optional)" />
+                  <TextInput
+                    id="title"
+                    type="text"
+                    placeholder="Notification title"
+                    value={notificationTitle}
+                    onChange={(e) => setNotificationTitle(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="body" value="Message Body *" />
+                  <Textarea
+                    id="body"
+                    placeholder="Enter your notification message..."
+                    value={notificationBody}
+                    onChange={(e) => setNotificationBody(e.target.value)}
+                    rows={4}
+                    className="mt-1"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="type" value="Notification Type" />
+                  <Select
+                    id="type"
+                    value={notificationType}
+                    onChange={(e) => setNotificationType(e.target.value)}
+                    className="mt-1"
+                  >
+                    <option value="info">Info</option>
+                    <option value="success">Success</option>
+                    <option value="warning">Warning</option>
+                    <option value="failure">Failure</option>
+                  </Select>
+                </div>
+                <Button
+                  onClick={handleSendNotification}
+                  disabled={sending || !notificationBody.trim()}
+                  className="w-full sm:w-auto"
+                >
+                  {sending ? 'Sending...' : 'Send to All Services'}
+                </Button>
+              </div>
+            </Card>
+
+            {/* Configured Services Section */}
+            <Card>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                 Configured Services ({services.length})
               </h2>
@@ -396,80 +470,6 @@ export function Apprise() {
                   </Table.Body>
                 </Table>
               )}
-            </Card>
-
-            {/* Send Notification Section */}
-            <Card className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Send Notification</h2>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="title" value="Title (optional)" />
-                  <TextInput
-                    id="title"
-                    type="text"
-                    placeholder="Notification title"
-                    value={notificationTitle}
-                    onChange={(e) => setNotificationTitle(e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="body" value="Message Body *" />
-                  <Textarea
-                    id="body"
-                    placeholder="Enter your notification message..."
-                    value={notificationBody}
-                    onChange={(e) => setNotificationBody(e.target.value)}
-                    rows={4}
-                    className="mt-1"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="type" value="Notification Type" />
-                  <Select
-                    id="type"
-                    value={notificationType}
-                    onChange={(e) => setNotificationType(e.target.value)}
-                    className="mt-1"
-                  >
-                    <option value="info">Info</option>
-                    <option value="success">Success</option>
-                    <option value="warning">Warning</option>
-                    <option value="failure">Failure</option>
-                  </Select>
-                </div>
-                <Button
-                  onClick={handleSendNotification}
-                  disabled={sending || !notificationBody.trim()}
-                  className="w-full sm:w-auto"
-                >
-                  {sending ? 'Sending...' : 'Send to All Services'}
-                </Button>
-              </div>
-            </Card>
-
-            {/* How It Works Section */}
-            <Card className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">How It Works</h2>
-              <div className="space-y-3 text-gray-700 dark:text-gray-300">
-                <p>
-                  Apprise is integrated into the NixOS Router WebUI backend, allowing you to send notifications
-                  to multiple services configured in <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">router-config.nix</code>.
-                </p>
-                <p>
-                  Notifications can be sent to all configured services simultaneously, or to individual services.
-                </p>
-                <p>
-                  <strong>Notification Types:</strong>
-                </p>
-                <ul className="list-disc list-inside ml-4 space-y-1">
-                  <li><strong>info</strong> - General information (default)</li>
-                  <li><strong>success</strong> - Success messages</li>
-                  <li><strong>warning</strong> - Warning messages</li>
-                  <li><strong>failure</strong> - Error/failure messages</li>
-                </ul>
-              </div>
             </Card>
 
             {/* URL Generator Modal */}
