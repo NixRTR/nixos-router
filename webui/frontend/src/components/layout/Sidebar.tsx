@@ -15,7 +15,6 @@ import {
   HiLightningBolt,
   HiTrendingUp,
   HiBell,
-  HiClipboardCheck,
   HiGlobe,
 } from 'react-icons/hi';
 import { FaGithub } from 'react-icons/fa';
@@ -178,27 +177,15 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
               </FlowbiteSidebar.Item>
 
               {appriseEnabled && (
-                <>
-                  <FlowbiteSidebar.Item
-                    as={Link}
-                    to="/apprise"
-                    icon={HiBell}
-                    active={location.pathname === '/apprise'}
-                    onClick={handleItemClick}
-                  >
-                    Apprise
-                  </FlowbiteSidebar.Item>
-
-                  <FlowbiteSidebar.Item
-                    as={Link}
-                    to="/notifications"
-                    icon={HiClipboardCheck}
-                    active={location.pathname === '/notifications'}
-                    onClick={handleItemClick}
-                  >
-                    Notifications
-                  </FlowbiteSidebar.Item>
-                </>
+                <FlowbiteSidebar.Item
+                  as={Link}
+                  to="/notifications"
+                  icon={HiBell}
+                  active={location.pathname === '/notifications'}
+                  onClick={handleItemClick}
+                >
+                  Notifications
+                </FlowbiteSidebar.Item>
               )}
 
               <FlowbiteSidebar.Item

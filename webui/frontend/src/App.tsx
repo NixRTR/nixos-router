@@ -16,7 +16,6 @@ const SystemInfo = lazy(() => import('./pages/SystemInfo').then(m => ({ default:
 const Documentation = lazy(() => import('./pages/Documentation').then(m => ({ default: m.Documentation })));
 const Speedtest = lazy(() => import('./pages/Speedtest').then(m => ({ default: m.Speedtest })));
 const TrafficShaping = lazy(() => import('./pages/TrafficShaping').then(m => ({ default: m.TrafficShaping })));
-const Apprise = lazy(() => import('./pages/Apprise').then(m => ({ default: m.Apprise })));
 const Notifications = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
 const Dns = lazy(() => import('./pages/Dns').then(m => ({ default: m.Dns })));
 
@@ -143,16 +142,6 @@ export default function App() {
             <ProtectedRoute>
               <Suspense fallback={<PageLoader />}>
                 <TrafficShaping />
-              </Suspense>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/apprise"
-          element={
-            <ProtectedRoute>
-              <Suspense fallback={<PageLoader />}>
-                <Apprise />
               </Suspense>
             </ProtectedRoute>
           }

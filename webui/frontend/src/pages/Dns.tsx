@@ -392,7 +392,6 @@ export function Dns() {
                               color="blue"
                               onClick={() => openRecordsView(zone)}
                             >
-                              <HiPlus className="w-4 h-4 mr-1" />
                               Records
                             </Button>
                             <Button
