@@ -356,6 +356,50 @@ class AppriseServiceDB(Base):
         Index('idx_apprise_services_enabled', 'enabled', postgresql_using='btree'),
     )
 
+
+class DnsZoneDB(Base):
+    """DNS zone configuration"""
+    __tablename__ = "dns_zones"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)  # Domain name (e.g., "jeandr.net")
+    network = Column(String(50), nullable=False)  # "homelab" or "lan"
+    authoritative = Column(Boolean, default=True)  # Serve locally (transparent zone)
+    forward_to = Column(Text)  # Optional: Forward queries to this DNS server
+    delegate_to = Column(Text)  # Optional: Delegate zone to this DNS server (NS records)
+    enabled = Column(Boolean, default=True, index=True)
+    original_config_path = Column(Text)  # For migration tracking: "homelab.dns" or "lan.dns"
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    
+    __table_args__ = (
+        Index('idx_dns_zones_network', 'network', postgresql_using='btree'),
+        Index('idx_dns_zones_enabled', 'enabled', postgresql_using='btree'),
+        Index('idx_dns_zones_name_network', 'name', 'network', unique=True, postgresql_using='btree'),
+    )
+
+
+class DnsRecordDB(Base):
+    """DNS record configuration"""
+    __tablename__ = "dns_records"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    zone_id = Column(Integer, ForeignKey('dns_zones.id', ondelete='CASCADE'), nullable=False, index=True)
+    name = Column(String(255), nullable=False)  # Hostname (e.g., "hera.jeandr.net" or "*.jeandr.net")
+    type = Column(String(10), nullable=False)  # "A" or "CNAME"
+    value = Column(Text, nullable=False)  # IP address for A, target hostname for CNAME
+    comment = Column(Text)
+    enabled = Column(Boolean, default=True, index=True)
+    original_config_path = Column(Text)  # For migration tracking
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    
+    __table_args__ = (
+        Index('idx_dns_records_zone_id', 'zone_id', postgresql_using='btree'),
+        Index('idx_dns_records_type', 'type', postgresql_using='btree'),
+        Index('idx_dns_records_enabled', 'enabled', postgresql_using='btree'),
+    )
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting async database session"""
     async with AsyncSessionLocal() as session:
@@ -736,6 +780,121 @@ async def _apply_schema_updates(conn):
             text("""
                 CREATE TRIGGER apprise_services_updated_at
                 BEFORE UPDATE ON apprise_services
+                FOR EACH ROW EXECUTE PROCEDURE set_updated_at()
+            """)
+        )
+    
+    # Migration 006: DNS zones and records tables
+    result = await conn.execute(
+        text("""
+            SELECT 1 FROM information_schema.tables 
+            WHERE table_name = 'dns_zones'
+        """)
+    )
+    has_dns_zones = result.scalar() is not None
+    
+    if not has_dns_zones:
+        await conn.execute(
+            text("""
+                CREATE TABLE dns_zones (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    network VARCHAR(50) NOT NULL,
+                    authoritative BOOLEAN DEFAULT TRUE,
+                    forward_to TEXT,
+                    delegate_to TEXT,
+                    enabled BOOLEAN DEFAULT TRUE,
+                    original_config_path TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    UNIQUE(name, network)
+                )
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_dns_zones_network 
+                ON dns_zones(network)
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_dns_zones_enabled 
+                ON dns_zones(enabled)
+            """)
+        )
+        print("Created dns_zones table")
+    
+    result = await conn.execute(
+        text("""
+            SELECT 1 FROM information_schema.tables 
+            WHERE table_name = 'dns_records'
+        """)
+    )
+    has_dns_records = result.scalar() is not None
+    
+    if not has_dns_records:
+        await conn.execute(
+            text("""
+                CREATE TABLE dns_records (
+                    id SERIAL PRIMARY KEY,
+                    zone_id INTEGER NOT NULL REFERENCES dns_zones(id) ON DELETE CASCADE,
+                    name VARCHAR(255) NOT NULL,
+                    type VARCHAR(10) NOT NULL,
+                    value TEXT NOT NULL,
+                    comment TEXT,
+                    enabled BOOLEAN DEFAULT TRUE,
+                    original_config_path TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_dns_records_zone_id 
+                ON dns_records(zone_id)
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_dns_records_type 
+                ON dns_records(type)
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_dns_records_enabled 
+                ON dns_records(enabled)
+            """)
+        )
+        print("Created dns_records table")
+    
+    # Ensure DNS triggers exist
+    result = await conn.execute(
+        text("""
+            SELECT 1 FROM pg_trigger WHERE tgname = 'dns_zones_updated_at'
+        """)
+    )
+    if result.scalar() is None:
+        await conn.execute(
+            text("""
+                CREATE TRIGGER dns_zones_updated_at
+                BEFORE UPDATE ON dns_zones
+                FOR EACH ROW EXECUTE PROCEDURE set_updated_at()
+            """)
+        )
+    
+    result = await conn.execute(
+        text("""
+            SELECT 1 FROM pg_trigger WHERE tgname = 'dns_records_updated_at'
+        """)
+    )
+    if result.scalar() is None:
+        await conn.execute(
+            text("""
+                CREATE TRIGGER dns_records_updated_at
+                BEFORE UPDATE ON dns_records
                 FOR EACH ROW EXECUTE PROCEDURE set_updated_at()
             """)
         )

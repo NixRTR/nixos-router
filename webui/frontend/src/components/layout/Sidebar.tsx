@@ -16,6 +16,7 @@ import {
   HiTrendingUp,
   HiBell,
   HiClipboardCheck,
+  HiGlobe,
 } from 'react-icons/hi';
 import { FaGithub } from 'react-icons/fa';
 import { apiClient } from '../../api/client';
@@ -199,6 +200,16 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
                   </FlowbiteSidebar.Item>
                 </>
               )}
+
+              <FlowbiteSidebar.Item
+                as={Link}
+                to="/dns"
+                icon={HiGlobe}
+                active={location.pathname === '/dns'}
+                onClick={handleItemClick}
+              >
+                DNS
+              </FlowbiteSidebar.Item>
 
               {cakeEnabled && (
                 <FlowbiteSidebar.Item

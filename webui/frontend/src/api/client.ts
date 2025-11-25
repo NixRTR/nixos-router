@@ -15,6 +15,14 @@ import type {
   AppriseServiceCreate,
   AppriseServiceUpdate,
 } from '../types/notifications';
+import type {
+  DnsZone,
+  DnsZoneCreate,
+  DnsZoneUpdate,
+  DnsRecord,
+  DnsRecordCreate,
+  DnsRecordUpdate,
+} from '../types/dns';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -369,6 +377,60 @@ class APIClient {
     const response = await this.client.get<{ interface: string; data: any[] }>('/api/cake/history', {
       params,
     });
+    return response.data;
+  }
+
+  // DNS Zone methods
+  async getDnsZones(network?: 'homelab' | 'lan'): Promise<DnsZone[]> {
+    const params: Record<string, string> = {};
+    if (network) params.network = network;
+    const response = await this.client.get<DnsZone[]>('/api/dns/zones', { params });
+    return response.data;
+  }
+
+  async createDnsZone(zone: DnsZoneCreate): Promise<DnsZone> {
+    const response = await this.client.post<DnsZone>('/api/dns/zones', zone);
+    return response.data;
+  }
+
+  async getDnsZone(zoneId: number): Promise<DnsZone> {
+    const response = await this.client.get<DnsZone>(`/api/dns/zones/${zoneId}`);
+    return response.data;
+  }
+
+  async updateDnsZone(zoneId: number, zone: DnsZoneUpdate): Promise<DnsZone> {
+    const response = await this.client.put<DnsZone>(`/api/dns/zones/${zoneId}`, zone);
+    return response.data;
+  }
+
+  async deleteDnsZone(zoneId: number): Promise<{ message: string }> {
+    const response = await this.client.delete<{ message: string }>(`/api/dns/zones/${zoneId}`);
+    return response.data;
+  }
+
+  // DNS Record methods
+  async getDnsRecords(zoneId: number): Promise<DnsRecord[]> {
+    const response = await this.client.get<DnsRecord[]>(`/api/dns/zones/${zoneId}/records`);
+    return response.data;
+  }
+
+  async createDnsRecord(zoneId: number, record: DnsRecordCreate): Promise<DnsRecord> {
+    const response = await this.client.post<DnsRecord>(`/api/dns/zones/${zoneId}/records`, record);
+    return response.data;
+  }
+
+  async getDnsRecord(recordId: number): Promise<DnsRecord> {
+    const response = await this.client.get<DnsRecord>(`/api/dns/records/${recordId}`);
+    return response.data;
+  }
+
+  async updateDnsRecord(recordId: number, record: DnsRecordUpdate): Promise<DnsRecord> {
+    const response = await this.client.put<DnsRecord>(`/api/dns/records/${recordId}`, record);
+    return response.data;
+  }
+
+  async deleteDnsRecord(recordId: number): Promise<{ message: string }> {
+    const response = await this.client.delete<{ message: string }>(`/api/dns/records/${recordId}`);
     return response.data;
   }
 }
