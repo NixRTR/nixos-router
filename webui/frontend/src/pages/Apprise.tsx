@@ -319,8 +319,8 @@ export function Apprise() {
               </Alert>
             )}
 
-{/* Configured Services Section */}
-            <Card>
+            {/* Configured Services Section */}
+            <Card className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                 Configured Services ({services.length})
               </h2>
@@ -471,7 +471,7 @@ export function Apprise() {
                 </ul>
               </div>
             </Card>
-            
+
             {/* URL Generator Modal */}
             <Modal show={urlGeneratorModalOpen} onClose={() => setUrlGeneratorModalOpen(false)} size="6xl">
               <Modal.Header>Create New Apprise Service</Modal.Header>
