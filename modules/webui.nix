@@ -290,6 +290,7 @@ in
         CONNTRACK_BIN = "${pkgs.conntrack-tools}/bin/conntrack";
         FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
         SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
+        SUDO_BIN = "${pkgs.sudo}/bin/sudo";
       };
       
       serviceConfig = {

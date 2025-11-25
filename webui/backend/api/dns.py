@@ -6,6 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 import subprocess
+import shutil
+import os
 
 from ..database import get_db, DnsZoneDB, DnsRecordDB
 from ..models import (
@@ -22,6 +24,33 @@ NETWORK_SERVICE_MAP = {
     'homelab': 'unbound-homelab',
     'lan': 'unbound-lan',
 }
+
+
+def _find_sudo() -> str:
+    """Find sudo binary path (NixOS way)"""
+    # Check environment variable first (set by NixOS service)
+    env_path = os.environ.get("SUDO_BIN")
+    if env_path and os.path.exists(env_path):
+        return env_path
+    
+    # Try shutil.which first (uses PATH)
+    sudo_path = shutil.which('sudo')
+    if sudo_path:
+        return sudo_path
+    
+    # Try common NixOS paths
+    candidates = [
+        '/run/wrappers/bin/sudo',
+        '/run/current-system/sw/bin/sudo',
+        '/usr/bin/sudo',
+        '/bin/sudo',
+    ]
+    
+    for path in candidates:
+        if os.path.exists(path) and os.access(path, os.X_OK):
+            return path
+    
+    raise RuntimeError("sudo binary not found. Please ensure sudo is installed.")
 
 
 @router.get("/zones", response_model=List[DnsZone])
@@ -517,9 +546,12 @@ async def control_dns_service(
     service_name = NETWORK_SERVICE_MAP[network]
     
     try:
+        # Find sudo binary path
+        sudo_path = _find_sudo()
+        
         # Use sudo systemctl to control the service (requires sudo permissions)
         result = subprocess.run(
-            ['sudo', 'systemctl', action, service_name],
+            [sudo_path, 'systemctl', action, service_name],
             capture_output=True,
             text=True,
             timeout=30,
