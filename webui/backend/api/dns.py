@@ -13,7 +13,7 @@ from ..models import (
 )
 from ..api.auth import get_current_user
 
-router = APIRouter(prefix="/dns", tags=["dns"])
+router = APIRouter(prefix="/api/dns", tags=["dns"])
 
 
 @router.get("/zones", response_model=List[DnsZone])
