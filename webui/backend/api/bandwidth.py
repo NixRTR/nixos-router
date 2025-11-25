@@ -9,7 +9,8 @@ from pydantic import BaseModel
 import re
 
 from ..auth import get_current_user
-from ..database import AsyncSessionLocal, InterfaceStatsDB, ClientBandwidthStatsDB, ClientConnectionStatsDB
+from ..database import AsyncSessionLocal, InterfaceStatsDB, ClientBandwidthStatsDB, ClientConnectionStatsDB, SpeedtestResultDB
+from ipaddress import ip_address, IPv4Address
 from ..models import (
     ClientBandwidthHistory, ClientBandwidthCurrent, ClientBandwidthDataPoint,
     ClientConnectionCurrent, ClientConnectionHistory, ClientConnectionDataPoint
@@ -34,6 +35,15 @@ def _is_ipv4(ip: str) -> bool:
             if num < 0 or num > 255:
                 return False
         return True
+    except (ValueError, AttributeError):
+        return False
+
+
+def _is_private_ip(ip_str: str) -> bool:
+    """Check if an IP address is in a private range"""
+    try:
+        ip = ip_address(ip_str)
+        return ip.is_private
     except (ValueError, AttributeError):
         return False
 
@@ -137,20 +147,92 @@ async def get_bandwidth_history(
         
         result = await session.execute(query)
         stats = result.scalars().all()
+        
+        # For WAN interface, identify and subtract speedtest connection bytes
+        # Fetch speedtest results for the same time range
+        speedtest_query = select(SpeedtestResultDB).where(
+            SpeedtestResultDB.timestamp >= start_time
+        ).order_by(SpeedtestResultDB.timestamp.asc())
+        
+        speedtest_result = await session.execute(speedtest_query)
+        speedtests = speedtest_result.scalars().all()
+        
+        # Build a map of speedtest connection bytes by timestamp
+        # Key: rounded timestamp (to match interface stats granularity)
+        # Value: {rx_bytes: int, tx_bytes: int} to subtract
+        speedtest_bytes_to_subtract: Dict[datetime, Dict[str, int]] = {}
+        
+        if (interface is None or interface == 'ppp0') and speedtests:
+            # For each speedtest, create a time window (2 min before to 1 min after)
+            for st in speedtests:
+                window_start = st.timestamp - timedelta(minutes=2)
+                window_end = st.timestamp + timedelta(minutes=1)
+                
+                # Query connection stats during this window
+                # Look for high-bandwidth external connections (likely speedtest traffic)
+                conn_query = select(ClientConnectionStatsDB).where(
+                    ClientConnectionStatsDB.timestamp >= window_start,
+                    ClientConnectionStatsDB.timestamp <= window_end,
+                    ClientConnectionStatsDB.aggregation_level == 'raw'  # Use raw data for precision
+                )
+                
+                conn_result = await session.execute(conn_query)
+                connections = conn_result.scalars().all()
+                
+                for conn in connections:
+                    # Check if this is likely a speedtest connection:
+                    # 1. High bandwidth (> 10 MB in interval = ~16 Mbps over 5 seconds)
+                    # 2. External IP (not private range)
+                    remote_ip_str = str(conn.remote_ip)
+                    is_private = _is_private_ip(remote_ip_str)
+                    
+                    # High bandwidth threshold: 10 MB in 5 seconds = ~16 Mbps
+                    # Speedtests are typically 50-1000+ Mbps, so this is conservative
+                    high_bandwidth = (conn.rx_bytes > 10_000_000) or (conn.tx_bytes > 10_000_000)
+                    
+                    if not is_private and high_bandwidth:
+                        # This is likely a speedtest connection
+                        # Round timestamp to match interface stats granularity (typically 2-5 second intervals)
+                        # Round to nearest 5 seconds to match collection interval
+                        timestamp_seconds = int(conn.timestamp.timestamp())
+                        rounded_seconds = (timestamp_seconds // 5) * 5
+                        timestamp_key = datetime.fromtimestamp(rounded_seconds, tz=timezone.utc)
+                        
+                        if timestamp_key not in speedtest_bytes_to_subtract:
+                            speedtest_bytes_to_subtract[timestamp_key] = {'rx_bytes': 0, 'tx_bytes': 0}
+                        
+                        speedtest_bytes_to_subtract[timestamp_key]['rx_bytes'] += conn.rx_bytes
+                        speedtest_bytes_to_subtract[timestamp_key]['tx_bytes'] += conn.tx_bytes
     
-    # Group by interface
+    # Group by interface and subtract speedtest bytes for WAN interface
     interfaces = {}
     for stat in stats:
         if stat.interface not in interfaces:
             interfaces[stat.interface] = []
+        
+        # For WAN interface (ppp0), subtract speedtest connection bytes
+        rx_bytes = stat.rx_bytes
+        tx_bytes = stat.tx_bytes
+        
+        if stat.interface == 'ppp0' and speedtest_bytes_to_subtract:
+            # Round timestamp to match the keys in speedtest_bytes_to_subtract
+            timestamp_seconds = int(stat.timestamp.timestamp())
+            rounded_seconds = (timestamp_seconds // 5) * 5
+            timestamp_key = datetime.fromtimestamp(rounded_seconds, tz=timezone.utc)
+            
+            if timestamp_key in speedtest_bytes_to_subtract:
+                # Subtract speedtest bytes from interface totals
+                subtract = speedtest_bytes_to_subtract[timestamp_key]
+                rx_bytes = max(0, rx_bytes - subtract['rx_bytes'])
+                tx_bytes = max(0, tx_bytes - subtract['tx_bytes'])
         
         # Calculate bandwidth in Mbps
         # Note: We store cumulative bytes, need to calculate rate
         # For now, we'll use the raw bytes and let frontend calculate rate
         interfaces[stat.interface].append({
             'timestamp': stat.timestamp,
-            'rx_bytes': stat.rx_bytes,
-            'tx_bytes': stat.tx_bytes,
+            'rx_bytes': rx_bytes,
+            'tx_bytes': tx_bytes,
             'rx_mbps': 0.0,  # Will be calculated from deltas
             'tx_mbps': 0.0
         })
