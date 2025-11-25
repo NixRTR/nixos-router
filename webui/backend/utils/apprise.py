@@ -236,8 +236,74 @@ def url_encode_password_in_url(url: str) -> str:
         return url
 
 
+async def load_apprise_config_from_db(session) -> Apprise:
+    """Load Apprise configuration from database
+    
+    Args:
+        session: Async database session
+        
+    Returns:
+        Apprise object configured with services from database
+    """
+    from sqlalchemy import select
+    from ..database import AppriseServiceDB
+    
+    # Create Apprise object
+    apobj = Apprise()
+    
+    # Load services from database
+    result = await session.execute(
+        select(AppriseServiceDB).where(AppriseServiceDB.enabled == True)
+    )
+    services = result.scalars().all()
+    
+    for service in services:
+        # URL-encode passwords/tokens in the URL before adding to Apprise
+        encoded_url = url_encode_password_in_url(service.url)
+        try:
+            apobj.add(encoded_url)
+            logger.debug(f"Added service {service.name} to Apprise object")
+        except Exception as e:
+            logger.error(f"Failed to add service {service.name} to Apprise: {e}")
+    
+    logger.debug(f"Apprise object contains {len(apobj)} service(s) from database")
+    return apobj
+
+
 def load_apprise_config(config_path: Optional[str] = None) -> Apprise:
-    """Load Apprise configuration from file
+    """Load Apprise configuration (legacy - uses database)
+    
+    Args:
+        config_path: Path to apprise config file (deprecated, kept for compatibility)
+        
+    Returns:
+        Apprise object configured with services from database
+    """
+    # Use database instead of config file
+    import asyncio
+    from ..database import AsyncSessionLocal
+    
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    async def _load():
+        async with AsyncSessionLocal() as session:
+            return await load_apprise_config_from_db(session)
+    
+    if loop.is_running():
+        # If we're in an async context, create a new Apprise object
+        # This is a fallback - ideally callers should use load_apprise_config_from_db
+        logger.warning("load_apprise_config called from async context - use load_apprise_config_from_db instead")
+        return Apprise()
+    
+    return loop.run_until_complete(_load())
+
+
+def _load_apprise_config_from_file(config_path: Optional[str] = None) -> Apprise:
+    """Load Apprise configuration from file (legacy - for migration only)
     
     Args:
         config_path: Path to apprise config file (defaults to /var/lib/apprise/config/apprise)
@@ -350,11 +416,50 @@ def load_apprise_config(config_path: Optional[str] = None) -> Apprise:
     return apobj
 
 
+async def _build_apprise_for_service_ids(
+    session,
+    service_ids: Optional[List[int]]
+) -> Tuple[Optional[Apprise], Optional[str]]:
+    """Return an Apprise instance filtered to selected services by ID"""
+    from sqlalchemy import select
+    from ..database import AppriseServiceDB
+    
+    if service_ids is None or len(service_ids) == 0:
+        return await load_apprise_config_from_db(session), None
+
+    result = await session.execute(
+        select(AppriseServiceDB).where(
+            AppriseServiceDB.id.in_(service_ids),
+            AppriseServiceDB.enabled == True
+        )
+    )
+    services = result.scalars().all()
+    
+    if not services:
+        return None, "No notification services configured or enabled"
+
+    apobj = Apprise()
+    for service in services:
+        encoded_url = url_encode_password_in_url(service.url)
+        try:
+            apobj.add(encoded_url)
+        except Exception as exc:
+            logger.error(f"Failed to add service {service.id} ({service.name}): {exc}")
+    
+    if len(apobj) == 0:
+        return None, "No valid services selected for notification"
+    return apobj, None
+
+
 def _build_apprise_for_services(
     service_indices: Optional[List[int]],
     config_path: Optional[str]
 ) -> Tuple[Optional[Apprise], Optional[str]]:
-    """Return an Apprise instance filtered to selected services"""
+    """Return an Apprise instance filtered to selected services (legacy - uses database)
+    
+    Note: This function is kept for backward compatibility but now uses database.
+    For new code, use _build_apprise_for_service_ids with async session.
+    """
     if service_indices is None or len(service_indices) == 0:
         return load_apprise_config(config_path), None
 
@@ -472,40 +577,63 @@ def get_configured_services(config_path: Optional[str] = None) -> List[dict]:
     return services
 
 
-def get_raw_service_urls(config_path: Optional[str] = None) -> List[dict]:
-    """Get list of raw (unmasked) service URLs with descriptions from config file
+async def get_raw_service_urls_from_db(session) -> List[dict]:
+    """Get list of raw (unmasked) service URLs with descriptions from database
     
     Args:
-        config_path: Optional path to apprise config file
+        session: Async database session
         
     Returns:
         List of dicts with 'url' and 'description' keys
     """
-    if config_path is None:
-        config_path = os.getenv('APPRISE_CONFIG_FILE', DEFAULT_APPRISE_CONFIG)
+    from sqlalchemy import select
+    from ..database import AppriseServiceDB
+    
+    result = await session.execute(
+        select(AppriseServiceDB).where(AppriseServiceDB.enabled == True).order_by(AppriseServiceDB.name)
+    )
+    services_db = result.scalars().all()
     
     services = []
-    if os.path.exists(config_path):
-        with open(config_path, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#'):
-                    # Parse description|url format
-                    if '|' in line:
-                        description, url = line.split('|', 1)
-                        description = description.strip()
-                        url = url.strip()
-                    else:
-                        # Backward compatibility: extract service name from URL
-                        url = line
-                        description = get_service_name_from_url(url)
-                    
-                    services.append({
-                        'url': url,
-                        'description': description
-                    })
+    for service in services_db:
+        services.append({
+            'url': service.url,
+            'description': service.description or service.name
+        })
     
     return services
+
+
+def get_raw_service_urls(config_path: Optional[str] = None) -> List[dict]:
+    """Get list of raw (unmasked) service URLs with descriptions (legacy - uses database)
+    
+    Args:
+        config_path: Optional path to apprise config file (deprecated, kept for compatibility)
+        
+    Returns:
+        List of dicts with 'url' and 'description' keys
+    """
+    # Use database instead of config file
+    import asyncio
+    from ..database import AsyncSessionLocal
+    
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    async def _get():
+        async with AsyncSessionLocal() as session:
+            return await get_raw_service_urls_from_db(session)
+    
+    if loop.is_running():
+        # If we're in an async context, we can't use run_until_complete
+        # Return empty list and log warning
+        logger.warning("get_raw_service_urls called from async context - use get_raw_service_urls_from_db instead")
+        return []
+    
+    return loop.run_until_complete(_get())
 
 
 def test_service(
@@ -707,4 +835,85 @@ def get_service_name_from_url(url: str) -> str:
     if match:
         return match.group(1).capitalize()
     return "Unknown Service"
+
+
+async def migrate_secrets_to_database(session) -> None:
+    """Migrate Apprise services from config file to database
+    
+    Reads services from the config file and adds them to the database
+    if they don't already exist (checked by URL or original_secret_string).
+    
+    Args:
+        session: Async database session
+    """
+    from sqlalchemy import select
+    from ..database import AppriseServiceDB
+    
+    config_path = os.getenv('APPRISE_CONFIG_FILE', DEFAULT_APPRISE_CONFIG)
+    
+    if not os.path.exists(config_path):
+        logger.info("Apprise config file does not exist, skipping migration")
+        return
+    
+    logger.info(f"Starting migration of Apprise services from {config_path} to database")
+    
+    migrated_count = 0
+    skipped_count = 0
+    
+    try:
+        with open(config_path, 'r') as f:
+            for line_num, line in enumerate(f, 1):
+                original_line = line.strip()
+                if not original_line or original_line.startswith('#'):
+                    continue
+                
+                # Parse description|url format
+                if '|' in original_line:
+                    description, url = original_line.split('|', 1)
+                    description = description.strip()
+                    url = url.strip()
+                else:
+                    # Backward compatibility: extract service name from URL
+                    url = original_line
+                    description = get_service_name_from_url(url)
+                
+                # Check if this service already exists in database
+                # Check by URL (exact match)
+                result = await session.execute(
+                    select(AppriseServiceDB).where(AppriseServiceDB.url == url)
+                )
+                existing_by_url = result.scalar_one_or_none()
+                
+                # Check by original_secret_string
+                result = await session.execute(
+                    select(AppriseServiceDB).where(
+                        AppriseServiceDB.original_secret_string == original_line
+                    )
+                )
+                existing_by_secret = result.scalar_one_or_none()
+                
+                if existing_by_url or existing_by_secret:
+                    logger.debug(f"Skipping line {line_num}: service already exists in database")
+                    skipped_count += 1
+                    continue
+                
+                # Create new service in database
+                service = AppriseServiceDB(
+                    name=description or get_service_name_from_url(url),
+                    description=description if description != get_service_name_from_url(url) else None,
+                    url=url,
+                    original_secret_string=original_line,
+                    enabled=True
+                )
+                session.add(service)
+                migrated_count += 1
+                logger.info(f"Migrated service from line {line_num}: {description or 'Unnamed'}")
+        
+        await session.commit()
+        logger.info(f"Migration complete: {migrated_count} services migrated, {skipped_count} skipped")
+        
+    except Exception as e:
+        logger.error(f"Error during Apprise service migration: {type(e).__name__}: {str(e)}", exc_info=True)
+        await session.rollback()
+        raise
 

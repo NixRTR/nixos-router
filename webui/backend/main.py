@@ -42,6 +42,7 @@ from .api.apprise import router as apprise_router
 from .api.notifications import router as notifications_router
 from .collectors.aggregation import run_aggregation_job
 from .collectors.notifications import NotificationEvaluator
+from .utils.apprise import migrate_secrets_to_database
 
 notification_evaluator = NotificationEvaluator(AsyncSessionLocal)
 
@@ -103,6 +104,17 @@ async def lifespan(app: FastAPI):
     # Initialize database
     await init_db()
     print("Database initialized")
+    
+    # Migrate Apprise services from secrets/config file to database
+    try:
+        async with AsyncSessionLocal() as session:
+            await migrate_secrets_to_database(session)
+        print("Apprise services migration completed")
+    except Exception as e:
+        logging.getLogger(__name__).error(
+            f"Error migrating Apprise services: {e}", exc_info=True
+        )
+        # Don't fail startup if migration fails
     
     # Start WebSocket broadcast loop
     await manager.start_broadcasting()

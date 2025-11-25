@@ -253,6 +253,20 @@ CREATE TABLE IF NOT EXISTS notification_history (
 CREATE INDEX IF NOT EXISTS idx_notification_history_rule_id ON notification_history(rule_id);
 CREATE INDEX IF NOT EXISTS idx_notification_history_timestamp ON notification_history(timestamp DESC);
 
+-- Apprise services (migrated from secrets/config file)
+CREATE TABLE IF NOT EXISTS apprise_services (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    url TEXT NOT NULL,
+    original_secret_string TEXT,  -- Original string from secrets if migrated
+    enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_apprise_services_enabled ON apprise_services(enabled);
+
 -- Create hypertable for time-series data (if using TimescaleDB extension)
 -- Uncomment if TimescaleDB is available:
 -- SELECT create_hypertable('system_metrics', 'timestamp', if_not_exists => TRUE);

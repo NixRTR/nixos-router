@@ -481,11 +481,16 @@ class NotificationEvaluator:
             measurement_ts,
         )
 
-        success, error = send_notification(
+        # Convert service indices to service IDs if needed
+        # For now, apprise_service_indices contains IDs (we'll update the field name later)
+        service_ids = rule.apprise_service_indices if rule.apprise_service_indices else None
+        
+        success, error = await send_notification_async(
+            session,
             body=rendered_message,
             title=f"{rule.name} ({target_level.upper()})",
             notification_type=target_level,
-            service_indices=rule.apprise_service_indices or None,
+            service_ids=service_ids,
         )
 
         history = NotificationHistoryDB(

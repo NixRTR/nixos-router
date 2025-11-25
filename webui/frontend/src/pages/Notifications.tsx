@@ -185,12 +185,12 @@ export function Notifications() {
     }));
   };
 
-  const handleServiceToggle = (index: number) => {
+  const handleServiceToggle = (serviceId: number) => {
     setFormState((prev) => {
-      const exists = prev.apprise_service_indices.includes(index);
+      const exists = prev.apprise_service_indices.includes(serviceId);
       const updated = exists
-        ? prev.apprise_service_indices.filter((i) => i !== index)
-        : [...prev.apprise_service_indices, index].sort((a, b) => a - b);
+        ? prev.apprise_service_indices.filter((id) => id !== serviceId)
+        : [...prev.apprise_service_indices, serviceId].sort((a, b) => a - b);
       return { ...prev, apprise_service_indices: updated };
     });
   };
@@ -576,15 +576,17 @@ export function Notifications() {
                 <p className="text-xs text-gray-500">No Apprise services configured.</p>
               ) : (
                 <div className="grid gap-2 md:grid-cols-2">
-                  {services.map((service, idx) => (
-                    <label key={idx} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                  {services.map((service) => (
+                    <label key={service.id} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
                       <Checkbox
-                        checked={formState.apprise_service_indices.includes(idx)}
-                        onChange={() => handleServiceToggle(idx)}
+                        checked={formState.apprise_service_indices.includes(service.id)}
+                        onChange={() => handleServiceToggle(service.id)}
                       />
                       <span>
-                        <span className="font-semibold">{service.description || `Service ${idx + 1}`}</span>
-                        <span className="ml-2 text-xs text-gray-500">{service.url}</span>
+                        <span className="font-semibold">{service.name}</span>
+                        {service.description && (
+                          <span className="ml-2 text-xs text-gray-500">{service.description}</span>
+                        )}
                       </span>
                     </label>
                   ))}

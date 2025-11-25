@@ -471,3 +471,45 @@ class NotificationHistory(BaseModel):
     """Notification history list"""
     rule_id: int
     items: List[NotificationHistoryRecord]
+
+
+# Apprise Service Models
+class AppriseService(BaseModel):
+    """Apprise service with full details"""
+    id: int
+    name: str
+    description: Optional[str] = None
+    url: str
+    original_secret_string: Optional[str] = None
+    enabled: bool = True
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class AppriseServiceCreate(BaseModel):
+    """Model for creating a new Apprise service"""
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    url: str = Field(..., min_length=1)
+
+
+class AppriseServiceUpdate(BaseModel):
+    """Model for updating an Apprise service"""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    url: Optional[str] = Field(None, min_length=1)
+    enabled: Optional[bool] = None
+
+
+class AppriseServiceInfo(BaseModel):
+    """Apprise service info for display (no URL)"""
+    id: int
+    name: str
+    description: Optional[str] = None
+    enabled: bool = True
+    
+    class Config:
+        from_attributes = True

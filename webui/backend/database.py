@@ -332,10 +332,28 @@ class NotificationHistoryDB(Base):
     value = Column(Float, nullable=False)
     message = Column(Text)
     sent_successfully = Column(Boolean, default=False)
-
+    
     __table_args__ = (
         Index('idx_notification_history_rule_id', 'rule_id', postgresql_using='btree'),
         Index('idx_notification_history_timestamp', 'timestamp', postgresql_using='btree'),
+    )
+
+
+class AppriseServiceDB(Base):
+    """Apprise service configuration"""
+    __tablename__ = "apprise_services"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    url = Column(Text, nullable=False)
+    original_secret_string = Column(Text)  # Original string from secrets if migrated
+    enabled = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    
+    __table_args__ = (
+        Index('idx_apprise_services_enabled', 'enabled', postgresql_using='btree'),
     )
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -671,6 +689,53 @@ async def _apply_schema_updates(conn):
             text("""
                 CREATE TRIGGER notification_state_updated_at
                 BEFORE UPDATE ON notification_state
+                FOR EACH ROW EXECUTE PROCEDURE set_updated_at()
+            """)
+        )
+    
+    # Migration 005: Apprise services table
+    result = await conn.execute(
+        text("""
+            SELECT 1 FROM information_schema.tables 
+            WHERE table_name = 'apprise_services'
+        """)
+    )
+    has_apprise_services = result.scalar() is not None
+    
+    if not has_apprise_services:
+        await conn.execute(
+            text("""
+                CREATE TABLE apprise_services (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    url TEXT NOT NULL,
+                    original_secret_string TEXT,
+                    enabled BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_apprise_services_enabled 
+                ON apprise_services(enabled)
+            """)
+        )
+        print("Created apprise_services table")
+    
+    # Ensure apprise_services trigger exists
+    result = await conn.execute(
+        text("""
+            SELECT 1 FROM pg_trigger WHERE tgname = 'apprise_services_updated_at'
+        """)
+    )
+    if result.scalar() is None:
+        await conn.execute(
+            text("""
+                CREATE TRIGGER apprise_services_updated_at
+                BEFORE UPDATE ON apprise_services
                 FOR EACH ROW EXECUTE PROCEDURE set_updated_at()
             """)
         )

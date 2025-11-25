@@ -4,8 +4,9 @@
  * Supports 30+ popular notification services
  */
 import { useState } from 'react';
-import { Card, Button, Label, TextInput, Select, Alert } from 'flowbite-react';
+import { Card, Button, Label, TextInput, Select, Alert, Modal, Textarea } from 'flowbite-react';
 import { HiClipboard, HiCheckCircle } from 'react-icons/hi';
+import { apiClient } from '../api/client';
 
 type ServiceType = 
   // Email
@@ -34,6 +35,12 @@ export function AppriseUrlGenerator() {
   const [config, setConfig] = useState<ServiceConfig>({});
   const [generatedUrl, setGeneratedUrl] = useState<string>('');
   const [copied, setCopied] = useState(false);
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [saveDescription, setSaveDescription] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const serviceTypes: { value: ServiceType; label: string; category?: string }[] = [
     // Email
@@ -1597,15 +1604,115 @@ export function AppriseUrlGenerator() {
                   </>
                 )}
               </Button>
+              <Button
+                onClick={() => {
+                  setSaveModalOpen(true);
+                  setSaveName('');
+                  setSaveDescription('');
+                  setSaveError(null);
+                  setSaveSuccess(false);
+                }}
+                color="blue"
+                size="sm"
+              >
+                Save Service
+              </Button>
             </div>
             <Alert color="info" className="mt-2">
               <div className="text-sm">
-                <strong>Note:</strong> This URL contains sensitive information. 
-                Store it securely in your secrets.yaml file.
+                <strong>Note:</strong> You can save this service to the database for easier management, or copy it to store in secrets.yaml.
               </div>
             </Alert>
           </div>
         )}
+
+        {/* Save Service Modal */}
+        <Modal show={saveModalOpen} onClose={() => setSaveModalOpen(false)}>
+          <Modal.Header>Save Apprise Service</Modal.Header>
+          <Modal.Body>
+            <div className="space-y-4">
+              {saveError && (
+                <Alert color="failure">
+                  {saveError}
+                </Alert>
+              )}
+              {saveSuccess && (
+                <Alert color="success">
+                  Service saved successfully!
+                </Alert>
+              )}
+              <div>
+                <Label htmlFor="saveName" value="Service Name *" />
+                <TextInput
+                  id="saveName"
+                  value={saveName}
+                  onChange={(e) => setSaveName(e.target.value)}
+                  placeholder="e.g., Discord Notifications"
+                  required
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="saveDescription" value="Description (optional)" />
+                <Textarea
+                  id="saveDescription"
+                  value={saveDescription}
+                  onChange={(e) => setSaveDescription(e.target.value)}
+                  placeholder="Optional description for this service"
+                  rows={3}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="saveUrl" value="Service URL" />
+                <TextInput
+                  id="saveUrl"
+                  readOnly
+                  value={generatedUrl}
+                  className="mt-1 font-mono text-sm"
+                />
+              </div>
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              color="blue"
+              onClick={async () => {
+                if (!saveName.trim()) {
+                  setSaveError('Service name is required');
+                  return;
+                }
+                setSaving(true);
+                setSaveError(null);
+                setSaveSuccess(false);
+                try {
+                  await apiClient.createAppriseService({
+                    name: saveName.trim(),
+                    description: saveDescription.trim() || null,
+                    url: generatedUrl,
+                  });
+                  setSaveSuccess(true);
+                  setTimeout(() => {
+                    setSaveModalOpen(false);
+                    setSaveName('');
+                    setSaveDescription('');
+                    setSaveSuccess(false);
+                  }, 1500);
+                } catch (error: any) {
+                  setSaveError(error.response?.data?.detail || error.message || 'Failed to save service');
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              disabled={saving || !saveName.trim()}
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </Button>
+            <Button color="gray" onClick={() => setSaveModalOpen(false)}>
+              Cancel
+            </Button>
+          </Modal.Footer>
+        </Modal>
       </div>
     </Card>
   );

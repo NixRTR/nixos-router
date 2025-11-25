@@ -10,6 +10,10 @@ import type {
   NotificationHistory,
   NotificationParameterMetadata,
   NotificationTestResponse,
+  AppriseServiceInfo,
+  AppriseService,
+  AppriseServiceCreate,
+  AppriseServiceUpdate,
 } from '../types/notifications';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -263,8 +267,33 @@ class APIClient {
     return response.data;
   }
 
-  async getAppriseServices(): Promise<{ url: string; description: string }[]> {
-    const response = await this.client.get<{ url: string; description: string }[]>('/api/apprise/services');
+  async getAppriseServices(): Promise<AppriseServiceInfo[]> {
+    const response = await this.client.get<AppriseServiceInfo[]>('/api/apprise/services');
+    return response.data;
+  }
+
+  async getAppriseService(id: number): Promise<AppriseService> {
+    const response = await this.client.get<AppriseService>(`/api/apprise/services/${id}`);
+    return response.data;
+  }
+
+  async createAppriseService(service: AppriseServiceCreate): Promise<AppriseService> {
+    const response = await this.client.post<AppriseService>('/api/apprise/services', service);
+    return response.data;
+  }
+
+  async updateAppriseService(id: number, service: AppriseServiceUpdate): Promise<AppriseService> {
+    const response = await this.client.put<AppriseService>(`/api/apprise/services/${id}`, service);
+    return response.data;
+  }
+
+  async deleteAppriseService(id: number): Promise<{ message: string }> {
+    const response = await this.client.delete<{ message: string }>(`/api/apprise/services/${id}`);
+    return response.data;
+  }
+
+  async testAppriseServiceById(serviceId: number): Promise<{ success: boolean; message: string; details?: string }> {
+    const response = await this.client.post<{ success: boolean; message: string; details?: string }>(`/api/apprise/services/${serviceId}/test`);
     return response.data;
   }
 
