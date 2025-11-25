@@ -26,7 +26,7 @@ from ..models import (
     ParameterType,
 )
 from ..collectors.system import collect_disk_space
-from ..utils.apprise import send_notification
+from ..utils.apprise import send_notification_async
 from jinja2 import Environment, StrictUndefined, TemplateError
 
 logger = logging.getLogger(__name__)

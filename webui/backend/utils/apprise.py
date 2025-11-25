@@ -483,6 +483,62 @@ def _build_apprise_for_services(
     return apobj, None
 
 
+async def send_notification_async(
+    session,
+    body: str,
+    title: Optional[str] = None,
+    notification_type: Optional[str] = None,
+    service_ids: Optional[List[int]] = None
+) -> Tuple[bool, Optional[str]]:
+    """Send notification using Apprise (async version using database)
+    
+    Args:
+        session: Async database session
+        body: Message body (required)
+        title: Optional message title
+        notification_type: Optional notification type (info, success, warning, failure)
+        service_ids: Optional list of service IDs to send to (None = all enabled services)
+        
+    Returns:
+        Tuple of (success: bool, error_message: Optional[str])
+    """
+    try:
+        apobj, error = await _build_apprise_for_service_ids(session, service_ids)
+        if error:
+            return (False, error)
+        
+        # Check if any services are configured
+        if not apobj:
+            return (False, "No notification services configured")
+        
+        # Map notification type
+        apprise_type = None
+        if notification_type:
+            type_map = {
+                'info': 'info',
+                'success': 'success',
+                'warning': 'warning',
+                'failure': 'failure',
+            }
+            apprise_type = type_map.get(notification_type.lower())
+        
+        # Send notification
+        result = apobj.notify(
+            body=body,
+            title=title,
+            notify_type=apprise_type
+        )
+        
+        if result:
+            return (True, None)
+        else:
+            return (False, "Failed to send notification to all services")
+            
+    except Exception as e:
+        logger.error(f"Error in send_notification_async: {e}", exc_info=True)
+        return (False, str(e))
+
+
 def send_notification(
     body: str,
     title: Optional[str] = None,
@@ -490,7 +546,7 @@ def send_notification(
     config_path: Optional[str] = None,
     service_indices: Optional[List[int]] = None
 ) -> Tuple[bool, Optional[str]]:
-    """Send notification using Apprise
+    """Send notification using Apprise (synchronous version, deprecated - use send_notification_async)
     
     Args:
         body: Message body (required)
