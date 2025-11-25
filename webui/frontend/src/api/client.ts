@@ -495,6 +495,26 @@ class APIClient {
     const response = await this.client.delete<{ message: string }>(`/api/dhcp/reservations/${reservationId}`);
     return response.data;
   }
+
+  // DNS Service Control
+  async getDnsServiceStatus(network: 'homelab' | 'lan'): Promise<{
+    network: string;
+    service_name: string;
+    is_active: boolean;
+    is_enabled: boolean;
+    exists: boolean;
+    pid?: number | null;
+    memory_mb?: number | null;
+    cpu_percent?: number | null;
+  }> {
+    const response = await this.client.get(`/api/dns/service-status/${network}`);
+    return response.data;
+  }
+
+  async controlDnsService(network: 'homelab' | 'lan', action: 'start' | 'stop' | 'restart' | 'reload'): Promise<{ message: string }> {
+    const response = await this.client.post(`/api/dns/service/${network}/${action}`);
+    return response.data;
+  }
 }
 
 export const apiClient = new APIClient();

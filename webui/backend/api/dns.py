@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
+import subprocess
 
 from ..database import get_db, DnsZoneDB, DnsRecordDB
 from ..models import (
@@ -12,8 +13,15 @@ from ..models import (
     DnsRecord, DnsRecordCreate, DnsRecordUpdate
 )
 from ..api.auth import get_current_user
+from ..collectors.services import get_service_status
 
 router = APIRouter(prefix="/api/dns", tags=["dns"])
+
+# Map network names to systemd service names
+NETWORK_SERVICE_MAP = {
+    'homelab': 'unbound-homelab',
+    'lan': 'unbound-lan',
+}
 
 
 @router.get("/zones", response_model=List[DnsZone])
@@ -443,4 +451,95 @@ async def delete_record(
     await db.commit()
     
     return {"message": f"Record {record_id} deleted successfully"}
+
+
+@router.get("/service-status/{network}")
+async def get_dns_service_status(
+    network: str,
+    _: str = Depends(get_current_user)
+):
+    """Get DNS service status for a network
+    
+    Args:
+        network: Network name ("homelab" or "lan")
+        
+    Returns:
+        Service status information
+    """
+    if network not in NETWORK_SERVICE_MAP:
+        raise HTTPException(status_code=400, detail="Network must be 'homelab' or 'lan'")
+    
+    service_name = NETWORK_SERVICE_MAP[network]
+    status = get_service_status(service_name)
+    
+    if status is None:
+        return {
+            "network": network,
+            "service_name": service_name,
+            "is_active": False,
+            "is_enabled": False,
+            "exists": False
+        }
+    
+    return {
+        "network": network,
+        "service_name": service_name,
+        "is_active": status.is_active,
+        "is_enabled": status.is_enabled,
+        "exists": True,
+        "pid": status.pid,
+        "memory_mb": status.memory_mb,
+        "cpu_percent": status.cpu_percent
+    }
+
+
+@router.post("/service/{network}/{action}")
+async def control_dns_service(
+    network: str,
+    action: str,
+    _: str = Depends(get_current_user)
+):
+    """Control DNS service for a network
+    
+    Args:
+        network: Network name ("homelab" or "lan")
+        action: Action to perform ("start", "stop", "restart", "reload")
+        
+    Returns:
+        Success message
+    """
+    if network not in NETWORK_SERVICE_MAP:
+        raise HTTPException(status_code=400, detail="Network must be 'homelab' or 'lan'")
+    
+    if action not in ['start', 'stop', 'restart', 'reload']:
+        raise HTTPException(status_code=400, detail="Action must be 'start', 'stop', 'restart', or 'reload'")
+    
+    service_name = NETWORK_SERVICE_MAP[network]
+    
+    try:
+        # Use systemctl to control the service
+        result = subprocess.run(
+            ['systemctl', action, service_name],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True
+        )
+        
+        return {
+            "message": f"Service {service_name} {action}ed successfully",
+            "network": network,
+            "action": action,
+            "service_name": service_name
+        }
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to {action} service {service_name}: {e.stderr or str(e)}"
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Timeout while trying to {action} service {service_name}"
+        )
 

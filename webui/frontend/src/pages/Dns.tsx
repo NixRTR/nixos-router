@@ -8,7 +8,7 @@ import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
 import { useMetrics } from '../hooks/useMetrics';
 import { apiClient } from '../api/client';
-import { HiGlobe, HiPencil, HiTrash, HiPlus, HiInformationCircle } from 'react-icons/hi';
+import { HiGlobe, HiPencil, HiTrash, HiPlus, HiInformationCircle, HiPlay, HiStop, HiRefresh } from 'react-icons/hi';
 import type { DnsZone, DnsZoneCreate, DnsZoneUpdate, DnsRecord, DnsRecordCreate, DnsRecordUpdate } from '../types/dns';
 
 export function Dns() {
@@ -20,6 +20,8 @@ export function Dns() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [networkFilter, setNetworkFilter] = useState<'all' | 'homelab' | 'lan'>('all');
+  const [serviceStatuses, setServiceStatuses] = useState<Record<string, { is_active: boolean; is_enabled: boolean; exists: boolean }>>({});
+  const [controllingService, setControllingService] = useState<string | null>(null);
   
   // Zone modal state
   const [zoneModalOpen, setZoneModalOpen] = useState(false);
@@ -74,6 +76,45 @@ export function Dns() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchServiceStatuses = async () => {
+    try {
+      const [homelabStatus, lanStatus] = await Promise.all([
+        apiClient.getDnsServiceStatus('homelab'),
+        apiClient.getDnsServiceStatus('lan'),
+      ]);
+      setServiceStatuses({
+        homelab: homelabStatus,
+        lan: lanStatus,
+      });
+    } catch (err: any) {
+      console.error('Failed to fetch DNS service statuses:', err);
+    }
+  };
+
+  const handleServiceControl = async (network: 'homelab' | 'lan', action: 'start' | 'stop' | 'restart' | 'reload') => {
+    const serviceKey = `${network}-${action}`;
+    setControllingService(serviceKey);
+    try {
+      await apiClient.controlDnsService(network, action);
+      // Refresh service status after a short delay
+      setTimeout(() => {
+        fetchServiceStatuses();
+      }, 1000);
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || err.message || `Failed to ${action} DNS service`);
+    } finally {
+      setControllingService(null);
+    }
+  };
+
+  const getServiceStatusForZone = (zone: DnsZone) => {
+    const status = serviceStatuses[zone.network];
+    if (!status || !status.exists) {
+      return { is_active: false, is_enabled: false };
+    }
+    return { is_active: status.is_active, is_enabled: status.is_enabled };
   };
 
   const fetchRecords = async (zoneId: number) => {
@@ -381,12 +422,17 @@ export function Dns() {
                           {zone.delegate_to || '-'}
                         </Table.Cell>
                         <Table.Cell>
-                          <Badge color={zone.enabled ? "success" : "gray"}>
-                            {zone.enabled ? "Enabled" : "Disabled"}
-                          </Badge>
+                          {(() => {
+                            const serviceStatus = getServiceStatusForZone(zone);
+                            return (
+                              <Badge color={serviceStatus.is_active ? "success" : "gray"}>
+                                {serviceStatus.is_active ? "Running" : serviceStatus.is_enabled ? "Stopped" : "Disabled"}
+                              </Badge>
+                            );
+                          })()}
                         </Table.Cell>
                         <Table.Cell>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 flex-wrap">
                             <Button
                               size="xs"
                               color="blue"
@@ -401,6 +447,51 @@ export function Dns() {
                             >
                               <HiPencil className="w-4 h-4" />
                             </Button>
+                            {(() => {
+                              const serviceStatus = getServiceStatusForZone(zone);
+                              const serviceKey = `${zone.network}-`;
+                              const isControlling = controllingService?.startsWith(serviceKey);
+                              return (
+                                <>
+                                  <Button
+                                    size="xs"
+                                    color="success"
+                                    onClick={() => handleServiceControl(zone.network, 'start')}
+                                    disabled={isControlling || serviceStatus.is_active}
+                                    title="Start Service"
+                                  >
+                                    <HiPlay className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    size="xs"
+                                    color="failure"
+                                    onClick={() => handleServiceControl(zone.network, 'stop')}
+                                    disabled={isControlling || !serviceStatus.is_active}
+                                    title="Stop Service"
+                                  >
+                                    <HiStop className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    size="xs"
+                                    color="warning"
+                                    onClick={() => handleServiceControl(zone.network, 'reload')}
+                                    disabled={isControlling || !serviceStatus.is_active}
+                                    title="Reload Service"
+                                  >
+                                    <HiRefresh className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    size="xs"
+                                    color="purple"
+                                    onClick={() => handleServiceControl(zone.network, 'restart')}
+                                    disabled={isControlling}
+                                    title="Restart Service"
+                                  >
+                                    <HiRefresh className="w-4 h-4" />
+                                  </Button>
+                                </>
+                              );
+                            })()}
                             <Button
                               size="xs"
                               color="failure"
