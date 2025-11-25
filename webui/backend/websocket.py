@@ -30,6 +30,8 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: Set[WebSocket] = set()
         self.broadcast_task: asyncio.Task = None
+        self.pending_store_tasks: Set[asyncio.Task] = set()
+        self._store_semaphore = asyncio.Semaphore(5)  # Limit concurrent store operations
         
     async def connect(self, websocket: WebSocket):
         """Accept new WebSocket connection"""
@@ -124,18 +126,26 @@ class ConnectionManager:
         if is_cake_enabled()[0]:  # Check if CAKE is enabled
             cake_stats = collect_cake_stats()
         
-        # Store in database asynchronously
-        asyncio.create_task(self._store_metrics(
-            system_metrics,
-            interface_stats,
-            service_statuses,
-            dhcp_leases,
-            disk_io,
-            temperatures,
-            client_bandwidth,
-            client_connections,
-            cake_stats
-        ))
+        # Store in database asynchronously with task tracking
+        # Clean up completed tasks first
+        self.pending_store_tasks = {t for t in self.pending_store_tasks if not t.done()}
+        
+        # Only create new task if we don't have too many pending
+        if len(self.pending_store_tasks) < 10:  # Max 10 pending store operations
+            task = asyncio.create_task(self._store_metrics_with_semaphore(
+                system_metrics,
+                interface_stats,
+                service_statuses,
+                dhcp_leases,
+                disk_io,
+                temperatures,
+                client_bandwidth,
+                client_connections,
+                cake_stats
+            ))
+            self.pending_store_tasks.add(task)
+            # Remove task from set when done
+            task.add_done_callback(self.pending_store_tasks.discard)
         
         # Create snapshot for broadcast
         snapshot = MetricsSnapshot(
@@ -148,6 +158,32 @@ class ConnectionManager:
         )
         
         return json.loads(snapshot.model_dump_json())
+    
+    async def _store_metrics_with_semaphore(
+        self,
+        system: SystemMetrics,
+        interfaces: List[InterfaceStats],
+        services: List[ServiceStatus],
+        dhcp_leases: List[DHCPLease],
+        disk_io: List,
+        temperatures: List,
+        client_bandwidth: List[dict] = None,
+        client_connections: List[dict] = None,
+        cake_stats = None
+    ):
+        """Wrapper that uses semaphore to limit concurrent store operations"""
+        async with self._store_semaphore:
+            await self._store_metrics(
+                system,
+                interfaces,
+                services,
+                dhcp_leases,
+                disk_io,
+                temperatures,
+                client_bandwidth,
+                client_connections,
+                cake_stats
+            )
     
     async def _store_metrics(
         self,

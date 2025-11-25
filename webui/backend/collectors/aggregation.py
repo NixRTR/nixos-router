@@ -159,22 +159,26 @@ async def _aggregate_to_interval(
         cutoff_time: Only aggregate data older than this time
         group_by: List of column names to group by
     """
-    # Query source data
-    query = select(model_class).where(
-        model_class.aggregation_level == source_level,
-        model_class.timestamp < cutoff_time
-    ).order_by(*[getattr(model_class, col) for col in group_by], model_class.timestamp.asc())
-    
-    result = await session.execute(query)
-    source_stats = result.scalars().all()
-    
-    if not source_stats:
-        return
-    
-    # Group by time buckets and group_by columns
+    # Query source data in batches to avoid loading everything into memory
+    # Process in chunks of 10000 records at a time
+    batch_size = 10000
+    offset = 0
     buckets: Dict[Tuple, Dict] = {}
     
-    for stat in source_stats:
+    while True:
+        query = select(model_class).where(
+            model_class.aggregation_level == source_level,
+            model_class.timestamp < cutoff_time
+        ).order_by(*[getattr(model_class, col) for col in group_by], model_class.timestamp.asc()).limit(batch_size).offset(offset)
+        
+        result = await session.execute(query)
+        source_stats = result.scalars().all()
+        
+        if not source_stats:
+            break
+        
+        # Group by time buckets and group_by columns
+        for stat in source_stats:
         # Round timestamp to interval boundary
         timestamp_seconds = int(stat.timestamp.timestamp())
         rounded_seconds = (timestamp_seconds // interval_seconds) * interval_seconds
@@ -203,7 +207,16 @@ async def _aggregate_to_interval(
         if stat.tx_bytes_total > buckets[bucket_key]['tx_bytes_total_max']:
             buckets[bucket_key]['tx_bytes_total_max'] = stat.tx_bytes_total
         
-        buckets[bucket_key]['count'] += 1
+            buckets[bucket_key]['count'] += 1
+        
+        # If we got fewer records than batch_size, we're done
+        if len(source_stats) < batch_size:
+            break
+        
+        offset += batch_size
+    
+    if not buckets:
+        return
     
     # Create aggregated records
     aggregated_records = []
