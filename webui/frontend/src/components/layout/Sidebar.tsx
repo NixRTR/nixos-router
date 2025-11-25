@@ -16,6 +16,7 @@ import {
   HiTrendingUp,
   HiBell,
   HiGlobe,
+  HiServer,
 } from 'react-icons/hi';
 import { FaGithub } from 'react-icons/fa';
 import { apiClient } from '../../api/client';
@@ -196,6 +197,16 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
                 onClick={handleItemClick}
               >
                 DNS
+              </FlowbiteSidebar.Item>
+
+              <FlowbiteSidebar.Item
+                as={Link}
+                to="/dhcp"
+                icon={HiServer}
+                active={location.pathname === '/dhcp'}
+                onClick={handleItemClick}
+              >
+                DHCP
               </FlowbiteSidebar.Item>
 
               {cakeEnabled && (

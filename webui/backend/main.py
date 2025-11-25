@@ -41,10 +41,12 @@ from .api.cake import router as cake_router
 from .api.apprise import router as apprise_router
 from .api.notifications import router as notifications_router
 from .api.dns import router as dns_router
+from .api.dhcp import router as dhcp_router
 from .collectors.aggregation import run_aggregation_job
 from .collectors.notifications import NotificationEvaluator
 from .utils.apprise import migrate_secrets_to_database
 from .utils.dns import migrate_dns_config_to_database
+from .utils.dhcp import migrate_dhcp_config_to_database
 
 notification_evaluator = NotificationEvaluator(AsyncSessionLocal)
 
@@ -119,13 +121,23 @@ async def lifespan(app: FastAPI):
         # Don't fail startup if migration fails
     
     # Migrate DNS configuration from router-config.nix to database
-    try:
-        async with AsyncSessionLocal() as session:
-            await migrate_dns_config_to_database(session)
+        try:
+            async with AsyncSessionLocal() as session:
+                await migrate_dns_config_to_database(session)
         print("DNS configuration migration completed")
     except Exception as e:
         logging.getLogger(__name__).error(
             f"Error migrating DNS configuration: {e}", exc_info=True
+        )
+    
+    # Migrate DHCP configuration from router-config.nix to database
+    try:
+        async with AsyncSessionLocal() as session:
+            await migrate_dhcp_config_to_database(session)
+        print("DHCP configuration migration completed")
+    except Exception as e:
+        logging.getLogger(__name__).error(
+            f"Error migrating DHCP configuration: {e}", exc_info=True
         )
         # Don't fail startup if migration fails
     
@@ -192,6 +204,7 @@ app.include_router(cake_router)
 app.include_router(apprise_router)
 app.include_router(notifications_router)
 app.include_router(dns_router)
+app.include_router(dhcp_router)
 
 
 @app.get("/api")

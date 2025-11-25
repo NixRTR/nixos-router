@@ -400,6 +400,53 @@ class DnsRecordDB(Base):
         Index('idx_dns_records_enabled', 'enabled', postgresql_using='btree'),
     )
 
+
+class DhcpNetworkDB(Base):
+    """DHCP network configuration (one per network: homelab/lan)"""
+    __tablename__ = "dhcp_networks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    network = Column(String(50), nullable=False, unique=True)  # "homelab" or "lan"
+    enabled = Column(Boolean, default=True, index=True)
+    start = Column(INET, nullable=False)  # IP range start
+    end = Column(INET, nullable=False)  # IP range end
+    lease_time = Column(String(20), nullable=False)  # e.g., "1h", "1d", "86400"
+    dns_servers = Column(ARRAY(INET))  # Array of DNS server IPs
+    dynamic_domain = Column(Text)  # Optional dynamic DNS domain (e.g., "dhcp.homelab.local")
+    original_config_path = Column(Text)  # For migration tracking: "homelab.dhcp" or "lan.dhcp"
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    
+    __table_args__ = (
+        Index('idx_dhcp_networks_network', 'network', postgresql_using='btree'),
+        Index('idx_dhcp_networks_enabled', 'enabled', postgresql_using='btree'),
+    )
+
+
+class DhcpReservationDB(Base):
+    """DHCP static IP reservations"""
+    __tablename__ = "dhcp_reservations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    network_id = Column(Integer, ForeignKey('dhcp_networks.id', ondelete='CASCADE'), nullable=False, index=True)
+    hostname = Column(String(255), nullable=False)
+    hw_address = Column(MACADDR, nullable=False)  # MAC address
+    ip_address = Column(INET, nullable=False)  # Reserved IP address
+    comment = Column(Text)
+    enabled = Column(Boolean, default=True, index=True)
+    original_config_path = Column(Text)  # For migration tracking
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    
+    __table_args__ = (
+        Index('idx_dhcp_reservations_network_id', 'network_id', postgresql_using='btree'),
+        Index('idx_dhcp_reservations_hw_address', 'hw_address', postgresql_using='btree'),
+        Index('idx_dhcp_reservations_ip_address', 'ip_address', postgresql_using='btree'),
+        Index('idx_dhcp_reservations_enabled', 'enabled', postgresql_using='btree'),
+        Index('idx_dhcp_reservations_network_hw', 'network_id', 'hw_address', unique=True, postgresql_using='btree'),
+        Index('idx_dhcp_reservations_network_ip', 'network_id', 'ip_address', unique=True, postgresql_using='btree'),
+    )
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting async database session"""
     async with AsyncSessionLocal() as session:
@@ -895,6 +942,129 @@ async def _apply_schema_updates(conn):
             text("""
                 CREATE TRIGGER dns_records_updated_at
                 BEFORE UPDATE ON dns_records
+                FOR EACH ROW EXECUTE PROCEDURE set_updated_at()
+            """)
+        )
+    
+    # Migration 007: DHCP networks and reservations tables
+    result = await conn.execute(
+        text("""
+            SELECT 1 FROM information_schema.tables 
+            WHERE table_name = 'dhcp_networks'
+        """)
+    )
+    has_dhcp_networks = result.scalar() is not None
+    
+    if not has_dhcp_networks:
+        await conn.execute(
+            text("""
+                CREATE TABLE dhcp_networks (
+                    id SERIAL PRIMARY KEY,
+                    network VARCHAR(50) NOT NULL UNIQUE,
+                    enabled BOOLEAN DEFAULT TRUE,
+                    start INET NOT NULL,
+                    end INET NOT NULL,
+                    lease_time VARCHAR(20) NOT NULL,
+                    dns_servers INET[],
+                    dynamic_domain TEXT,
+                    original_config_path TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_dhcp_networks_network 
+                ON dhcp_networks(network)
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_dhcp_networks_enabled 
+                ON dhcp_networks(enabled)
+            """)
+        )
+        print("Created dhcp_networks table")
+    
+    result = await conn.execute(
+        text("""
+            SELECT 1 FROM information_schema.tables 
+            WHERE table_name = 'dhcp_reservations'
+        """)
+    )
+    has_dhcp_reservations = result.scalar() is not None
+    
+    if not has_dhcp_reservations:
+        await conn.execute(
+            text("""
+                CREATE TABLE dhcp_reservations (
+                    id SERIAL PRIMARY KEY,
+                    network_id INTEGER NOT NULL REFERENCES dhcp_networks(id) ON DELETE CASCADE,
+                    hostname VARCHAR(255) NOT NULL,
+                    hw_address MACADDR NOT NULL,
+                    ip_address INET NOT NULL,
+                    comment TEXT,
+                    enabled BOOLEAN DEFAULT TRUE,
+                    original_config_path TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    UNIQUE(network_id, hw_address),
+                    UNIQUE(network_id, ip_address)
+                )
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_dhcp_reservations_network_id 
+                ON dhcp_reservations(network_id)
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_dhcp_reservations_hw_address 
+                ON dhcp_reservations(hw_address)
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_dhcp_reservations_ip_address 
+                ON dhcp_reservations(ip_address)
+            """)
+        )
+        await conn.execute(
+            text("""
+                CREATE INDEX idx_dhcp_reservations_enabled 
+                ON dhcp_reservations(enabled)
+            """)
+        )
+        print("Created dhcp_reservations table")
+    
+    # Ensure DHCP triggers exist
+    result = await conn.execute(
+        text("""
+            SELECT 1 FROM pg_trigger WHERE tgname = 'dhcp_networks_updated_at'
+        """)
+    )
+    if result.scalar() is None:
+        await conn.execute(
+            text("""
+                CREATE TRIGGER dhcp_networks_updated_at
+                BEFORE UPDATE ON dhcp_networks
+                FOR EACH ROW EXECUTE PROCEDURE set_updated_at()
+            """)
+        )
+    
+    result = await conn.execute(
+        text("""
+            SELECT 1 FROM pg_trigger WHERE tgname = 'dhcp_reservations_updated_at'
+        """)
+    )
+    if result.scalar() is None:
+        await conn.execute(
+            text("""
+                CREATE TRIGGER dhcp_reservations_updated_at
+                BEFORE UPDATE ON dhcp_reservations
                 FOR EACH ROW EXECUTE PROCEDURE set_updated_at()
             """)
         )

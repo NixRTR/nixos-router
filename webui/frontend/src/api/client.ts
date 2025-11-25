@@ -23,6 +23,14 @@ import type {
   DnsRecordCreate,
   DnsRecordUpdate,
 } from '../types/dns';
+import type {
+  DhcpNetwork,
+  DhcpNetworkCreate,
+  DhcpNetworkUpdate,
+  DhcpReservation,
+  DhcpReservationCreate,
+  DhcpReservationUpdate,
+} from '../types/dhcp';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -431,6 +439,60 @@ class APIClient {
 
   async deleteDnsRecord(recordId: number): Promise<{ message: string }> {
     const response = await this.client.delete<{ message: string }>(`/api/dns/records/${recordId}`);
+    return response.data;
+  }
+
+  // DHCP Network methods
+  async getDhcpNetworks(network?: 'homelab' | 'lan'): Promise<DhcpNetwork[]> {
+    const params: Record<string, string> = {};
+    if (network) params.network = network;
+    const response = await this.client.get<DhcpNetwork[]>('/api/dhcp/networks', { params });
+    return response.data;
+  }
+
+  async createDhcpNetwork(network: DhcpNetworkCreate): Promise<DhcpNetwork> {
+    const response = await this.client.post<DhcpNetwork>('/api/dhcp/networks', network);
+    return response.data;
+  }
+
+  async getDhcpNetwork(networkId: number): Promise<DhcpNetwork> {
+    const response = await this.client.get<DhcpNetwork>(`/api/dhcp/networks/${networkId}`);
+    return response.data;
+  }
+
+  async updateDhcpNetwork(networkId: number, network: DhcpNetworkUpdate): Promise<DhcpNetwork> {
+    const response = await this.client.put<DhcpNetwork>(`/api/dhcp/networks/${networkId}`, network);
+    return response.data;
+  }
+
+  async deleteDhcpNetwork(networkId: number): Promise<{ message: string }> {
+    const response = await this.client.delete<{ message: string }>(`/api/dhcp/networks/${networkId}`);
+    return response.data;
+  }
+
+  // DHCP Reservation methods
+  async getDhcpReservations(networkId: number): Promise<DhcpReservation[]> {
+    const response = await this.client.get<DhcpReservation[]>(`/api/dhcp/networks/${networkId}/reservations`);
+    return response.data;
+  }
+
+  async createDhcpReservation(networkId: number, reservation: DhcpReservationCreate): Promise<DhcpReservation> {
+    const response = await this.client.post<DhcpReservation>(`/api/dhcp/networks/${networkId}/reservations`, reservation);
+    return response.data;
+  }
+
+  async getDhcpReservation(reservationId: number): Promise<DhcpReservation> {
+    const response = await this.client.get<DhcpReservation>(`/api/dhcp/reservations/${reservationId}`);
+    return response.data;
+  }
+
+  async updateDhcpReservation(reservationId: number, reservation: DhcpReservationUpdate): Promise<DhcpReservation> {
+    const response = await this.client.put<DhcpReservation>(`/api/dhcp/reservations/${reservationId}`, reservation);
+    return response.data;
+  }
+
+  async deleteDhcpReservation(reservationId: number): Promise<{ message: string }> {
+    const response = await this.client.delete<{ message: string }>(`/api/dhcp/reservations/${reservationId}`);
     return response.data;
   }
 }
