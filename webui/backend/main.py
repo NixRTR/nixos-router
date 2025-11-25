@@ -121,14 +121,15 @@ async def lifespan(app: FastAPI):
         # Don't fail startup if migration fails
     
     # Migrate DNS configuration from router-config.nix to database
-        try:
-            async with AsyncSessionLocal() as session:
-                await migrate_dns_config_to_database(session)
+    try:
+        async with AsyncSessionLocal() as session:
+            await migrate_dns_config_to_database(session)
         print("DNS configuration migration completed")
     except Exception as e:
         logging.getLogger(__name__).error(
             f"Error migrating DNS configuration: {e}", exc_info=True
         )
+        # Don't fail startup if migration fails
     
     # Migrate DHCP configuration from router-config.nix to database
     try:
