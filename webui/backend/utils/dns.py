@@ -7,14 +7,9 @@ import re
 from typing import Dict, List, Tuple, Optional
 from sqlalchemy import select
 from ..database import DnsZoneDB, DnsRecordDB
+from ..config import settings
 
 logger = logging.getLogger(__name__)
-
-# Path to router-config.nix (relative to project root)
-ROUTER_CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-    'router-config.nix'
-)
 
 
 def extract_base_domain(hostname: str) -> str:
@@ -40,11 +35,13 @@ def parse_nix_config() -> Dict:
         - a_records: dict of hostname -> {ip, comment}
         - cname_records: dict of hostname -> {target, comment}
     """
-    if not os.path.exists(ROUTER_CONFIG_PATH):
-        logger.warning(f"router-config.nix not found at {ROUTER_CONFIG_PATH}, skipping DNS migration")
+    config_path = settings.router_config_file
+    
+    if not os.path.exists(config_path):
+        logger.warning(f"router-config.nix not found at {config_path}, skipping DNS migration")
         return {}
     
-    logger.info(f"Parsing router-config.nix from {ROUTER_CONFIG_PATH}")
+    logger.info(f"Parsing router-config.nix from {config_path}")
     
     config = {
         'homelab': {'a_records': {}, 'cname_records': {}},
@@ -52,7 +49,7 @@ def parse_nix_config() -> Dict:
     }
     
     try:
-        with open(ROUTER_CONFIG_PATH, 'r') as f:
+        with open(config_path, 'r') as f:
             content = f.read()
         
         # Extract homelab DNS section
