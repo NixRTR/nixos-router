@@ -459,5 +459,20 @@ in
       router-webui-backend
     '';
   };
+  
+  # Sudo rules to allow router-webui user to control DNS services
+  # Allow systemctl commands for unbound services
+  security.sudo.extraRules = [
+    {
+      users = [ "router-webui" ];
+      commands = [
+        {
+          # Allow systemctl with any arguments (we validate in the API)
+          command = "${pkgs.systemd}/bin/systemctl";
+          options = [ "NOPASSWD" ];
+        }
+      ];
+    }
+  ];
 }
 

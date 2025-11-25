@@ -517,9 +517,9 @@ async def control_dns_service(
     service_name = NETWORK_SERVICE_MAP[network]
     
     try:
-        # Use systemctl to control the service
+        # Use sudo systemctl to control the service (requires sudo permissions)
         result = subprocess.run(
-            ['systemctl', action, service_name],
+            ['sudo', 'systemctl', action, service_name],
             capture_output=True,
             text=True,
             timeout=30,
