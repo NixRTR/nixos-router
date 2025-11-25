@@ -179,34 +179,34 @@ async def _aggregate_to_interval(
         
         # Group by time buckets and group_by columns
         for stat in source_stats:
-        # Round timestamp to interval boundary
-        timestamp_seconds = int(stat.timestamp.timestamp())
-        rounded_seconds = (timestamp_seconds // interval_seconds) * interval_seconds
-        bucket_time = datetime.fromtimestamp(rounded_seconds, tz=timezone.utc).replace(microsecond=0)
-        
-        # Create group key from group_by columns
-        group_key = tuple(getattr(stat, col) for col in group_by)
-        bucket_key = (bucket_time, group_key)
-        
-        if bucket_key not in buckets:
-            buckets[bucket_key] = {
-                'rx_bytes_sum': 0,
-                'tx_bytes_sum': 0,
-                'rx_bytes_total_max': 0,
-                'tx_bytes_total_max': 0,
-                'count': 0
-            }
-        
-        # Sum interval bytes
-        buckets[bucket_key]['rx_bytes_sum'] += stat.rx_bytes
-        buckets[bucket_key]['tx_bytes_sum'] += stat.tx_bytes
-        
-        # Track max cumulative totals (latest value in bucket)
-        if stat.rx_bytes_total > buckets[bucket_key]['rx_bytes_total_max']:
-            buckets[bucket_key]['rx_bytes_total_max'] = stat.rx_bytes_total
-        if stat.tx_bytes_total > buckets[bucket_key]['tx_bytes_total_max']:
-            buckets[bucket_key]['tx_bytes_total_max'] = stat.tx_bytes_total
-        
+            # Round timestamp to interval boundary
+            timestamp_seconds = int(stat.timestamp.timestamp())
+            rounded_seconds = (timestamp_seconds // interval_seconds) * interval_seconds
+            bucket_time = datetime.fromtimestamp(rounded_seconds, tz=timezone.utc).replace(microsecond=0)
+            
+            # Create group key from group_by columns
+            group_key = tuple(getattr(stat, col) for col in group_by)
+            bucket_key = (bucket_time, group_key)
+            
+            if bucket_key not in buckets:
+                buckets[bucket_key] = {
+                    'rx_bytes_sum': 0,
+                    'tx_bytes_sum': 0,
+                    'rx_bytes_total_max': 0,
+                    'tx_bytes_total_max': 0,
+                    'count': 0
+                }
+            
+            # Sum interval bytes
+            buckets[bucket_key]['rx_bytes_sum'] += stat.rx_bytes
+            buckets[bucket_key]['tx_bytes_sum'] += stat.tx_bytes
+            
+            # Track max cumulative totals (latest value in bucket)
+            if stat.rx_bytes_total > buckets[bucket_key]['rx_bytes_total_max']:
+                buckets[bucket_key]['rx_bytes_total_max'] = stat.rx_bytes_total
+            if stat.tx_bytes_total > buckets[bucket_key]['tx_bytes_total_max']:
+                buckets[bucket_key]['tx_bytes_total_max'] = stat.tx_bytes_total
+            
             buckets[bucket_key]['count'] += 1
         
         # If we got fewer records than batch_size, we're done
