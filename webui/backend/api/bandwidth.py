@@ -169,10 +169,10 @@ async def get_bandwidth_history(
                 # - Ping: ~1 second
                 # - Download test: typically 10-30 seconds depending on speed
                 # - Upload test: typically 10-30 seconds depending on speed
-                # Total: ~30-60 seconds, we'll use 90 seconds to be safe
-                # Start 10 seconds before (for connection setup) and end 10 seconds after
-                window_start = st.timestamp - timedelta(seconds=10)
-                window_end = st.timestamp + timedelta(seconds=90)
+                # Total: ~30-60 seconds, we'll use 2 minutes to be safe
+                # Start 30 seconds before (for connection setup and to catch ramp-up) and end 30 seconds after
+                window_start = st.timestamp - timedelta(seconds=30)
+                window_end = st.timestamp + timedelta(seconds=120)
                 speedtest_exclude_windows.append((window_start, window_end))
     
     # Group by interface
@@ -207,16 +207,25 @@ async def get_bandwidth_history(
                 prev = data_points[i - 1]
                 curr = data_points[i]
                 
-                # For WAN interface, check if this interval overlaps with any speedtest window
-                # If so, skip this data point (set rate to 0 or interpolate)
+                # For WAN interface, check if this data point or interval overlaps with any speedtest window
                 if iface == 'ppp0' and speedtest_exclude_windows:
-                    # Check if the interval [prev.timestamp, curr.timestamp] overlaps with any speedtest window
+                    # Check if either endpoint of the interval is in a speedtest window, or if the interval overlaps
                     interval_start = prev['timestamp']
                     interval_end = curr['timestamp']
+                    prev_timestamp = prev['timestamp']
+                    curr_timestamp = curr['timestamp']
                     
                     should_exclude = False
                     for window_start, window_end in speedtest_exclude_windows:
-                        # Check if intervals overlap
+                        # Check if previous timestamp is in window (delta would include speedtest start)
+                        if window_start <= prev_timestamp <= window_end:
+                            should_exclude = True
+                            break
+                        # Check if current timestamp is in window (delta would include speedtest end)
+                        if window_start <= curr_timestamp <= window_end:
+                            should_exclude = True
+                            break
+                        # Check if interval overlaps with window (interval spans across speedtest)
                         if not (interval_end < window_start or interval_start > window_end):
                             should_exclude = True
                             break
