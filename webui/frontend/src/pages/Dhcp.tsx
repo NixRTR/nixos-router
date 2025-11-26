@@ -8,7 +8,7 @@ import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
 import { useMetrics } from '../hooks/useMetrics';
 import { apiClient } from '../api/client';
-import { HiServer, HiPencil, HiTrash, HiPlus, HiInformationCircle } from 'react-icons/hi';
+import { HiServer, HiPencil, HiTrash, HiPlus, HiInformationCircle, HiPlay, HiStop, HiRefresh } from 'react-icons/hi';
 import type { DhcpNetwork, DhcpNetworkCreate, DhcpNetworkUpdate, DhcpReservation, DhcpReservationCreate, DhcpReservationUpdate } from '../types/dhcp';
 
 export function Dhcp() {
@@ -20,6 +20,8 @@ export function Dhcp() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [networkFilter, setNetworkFilter] = useState<'all' | 'homelab' | 'lan'>('all');
+  const [dhcpServiceStatus, setDhcpServiceStatus] = useState<{ is_active: boolean; is_enabled: boolean; exists: boolean } | null>(null);
+  const [controllingDhcpService, setControllingDhcpService] = useState(false);
   
   // Network modal state
   const [networkModalOpen, setNetworkModalOpen] = useState(false);
@@ -61,7 +63,32 @@ export function Dhcp() {
       return;
     }
     fetchNetworks();
+    fetchDhcpServiceStatus();
   }, [token, networkFilter]);
+
+  const fetchDhcpServiceStatus = async () => {
+    try {
+      const status = await apiClient.getDhcpServiceStatus();
+      setDhcpServiceStatus(status);
+    } catch (err: any) {
+      console.error('Failed to fetch DHCP service status:', err);
+    }
+  };
+
+  const handleDhcpServiceControl = async (action: 'start' | 'stop' | 'restart' | 'reload') => {
+    setControllingDhcpService(true);
+    try {
+      await apiClient.controlDhcpService(action);
+      // Refresh service status after a short delay
+      setTimeout(() => {
+        fetchDhcpServiceStatus();
+      }, 1000);
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || err.message || `Failed to ${action} DHCP service`);
+    } finally {
+      setControllingDhcpService(false);
+    }
+  };
 
   const fetchNetworks = async () => {
     setLoading(true);
@@ -336,22 +363,72 @@ export function Dhcp() {
               </Alert>
             )}
 
-            {/* Network Filter */}
-            <div className="mb-4">
-              <Label htmlFor="networkFilter" value="Filter by Network" />
-              <Select
-                id="networkFilter"
-                value={networkFilter}
-                onChange={(e) => setNetworkFilter(e.target.value as 'all' | 'homelab' | 'lan')}
-                className="mt-1 w-48"
-              >
-                <option value="all">All Networks</option>
-                <option value="homelab">HOMELAB</option>
-                <option value="lan">LAN</option>
-              </Select>
+            {/* Network Filter and DHCP Service Controls */}
+            <div className="mb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+              <div>
+                <Label htmlFor="networkFilter" value="Filter by Network" />
+                <Select
+                  id="networkFilter"
+                  value={networkFilter}
+                  onChange={(e) => setNetworkFilter(e.target.value as 'all' | 'homelab' | 'lan')}
+                  className="mt-1 w-48"
+                >
+                  <option value="all">All Networks</option>
+                  <option value="homelab">HOMELAB</option>
+                  <option value="lan">LAN</option>
+                </Select>
+              </div>
+              
+              {/* DHCP Service Controls */}
+              <div className="flex flex-col gap-2">
+                <Label value="DHCP Service" />
+                <div className="flex gap-2 items-center flex-wrap">
+                  {dhcpServiceStatus && (
+                    <Badge color={dhcpServiceStatus.is_active ? "success" : "gray"} size="sm">
+                      {dhcpServiceStatus.is_active ? "Running" : dhcpServiceStatus.is_enabled ? "Stopped" : "Disabled"}
+                    </Badge>
+                  )}
+                  <Button
+                    size="xs"
+                    color="success"
+                    onClick={() => handleDhcpServiceControl('start')}
+                    disabled={controllingDhcpService || (dhcpServiceStatus?.is_active ?? false)}
+                    title="Start Service"
+                  >
+                    <HiPlay className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="xs"
+                    color="failure"
+                    onClick={() => handleDhcpServiceControl('stop')}
+                    disabled={controllingDhcpService || !(dhcpServiceStatus?.is_active ?? false)}
+                    title="Stop Service"
+                  >
+                    <HiStop className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="xs"
+                    color="warning"
+                    onClick={() => handleDhcpServiceControl('reload')}
+                    disabled={controllingDhcpService || !(dhcpServiceStatus?.is_active ?? false)}
+                    title="Reload Service"
+                  >
+                    <HiRefresh className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="xs"
+                    color="purple"
+                    onClick={() => handleDhcpServiceControl('restart')}
+                    disabled={controllingDhcpService}
+                    title="Restart Service"
+                  >
+                    <HiRefresh className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
 
-            {/* Networks Table */}
+            {/* Networks Cards */}
             <Card>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                 DHCP Networks ({networks.length})
@@ -362,45 +439,128 @@ export function Dhcp() {
                   No DHCP networks configured. Create a network to get started.
                 </Alert>
               ) : (
-                <Table>
-                  <Table.Head>
-                    <Table.HeadCell>Network</Table.HeadCell>
-                    <Table.HeadCell>IP Range</Table.HeadCell>
-                    <Table.HeadCell>Lease Time</Table.HeadCell>
-                    <Table.HeadCell>DNS Servers</Table.HeadCell>
-                    <Table.HeadCell>Dynamic Domain</Table.HeadCell>
-                    <Table.HeadCell>Status</Table.HeadCell>
-                    <Table.HeadCell>Actions</Table.HeadCell>
-                  </Table.Head>
-                  <Table.Body className="divide-y">
+                <>
+                  {/* Desktop Table View */}
+                  <div className="hidden min-[1000px]:block overflow-x-auto">
+                    <Table>
+                      <Table.Head>
+                        <Table.HeadCell>Network</Table.HeadCell>
+                        <Table.HeadCell>IP Range</Table.HeadCell>
+                        <Table.HeadCell>Lease Time</Table.HeadCell>
+                        <Table.HeadCell>DNS Servers</Table.HeadCell>
+                        <Table.HeadCell>Dynamic Domain</Table.HeadCell>
+                        <Table.HeadCell>Status</Table.HeadCell>
+                        <Table.HeadCell>Actions</Table.HeadCell>
+                      </Table.Head>
+                      <Table.Body className="divide-y">
+                        {networks.map((network) => (
+                          <Table.Row key={network.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                            <Table.Cell>
+                              <Badge color="blue">{network.network}</Badge>
+                            </Table.Cell>
+                            <Table.Cell className="font-mono text-sm text-gray-900 dark:text-white">
+                              {network.start} - {network.end}
+                            </Table.Cell>
+                            <Table.Cell className="text-gray-500 dark:text-gray-400">
+                              {network.lease_time}
+                            </Table.Cell>
+                            <Table.Cell className="text-gray-500 dark:text-gray-400">
+                              {network.dns_servers?.join(', ') || '-'}
+                            </Table.Cell>
+                            <Table.Cell className="text-gray-500 dark:text-gray-400">
+                              {network.dynamic_domain || '-'}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <Badge color={network.enabled ? "success" : "gray"}>
+                                {network.enabled ? "Enabled" : "Disabled"}
+                              </Badge>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <div className="flex gap-2 flex-wrap">
+                                <Button
+                                  size="xs"
+                                  color="blue"
+                                  onClick={() => openReservationsView(network)}
+                                >
+                                  Reservations
+                                </Button>
+                                <Button
+                                  size="xs"
+                                  color="gray"
+                                  onClick={() => openNetworkModal(network)}
+                                >
+                                  <HiPencil className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  size="xs"
+                                  color="failure"
+                                  onClick={() => {
+                                    setNetworkToDelete(network);
+                                    setDeleteNetworkModalOpen(true);
+                                  }}
+                                >
+                                  <HiTrash className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </Table.Cell>
+                          </Table.Row>
+                        ))}
+                      </Table.Body>
+                    </Table>
+                  </div>
+
+                  {/* Mobile/Tablet Card View */}
+                  <div className="min-[1000px]:hidden space-y-3">
                     {networks.map((network) => (
-                      <Table.Row key={network.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
-                        <Table.Cell>
-                          <Badge color="blue">{network.network}</Badge>
-                        </Table.Cell>
-                        <Table.Cell className="font-mono text-sm text-gray-900 dark:text-white">
-                          {network.start} - {network.end}
-                        </Table.Cell>
-                        <Table.Cell className="text-gray-500 dark:text-gray-400">
-                          {network.lease_time}
-                        </Table.Cell>
-                        <Table.Cell className="text-gray-500 dark:text-gray-400">
-                          {network.dns_servers?.join(', ') || '-'}
-                        </Table.Cell>
-                        <Table.Cell className="text-gray-500 dark:text-gray-400">
-                          {network.dynamic_domain || '-'}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Badge color={network.enabled ? "success" : "gray"}>
+                      <div
+                        key={network.id}
+                        className="p-4 rounded-lg border bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700"
+                      >
+                        {/* Header Row */}
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex-1">
+                            <Badge color="blue" size="sm" className="mb-2">
+                              {network.network}
+                            </Badge>
+                            <div className="font-mono text-sm text-gray-900 dark:text-white">
+                              {network.start} - {network.end}
+                            </div>
+                          </div>
+                          <Badge color={network.enabled ? "success" : "gray"} size="sm">
                             {network.enabled ? "Enabled" : "Disabled"}
                           </Badge>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="flex gap-2">
+                        </div>
+
+                        {/* Details Grid */}
+                        <div className="space-y-2 text-sm mb-4">
+                          <div className="flex justify-between">
+                            <span className="text-gray-500 dark:text-gray-400">Lease Time:</span>
+                            <span className="text-gray-900 dark:text-gray-100">{network.lease_time}</span>
+                          </div>
+                          
+                          {network.dns_servers && network.dns_servers.length > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-500 dark:text-gray-400">DNS Servers:</span>
+                              <span className="text-gray-900 dark:text-gray-100 font-mono text-xs">{network.dns_servers.join(', ')}</span>
+                            </div>
+                          )}
+                          
+                          {network.dynamic_domain && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-500 dark:text-gray-400">Dynamic Domain:</span>
+                              <span className="text-gray-900 dark:text-gray-100">{network.dynamic_domain}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                          <div className="flex gap-2 flex-wrap">
                             <Button
                               size="xs"
                               color="blue"
                               onClick={() => openReservationsView(network)}
+                              className="flex-1 min-w-[100px]"
                             >
                               Reservations
                             </Button>
@@ -408,6 +568,7 @@ export function Dhcp() {
                               size="xs"
                               color="gray"
                               onClick={() => openNetworkModal(network)}
+                              className="flex-1 min-w-[80px]"
                             >
                               <HiPencil className="w-4 h-4" />
                             </Button>
@@ -418,15 +579,16 @@ export function Dhcp() {
                                 setNetworkToDelete(network);
                                 setDeleteNetworkModalOpen(true);
                               }}
+                              className="flex-1 min-w-[80px]"
                             >
                               <HiTrash className="w-4 h-4" />
                             </Button>
                           </div>
-                        </Table.Cell>
-                      </Table.Row>
+                        </div>
+                      </div>
                     ))}
-                  </Table.Body>
-                </Table>
+                  </div>
+                </>
               )}
             </Card>
 

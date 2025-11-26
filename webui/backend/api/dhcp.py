@@ -5,6 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
+import subprocess
+import logging
+import socket
+import os
 
 from ..database import get_db, DhcpNetworkDB, DhcpReservationDB
 from ..models import (
@@ -12,8 +16,70 @@ from ..models import (
     DhcpReservation, DhcpReservationCreate, DhcpReservationUpdate
 )
 from ..api.auth import get_current_user
+from ..collectors.services import get_service_status
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/dhcp", tags=["dhcp"])
+
+# DHCP service name (single service for all networks)
+DHCP_SERVICE_NAME = "kea-dhcp4-server"
+
+
+def _control_service_via_systemctl(service_name: str, action: str) -> None:
+    """Control a systemd service via socket-activated helper service (runs as root)
+    
+    Uses a socket-activated service that runs as root and accepts commands via
+    a Unix socket. This follows NixOS best practices by avoiding direct sudo
+    usage in systemd services.
+    
+    Args:
+        service_name: Name of the service (e.g., "kea-dhcp4-server.service")
+        action: Action to perform ("start", "stop", "restart", "reload")
+        
+    Raises:
+        subprocess.CalledProcessError: If the command fails
+    """
+    logger.debug(f"Controlling service via socket: {service_name}, action: {action}")
+    
+    # Validate action
+    valid_actions = ['start', 'stop', 'restart', 'reload']
+    if action.lower() not in valid_actions:
+        logger.error(f"Invalid action: {action}")
+        raise ValueError(f"Invalid action: {action}. Must be one of: {valid_actions}")
+    
+    socket_path = "/run/router-webui/service-control.sock"
+    
+    # Send command to socket (format: "ACTION SERVICE\n")
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(30)
+        sock.connect(socket_path)
+        command = f"{action.lower()} {service_name}\n"
+        sock.sendall(command.encode('utf-8'))
+        sock.shutdown(socket.SHUT_WR)
+        
+        # Read response
+        response = b""
+        while True:
+            data = sock.recv(4096)
+            if not data:
+                break
+            response += data
+        
+        sock.close()
+        
+        # Check if there was an error in the response
+        response_str = response.decode('utf-8', errors='ignore')
+        if "Invalid" in response_str or "Failed" in response_str or "error" in response_str.lower():
+            logger.error(f"Service control returned error: {response_str}")
+            raise subprocess.CalledProcessError(1, f"socket command", stderr=response_str)
+        
+        logger.debug(f"Service control command succeeded - response: {response_str[:500]}")
+        
+    except (socket.error, OSError) as e:
+        logger.error(f"Failed to communicate with service control socket: {e}")
+        raise subprocess.CalledProcessError(1, f"socket command", stderr=str(e))
 
 
 @router.get("/networks", response_model=List[DhcpNetwork])
@@ -532,4 +598,90 @@ async def delete_reservation(
     await db.commit()
     
     return {"message": "DHCP reservation deleted"}
+
+
+@router.get("/service-status")
+async def get_dhcp_service_status(
+    _: str = Depends(get_current_user)
+):
+    """Get DHCP service status
+    
+    Uses systemctl to retrieve status (same approach as other services).
+    Reading status doesn't require sudo, only control operations do.
+    
+    Returns:
+        Service status information
+    """
+    logger.debug(f"Getting DHCP service status for: {DHCP_SERVICE_NAME}")
+    
+    # Use the same get_service_status function that other services use
+    status = get_service_status(DHCP_SERVICE_NAME)
+    
+    if status is None:
+        logger.debug(f"Service {DHCP_SERVICE_NAME} not found")
+        return {
+            "service_name": DHCP_SERVICE_NAME,
+            "is_active": False,
+            "is_enabled": False,
+            "exists": False
+        }
+    
+    logger.debug(f"Retrieved status for {DHCP_SERVICE_NAME}: active={status.is_active}, enabled={status.is_enabled}, pid={status.pid}")
+    
+    return {
+        "service_name": DHCP_SERVICE_NAME,
+        "is_active": status.is_active,
+        "is_enabled": status.is_enabled,
+        "exists": True,
+        "pid": status.pid,
+        "memory_mb": status.memory_mb,
+        "cpu_percent": status.cpu_percent
+    }
+
+
+@router.post("/service/{action}")
+async def control_dhcp_service(
+    action: str,
+    _: str = Depends(get_current_user)
+):
+    """Control DHCP service
+    
+    Args:
+        action: Action to perform ("start", "stop", "restart", "reload")
+        
+    Returns:
+        Success message
+    """
+    logger.debug(f"Control DHCP service request - action: {action}")
+    
+    if action not in ['start', 'stop', 'restart', 'reload']:
+        logger.warning(f"Invalid action requested: {action}")
+        raise HTTPException(status_code=400, detail="Action must be 'start', 'stop', 'restart', or 'reload'")
+    
+    full_service_name = f"{DHCP_SERVICE_NAME}.service"
+    logger.debug(f"Attempting to {action} service: {full_service_name}")
+    
+    try:
+        # Use socket-based service control
+        _control_service_via_systemctl(full_service_name, action)
+        logger.info(f"Successfully {action}ed service {DHCP_SERVICE_NAME}")
+        
+        return {
+            "message": f"Service {DHCP_SERVICE_NAME} {action}ed successfully",
+            "action": action,
+            "service_name": DHCP_SERVICE_NAME
+        }
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr or e.stdout or str(e)
+        logger.error(f"Failed to {action} service {DHCP_SERVICE_NAME}: returncode={e.returncode}, stderr={e.stderr[:500] if e.stderr else None}, stdout={e.stdout[:500] if e.stdout else None}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to {action} service {DHCP_SERVICE_NAME}: {error_msg}"
+        )
+    except (subprocess.TimeoutExpired, ValueError, RuntimeError) as e:
+        logger.error(f"Error while trying to {action} service {DHCP_SERVICE_NAME}: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error while trying to {action} service {DHCP_SERVICE_NAME}: {str(e)}"
+        )
 

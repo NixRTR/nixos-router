@@ -394,7 +394,7 @@ export function Dns() {
               ) : (
                 <>
                   {/* Desktop Table View */}
-                  <div className="hidden md:block overflow-x-auto">
+                  <div className="hidden min-[1000px]:block overflow-x-auto">
                     <Table>
                       <Table.Head>
                         <Table.HeadCell>Name</Table.HeadCell>
@@ -515,7 +515,7 @@ export function Dns() {
                   </div>
 
                   {/* Mobile/Tablet Card View */}
-                  <div className="md:hidden space-y-3">
+                  <div className="min-[1000px]:hidden space-y-3">
                     {zones.map((zone) => {
                       const serviceStatus = getServiceStatusForZone(zone);
                       const serviceKey = `${zone.network}-`;

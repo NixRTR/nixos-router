@@ -327,7 +327,7 @@ export function Clients() {
             </div>
 
             {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden min-[1000px]:block overflow-x-auto">
               <Table>
                 <Table.Head>
                   <Table.HeadCell className="w-12">Status</Table.HeadCell>
@@ -441,7 +441,7 @@ export function Clients() {
             </div>
 
             {/* Mobile Card View */}
-            <div className="md:hidden space-y-3">
+            <div className="min-[1000px]:hidden space-y-3">
               {filteredDevices.map((device) => (
                 <div
                   key={device.mac_address}
