@@ -135,11 +135,12 @@ in
       unixAuth = true;
     };
     
-    # Create state directory
+    # Create state directory and socket directory
     systemd.tmpfiles.rules = [
       "d /var/lib/router-webui 0750 router-webui router-webui -"
       "d /var/lib/router-webui/frontend 0755 router-webui router-webui -"
       "d /var/lib/router-webui/docs 0755 router-webui router-webui -"
+      "d /run/router-webui 0750 router-webui router-webui -"
     ];
     
     # Copy frontend build to state directory
@@ -521,11 +522,6 @@ in
         done
       '';
     };
-    
-    # Create socket directory
-    systemd.tmpfiles.rules = [
-      "d /run/router-webui 0750 router-webui router-webui -"
-    ];
   };
 }
 
