@@ -107,13 +107,11 @@ async def lifespan(app: FastAPI):
     
     # Initialize database
     await init_db()
-    print("Database initialized")
     
     # Migrate Apprise services from secrets/config file to database
     try:
         async with AsyncSessionLocal() as session:
             await migrate_secrets_to_database(session)
-        print("Apprise services migration completed")
     except Exception as e:
         logging.getLogger(__name__).error(
             f"Error migrating Apprise services: {e}", exc_info=True
@@ -124,7 +122,6 @@ async def lifespan(app: FastAPI):
     try:
         async with AsyncSessionLocal() as session:
             await migrate_dns_config_to_database(session)
-        print("DNS configuration migration completed")
     except Exception as e:
         logging.getLogger(__name__).error(
             f"Error migrating DNS configuration: {e}", exc_info=True
@@ -135,7 +132,6 @@ async def lifespan(app: FastAPI):
     try:
         async with AsyncSessionLocal() as session:
             await migrate_dhcp_config_to_database(session)
-        print("DHCP configuration migration completed")
     except Exception as e:
         logging.getLogger(__name__).error(
             f"Error migrating DHCP configuration: {e}", exc_info=True
