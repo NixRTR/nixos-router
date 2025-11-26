@@ -25,6 +25,9 @@ def verify_system_user(username: str, password: str) -> bool:
     Returns:
         bool: True if credentials are valid
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         # Check if user exists
         pwd.getpwnam(username)
@@ -32,23 +35,33 @@ def verify_system_user(username: str, password: str) -> bool:
         # Try PAM authentication
         try:
             import pamela
-            pamela.authenticate(username, password, service='login')
-            return True
+            # Use 'login' service for authenticating system users
+            # This works with standard NixOS PAM configuration
+            try:
+                result = pamela.authenticate(username, password, service='login')
+                if result:
+                    logger.info(f"PAM authentication successful for user: {username}")
+                else:
+                    logger.warning(f"PAM authentication failed for user: {username}")
+                return result
+            except pamela.PAMError as e:
+                # Authentication failed - log the error for debugging
+                logger.warning(f"PAM authentication error for user {username}: {e}")
+                return False
         except ImportError:
             # PAM not available (e.g., on Windows for development)
             # In development, accept any password for existing system user
             if settings.debug:
+                logger.warning("PAM not available, using debug mode (accepting any password)")
                 return True
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="PAM authentication not available"
             )
-        except pamela.PAMError:
-            # Authentication failed
-            return False
             
     except KeyError:
         # User doesn't exist
+        logger.warning(f"User does not exist: {username}")
         return False
 
 

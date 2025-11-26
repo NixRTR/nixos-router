@@ -476,7 +476,7 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
             <Modal.Header>
               Connection - {selectedConnection ? `${selectedConnection.remoteIp}:${selectedConnection.remotePort}` : ''}
             </Modal.Header>
-            <Modal.Body>
+            <Modal.Body className="max-h-[80vh] overflow-y-auto">
               <div className="space-y-4">
                 {/* Controls */}
                 <div className="flex flex-wrap gap-4">

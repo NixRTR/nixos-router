@@ -780,7 +780,7 @@ export function Notifications() {
       <Modal show={formOpen} size="4xl" onClose={closeForm}>
         <Modal.Header>{formState.id ? 'Edit Notification Rule' : 'Create Notification Rule'}</Modal.Header>
         <Modal.Body>
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto">
             {formError && (
               <Alert color="failure" onDismiss={() => setFormError(null)}>
                 {formError}
@@ -1020,8 +1020,8 @@ export function Notifications() {
       {/* URL Generator Modal */}
       <Modal show={urlGeneratorModalOpen} onClose={() => setUrlGeneratorModalOpen(false)} size="6xl">
         <Modal.Header>Create New Apprise Service</Modal.Header>
-        <Modal.Body>
-          <div className="max-h-[70vh] overflow-y-auto">
+        <Modal.Body className="max-h-[80vh] overflow-y-auto">
+          <div>
             <AppriseUrlGenerator 
               onServiceSaved={() => {
                 setUrlGeneratorModalOpen(false);
@@ -1035,7 +1035,7 @@ export function Notifications() {
       {/* Edit Service Modal */}
       <Modal show={editModalOpen} onClose={() => setEditModalOpen(false)} size="lg">
         <Modal.Header>Edit Apprise Service</Modal.Header>
-        <Modal.Body>
+        <Modal.Body className="max-h-[70vh] overflow-y-auto">
           <div className="space-y-4">
             {editError && (
               <Alert color="failure">

@@ -651,7 +651,7 @@ export function Dns() {
               <Modal.Header>
                 {editingZone ? 'Edit DNS Zone' : 'Create DNS Zone'}
               </Modal.Header>
-              <Modal.Body>
+              <Modal.Body className="max-h-[70vh] overflow-y-auto">
                 <div className="space-y-4">
                   {zoneError && (
                     <Alert color="failure">
@@ -742,7 +742,7 @@ export function Dns() {
               <Modal.Header>
                 {selectedZone ? `DNS Records for ${selectedZone.name}` : 'DNS Records'}
               </Modal.Header>
-              <Modal.Body>
+              <Modal.Body className="max-h-[80vh] overflow-y-auto">
                 <div className="space-y-4">
                   {recordError && (
                     <Alert color="failure">
@@ -750,7 +750,7 @@ export function Dns() {
                     </Alert>
                   )}
                   
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                     <h3 className="text-lg font-semibold">Records</h3>
                     {selectedZone && (
                       <Button
@@ -769,65 +769,134 @@ export function Dns() {
                       No records in this zone. Add a record to get started.
                     </Alert>
                   ) : (
-                    <Table>
-                      <Table.Head>
-                        <Table.HeadCell>Name</Table.HeadCell>
-                        <Table.HeadCell>Type</Table.HeadCell>
-                        <Table.HeadCell>Value</Table.HeadCell>
-                        <Table.HeadCell>Comment</Table.HeadCell>
-                        <Table.HeadCell>Status</Table.HeadCell>
-                        <Table.HeadCell>Actions</Table.HeadCell>
-                      </Table.Head>
-                      <Table.Body className="divide-y">
+                    <>
+                      {/* Desktop Table View */}
+                      <div className="hidden min-[1000px]:block overflow-x-auto">
+                        <Table>
+                          <Table.Head>
+                            <Table.HeadCell>Name</Table.HeadCell>
+                            <Table.HeadCell>Type</Table.HeadCell>
+                            <Table.HeadCell>Value</Table.HeadCell>
+                            <Table.HeadCell>Comment</Table.HeadCell>
+                            <Table.HeadCell>Status</Table.HeadCell>
+                            <Table.HeadCell>Actions</Table.HeadCell>
+                          </Table.Head>
+                          <Table.Body className="divide-y">
+                            {records.map((record) => (
+                              <Table.Row key={record.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                                <Table.Cell className="font-medium text-gray-900 dark:text-white">
+                                  {record.name}
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <Badge color={record.type === 'A' ? "blue" : "purple"}>
+                                    {record.type}
+                                  </Badge>
+                                </Table.Cell>
+                                <Table.Cell className="font-mono text-sm text-gray-900 dark:text-white">
+                                  {record.value}
+                                </Table.Cell>
+                                <Table.Cell className="text-gray-500 dark:text-gray-400">
+                                  {record.comment || '-'}
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <Badge color={record.enabled ? "success" : "gray"}>
+                                    {record.enabled ? "Enabled" : "Disabled"}
+                                  </Badge>
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <div className="flex gap-2 flex-wrap">
+                                    <Button
+                                      size="xs"
+                                      color="gray"
+                                      onClick={() => {
+                                        closeRecordsView();
+                                        openRecordEditModal(selectedZone!, record);
+                                      }}
+                                    >
+                                      <HiPencil className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      size="xs"
+                                      color="failure"
+                                      onClick={() => {
+                                        setRecordToDelete(record);
+                                        setDeleteRecordModalOpen(true);
+                                      }}
+                                    >
+                                      <HiTrash className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </Table.Cell>
+                              </Table.Row>
+                            ))}
+                          </Table.Body>
+                        </Table>
+                      </div>
+
+                      {/* Mobile/Tablet Card View */}
+                      <div className="min-[1000px]:hidden space-y-3">
                         {records.map((record) => (
-                          <Table.Row key={record.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
-                            <Table.Cell className="font-medium text-gray-900 dark:text-white">
-                              {record.name}
-                            </Table.Cell>
-                            <Table.Cell>
-                              <Badge color={record.type === 'A' ? "blue" : "purple"}>
-                                {record.type}
-                              </Badge>
-                            </Table.Cell>
-                            <Table.Cell className="font-mono text-sm text-gray-900 dark:text-white">
-                              {record.value}
-                            </Table.Cell>
-                            <Table.Cell className="text-gray-500 dark:text-gray-400">
-                              {record.comment || '-'}
-                            </Table.Cell>
-                            <Table.Cell>
-                              <Badge color={record.enabled ? "success" : "gray"}>
-                                {record.enabled ? "Enabled" : "Disabled"}
-                              </Badge>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="xs"
-                                  color="gray"
-                                  onClick={() => {
-                                    closeRecordsView();
-                                    openRecordEditModal(selectedZone!, record);
-                                  }}
-                                >
-                                  <HiPencil className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  size="xs"
-                                  color="failure"
-                                  onClick={() => {
-                                    setRecordToDelete(record);
-                                    setDeleteRecordModalOpen(true);
-                                  }}
-                                >
-                                  <HiTrash className="w-4 h-4" />
-                                </Button>
+                          <div
+                            key={record.id}
+                            className="p-3 rounded-lg border bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700"
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex-1">
+                                <div className="font-semibold text-gray-900 dark:text-white mb-1">
+                                  {record.name}
+                                </div>
+                                <div className="flex gap-2 items-center">
+                                  <Badge color={record.type === 'A' ? "blue" : "purple"} size="sm">
+                                    {record.type}
+                                  </Badge>
+                                  <Badge color={record.enabled ? "success" : "gray"} size="sm">
+                                    {record.enabled ? "Enabled" : "Disabled"}
+                                  </Badge>
+                                </div>
                               </div>
-                            </Table.Cell>
-                          </Table.Row>
+                            </div>
+                            
+                            <div className="space-y-1 text-sm mb-3">
+                              <div className="flex justify-between">
+                                <span className="text-gray-500 dark:text-gray-400">Value:</span>
+                                <span className="font-mono text-xs text-gray-900 dark:text-gray-100 break-all">{record.value}</span>
+                              </div>
+                              {record.comment && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500 dark:text-gray-400">Comment:</span>
+                                  <span className="text-gray-900 dark:text-gray-100 text-xs">{record.comment}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="pt-2 border-t border-gray-200 dark:border-gray-700 flex gap-2">
+                              <Button
+                                size="xs"
+                                color="gray"
+                                onClick={() => {
+                                  closeRecordsView();
+                                  openRecordEditModal(selectedZone!, record);
+                                }}
+                                className="flex-1"
+                              >
+                                <HiPencil className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="xs"
+                                color="failure"
+                                onClick={() => {
+                                  setRecordToDelete(record);
+                                  setDeleteRecordModalOpen(true);
+                                }}
+                                className="flex-1"
+                              >
+                                <HiTrash className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
                         ))}
-                      </Table.Body>
-                    </Table>
+                      </div>
+                    </>
                   )}
                 </div>
               </Modal.Body>
@@ -843,7 +912,7 @@ export function Dns() {
               <Modal.Header>
                 {editingRecord ? 'Edit DNS Record' : 'Create DNS Record'}
               </Modal.Header>
-              <Modal.Body>
+              <Modal.Body className="max-h-[70vh] overflow-y-auto">
                 <div className="space-y-4">
                   {recordError && (
                     <Alert color="failure">

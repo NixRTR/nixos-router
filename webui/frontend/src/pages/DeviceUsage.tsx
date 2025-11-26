@@ -823,7 +823,7 @@ export function DeviceUsage() {
             <Modal.Header>
               Bandwidth Usage - {selectedDevice ? getDisplayName(selectedDevice) : ''}
             </Modal.Header>
-            <Modal.Body>
+            <Modal.Body className="max-h-[80vh] overflow-y-auto">
               <div className="space-y-4">
                 {/* Controls */}
                 <div className="flex flex-wrap gap-4">

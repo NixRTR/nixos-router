@@ -597,7 +597,7 @@ export function Dhcp() {
               <Modal.Header>
                 {editingNetwork ? 'Edit DHCP Network' : 'Create DHCP Network'}
               </Modal.Header>
-              <Modal.Body>
+              <Modal.Body className="max-h-[70vh] overflow-y-auto">
                 <div className="space-y-4">
                   {networkError && (
                     <Alert color="failure">
@@ -701,8 +701,8 @@ export function Dhcp() {
               <Modal.Header>
                 Reservations - {selectedNetwork?.network.toUpperCase()}
               </Modal.Header>
-              <Modal.Body>
-                <div className="flex justify-between items-center mb-4">
+              <Modal.Body className="max-h-[80vh] overflow-y-auto">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     Static IP Reservations ({reservations.length})
                   </h3>
@@ -721,60 +721,125 @@ export function Dhcp() {
                     No reservations configured for this network.
                   </Alert>
                 ) : (
-                  <Table>
-                    <Table.Head>
-                      <Table.HeadCell>Hostname</Table.HeadCell>
-                      <Table.HeadCell>MAC Address</Table.HeadCell>
-                      <Table.HeadCell>IP Address</Table.HeadCell>
-                      <Table.HeadCell>Comment</Table.HeadCell>
-                      <Table.HeadCell>Status</Table.HeadCell>
-                      <Table.HeadCell>Actions</Table.HeadCell>
-                    </Table.Head>
-                    <Table.Body className="divide-y">
+                  <>
+                    {/* Desktop Table View */}
+                    <div className="hidden min-[1000px]:block overflow-x-auto">
+                      <Table>
+                        <Table.Head>
+                          <Table.HeadCell>Hostname</Table.HeadCell>
+                          <Table.HeadCell>MAC Address</Table.HeadCell>
+                          <Table.HeadCell>IP Address</Table.HeadCell>
+                          <Table.HeadCell>Comment</Table.HeadCell>
+                          <Table.HeadCell>Status</Table.HeadCell>
+                          <Table.HeadCell>Actions</Table.HeadCell>
+                        </Table.Head>
+                        <Table.Body className="divide-y">
+                          {reservations.map((reservation) => (
+                            <Table.Row key={reservation.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                              <Table.Cell className="font-medium text-gray-900 dark:text-white">
+                                {reservation.hostname}
+                              </Table.Cell>
+                              <Table.Cell className="font-mono text-sm text-gray-500 dark:text-gray-400">
+                                {reservation.hw_address}
+                              </Table.Cell>
+                              <Table.Cell className="font-mono text-sm text-gray-900 dark:text-white">
+                                {reservation.ip_address}
+                              </Table.Cell>
+                              <Table.Cell className="text-gray-500 dark:text-gray-400">
+                                {reservation.comment || '-'}
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Badge color={reservation.enabled ? "success" : "gray"}>
+                                  {reservation.enabled ? "Enabled" : "Disabled"}
+                                </Badge>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <div className="flex gap-2 flex-wrap">
+                                  <Button
+                                    size="xs"
+                                    color="gray"
+                                    onClick={() => openReservationEditModal(reservation)}
+                                  >
+                                    <HiPencil className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    size="xs"
+                                    color="failure"
+                                    onClick={() => {
+                                      setReservationToDelete(reservation);
+                                      setDeleteReservationModalOpen(true);
+                                    }}
+                                  >
+                                    <HiTrash className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </Table.Cell>
+                            </Table.Row>
+                          ))}
+                        </Table.Body>
+                      </Table>
+                    </div>
+
+                    {/* Mobile/Tablet Card View */}
+                    <div className="min-[1000px]:hidden space-y-3">
                       {reservations.map((reservation) => (
-                        <Table.Row key={reservation.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
-                          <Table.Cell className="font-medium text-gray-900 dark:text-white">
-                            {reservation.hostname}
-                          </Table.Cell>
-                          <Table.Cell className="font-mono text-sm text-gray-500 dark:text-gray-400">
-                            {reservation.hw_address}
-                          </Table.Cell>
-                          <Table.Cell className="font-mono text-sm text-gray-900 dark:text-white">
-                            {reservation.ip_address}
-                          </Table.Cell>
-                          <Table.Cell className="text-gray-500 dark:text-gray-400">
-                            {reservation.comment || '-'}
-                          </Table.Cell>
-                          <Table.Cell>
-                            <Badge color={reservation.enabled ? "success" : "gray"}>
-                              {reservation.enabled ? "Enabled" : "Disabled"}
-                            </Badge>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div className="flex gap-2">
-                              <Button
-                                size="xs"
-                                color="gray"
-                                onClick={() => openReservationEditModal(reservation)}
-                              >
-                                <HiPencil className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                size="xs"
-                                color="failure"
-                                onClick={() => {
-                                  setReservationToDelete(reservation);
-                                  setDeleteReservationModalOpen(true);
-                                }}
-                              >
-                                <HiTrash className="w-4 h-4" />
-                              </Button>
+                        <div
+                          key={reservation.id}
+                          className="p-3 rounded-lg border bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700"
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1">
+                              <div className="font-semibold text-gray-900 dark:text-white mb-1">
+                                {reservation.hostname}
+                              </div>
+                              <Badge color={reservation.enabled ? "success" : "gray"} size="sm">
+                                {reservation.enabled ? "Enabled" : "Disabled"}
+                              </Badge>
                             </div>
-                          </Table.Cell>
-                        </Table.Row>
+                          </div>
+                          
+                          <div className="space-y-1 text-sm mb-3">
+                            <div className="flex justify-between">
+                              <span className="text-gray-500 dark:text-gray-400">MAC Address:</span>
+                              <span className="font-mono text-xs text-gray-900 dark:text-gray-100 break-all">{reservation.hw_address}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500 dark:text-gray-400">IP Address:</span>
+                              <span className="font-mono text-xs text-gray-900 dark:text-gray-100">{reservation.ip_address}</span>
+                            </div>
+                            {reservation.comment && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-500 dark:text-gray-400">Comment:</span>
+                                <span className="text-gray-900 dark:text-gray-100 text-xs">{reservation.comment}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="pt-2 border-t border-gray-200 dark:border-gray-700 flex gap-2">
+                            <Button
+                              size="xs"
+                              color="gray"
+                              onClick={() => openReservationEditModal(reservation)}
+                              className="flex-1"
+                            >
+                              <HiPencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="xs"
+                              color="failure"
+                              onClick={() => {
+                                setReservationToDelete(reservation);
+                                setDeleteReservationModalOpen(true);
+                              }}
+                              className="flex-1"
+                            >
+                              <HiTrash className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
                       ))}
-                    </Table.Body>
-                  </Table>
+                    </div>
+                  </>
                 )}
               </Modal.Body>
               <Modal.Footer>
@@ -789,7 +854,7 @@ export function Dhcp() {
               <Modal.Header>
                 {editingReservation ? 'Edit Reservation' : 'Create Reservation'}
               </Modal.Header>
-              <Modal.Body>
+              <Modal.Body className="max-h-[70vh] overflow-y-auto">
                 <div className="space-y-4">
                   {reservationError && (
                     <Alert color="failure">
