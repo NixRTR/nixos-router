@@ -290,7 +290,7 @@ in
         CONNTRACK_BIN = "${pkgs.conntrack-tools}/bin/conntrack";
         FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
         SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
-        SUDO_BIN = "${pkgs.sudo}/bin/sudo";
+        DBUS_SEND_BIN = "${pkgs.dbus}/bin/dbus-send";
       };
       
       serviceConfig = {
@@ -460,20 +460,22 @@ in
       router-webui-backend
     '';
     
-    # Sudo rules to allow router-webui user to control DNS services
-    # Allow systemctl commands for unbound services
-    security.sudo.extraRules = [
-      {
-        users = [ "router-webui" ];
-        commands = [
-          {
-            # Allow systemctl with any arguments (we validate in the API)
-            command = "${pkgs.systemd}/bin/systemctl";
-            options = [ "NOPASSWD" ];
+    # Polkit rules to allow router-webui user to control DNS services via D-Bus
+    # This allows D-Bus calls to systemd without sudo (works with NoNewPrivileges)
+    security.polkit.extraConfig = ''
+      polkit.addRule(function(action, subject) {
+        if (subject.user == "router-webui" && 
+            action.id == "org.freedesktop.systemd1.manage-units") {
+          // Allow control of unbound-homelab and unbound-lan services
+          var unit = action.lookup("unit");
+          if (unit && 
+              (unit == "unbound-homelab.service" || 
+               unit == "unbound-lan.service")) {
+            return polkit.Result.YES;
           }
-        ];
-      }
-    ];
+        }
+      });
+    '';
   };
 }
 

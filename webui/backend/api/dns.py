@@ -26,31 +26,80 @@ NETWORK_SERVICE_MAP = {
 }
 
 
-def _find_sudo() -> str:
-    """Find sudo binary path (NixOS way)"""
+def _find_dbus_send() -> str:
+    """Find dbus-send binary path (NixOS way)"""
     # Check environment variable first (set by NixOS service)
-    env_path = os.environ.get("SUDO_BIN")
+    env_path = os.environ.get("DBUS_SEND_BIN")
     if env_path and os.path.exists(env_path):
         return env_path
     
     # Try shutil.which first (uses PATH)
-    sudo_path = shutil.which('sudo')
-    if sudo_path:
-        return sudo_path
+    dbus_path = shutil.which('dbus-send')
+    if dbus_path:
+        return dbus_path
     
     # Try common NixOS paths
     candidates = [
-        '/run/wrappers/bin/sudo',
-        '/run/current-system/sw/bin/sudo',
-        '/usr/bin/sudo',
-        '/bin/sudo',
+        '/run/current-system/sw/bin/dbus-send',
+        '/usr/bin/dbus-send',
+        '/bin/dbus-send',
     ]
     
     for path in candidates:
         if os.path.exists(path) and os.access(path, os.X_OK):
             return path
     
-    raise RuntimeError("sudo binary not found. Please ensure sudo is installed.")
+    raise RuntimeError("dbus-send binary not found. Please ensure dbus is installed.")
+
+
+def _control_service_via_dbus(service_name: str, action: str) -> None:
+    """Control a systemd service via D-Bus (doesn't require sudo)
+    
+    Args:
+        service_name: Name of the service (e.g., "unbound-homelab.service")
+        action: Action to perform ("start", "stop", "restart", "reload")
+        
+    Raises:
+        subprocess.CalledProcessError: If the D-Bus call fails
+    """
+    dbus_send = _find_dbus_send()
+    
+    # Map action names to systemd Manager D-Bus method names
+    manager_method_map = {
+        'start': 'StartUnit',
+        'stop': 'StopUnit',
+        'restart': 'RestartUnit',
+        'reload': 'ReloadUnit',
+    }
+    
+    manager_method = manager_method_map.get(action.lower())
+    if not manager_method:
+        raise ValueError(f"Invalid action: {action}")
+    
+    # Use systemd Manager interface to control the unit
+    # Format: dbus-send --system --dest=org.freedesktop.systemd1 \
+    #   /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager.StartUnit \
+    #   string:unbound-homelab.service string:replace
+    # Methods: StartUnit, StopUnit, RestartUnit, ReloadUnit
+    # All take: (unit_name, mode) where mode is "replace", "fail", etc.
+    
+    result = subprocess.run(
+        [
+            dbus_send,
+            '--system',
+            '--type=method_call',
+            '--print-reply',
+            '--dest=org.freedesktop.systemd1',
+            '/org/freedesktop/systemd1',
+            f'org.freedesktop.systemd1.Manager.{manager_method}',
+            f'string:{service_name}',
+            'string:replace'  # Mode: replace existing job if any
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True
+    )
 
 
 @router.get("/zones", response_model=List[DnsZone])
@@ -544,19 +593,11 @@ async def control_dns_service(
         raise HTTPException(status_code=400, detail="Action must be 'start', 'stop', 'restart', or 'reload'")
     
     service_name = NETWORK_SERVICE_MAP[network]
+    full_service_name = f"{service_name}.service"
     
     try:
-        # Find sudo binary path
-        sudo_path = _find_sudo()
-        
-        # Use sudo systemctl to control the service (requires sudo permissions)
-        result = subprocess.run(
-            [sudo_path, 'systemctl', action, service_name],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=True
-        )
+        # Use D-Bus to control the service (works with polkit, doesn't need sudo)
+        _control_service_via_dbus(full_service_name, action)
         
         return {
             "message": f"Service {service_name} {action}ed successfully",
@@ -565,13 +606,14 @@ async def control_dns_service(
             "service_name": service_name
         }
     except subprocess.CalledProcessError as e:
+        error_msg = e.stderr or e.stdout or str(e)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to {action} service {service_name}: {e.stderr or str(e)}"
+            detail=f"Failed to {action} service {service_name}: {error_msg}"
         )
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, ValueError, RuntimeError) as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Timeout while trying to {action} service {service_name}"
+            detail=f"Error while trying to {action} service {service_name}: {str(e)}"
         )
 
