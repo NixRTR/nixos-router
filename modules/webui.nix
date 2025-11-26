@@ -482,8 +482,10 @@ in
       };
     };
     
-    systemd.services.router-webui-service-control@ = {
-      description = "Router WebUI Service Control Helper (Instance %i)";
+    # Template service for socket activation (systemd will spawn instances automatically)
+    # The @ symbol needs to be escaped in Nix attribute names
+    systemd.services."router-webui-service-control@" = {
+      description = "Router WebUI Service Control Helper";
       serviceConfig = {
         Type = "simple";
         User = "root";
