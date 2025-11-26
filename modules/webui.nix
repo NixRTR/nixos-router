@@ -460,17 +460,18 @@ in
       router-webui-backend
     '';
     
-    # Polkit rules to allow router-webui user to control DNS services via D-Bus
+    # Polkit rules to allow router-webui user to control DNS/DHCP services via D-Bus
     # This allows D-Bus calls to systemd without sudo (works with NoNewPrivileges)
+    # Note: We validate unit names in the API, so we can grant access to all unit management
     security.polkit.extraConfig = ''
       polkit.addRule(function(action, subject) {
-        if (subject.user == "router-webui" && 
-            action.id == "org.freedesktop.systemd1.manage-units") {
-          // Allow control of unbound-homelab and unbound-lan services
-          var unit = action.lookup("unit");
-          if (unit && 
-              (unit == "unbound-homelab.service" || 
-               unit == "unbound-lan.service")) {
+        if (subject.user == "router-webui") {
+          // Allow systemd unit management (we validate specific units in the API)
+          if (action.id == "org.freedesktop.systemd1.manage-units") {
+            return polkit.Result.YES;
+          }
+          // Allow reading unit properties
+          if (action.id == "org.freedesktop.systemd1.get-unit-properties") {
             return polkit.Result.YES;
           }
         }
