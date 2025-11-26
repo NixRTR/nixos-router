@@ -660,7 +660,8 @@ async def get_dns_service_status(
 ):
     """Get DNS service status for a network
     
-    Uses D-Bus to retrieve status directly from systemd (doesn't require sudo).
+    Uses systemctl to retrieve status (same approach as other services).
+    Reading status doesn't require sudo, only control operations do.
     
     Args:
         network: Network name ("homelab" or "lan")
@@ -675,52 +676,34 @@ async def get_dns_service_status(
         raise HTTPException(status_code=400, detail="Network must be 'homelab' or 'lan'")
     
     service_name = NETWORK_SERVICE_MAP[network]
-    full_service_name = f"{service_name}.service"
-    logger.debug(f"Mapped network '{network}' to service '{service_name}' (full name: '{full_service_name}')")
+    logger.debug(f"Mapped network '{network}' to service '{service_name}'")
     
-    try:
-        # Get status via D-Bus
-        logger.debug(f"Querying service status via D-Bus for: {full_service_name}")
-        status = _get_service_status_via_dbus(full_service_name)
-        logger.debug(f"Retrieved status: {status}")
-        
-        # Get process stats if we have a PID
-        memory_mb = None
-        cpu_percent = None
-        if status['pid']:
-            try:
-                import psutil
-                process = psutil.Process(status['pid'])
-                mem_info = process.memory_info()
-                memory_mb = mem_info.rss / 1024 / 1024  # Convert to MB
-                cpu_percent = process.cpu_percent(interval=0.1)
-                logger.debug(f"Process stats - PID: {status['pid']}, Memory: {memory_mb}MB, CPU: {cpu_percent}%")
-            except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-                logger.warning(f"Could not get process stats for PID {status['pid']}: {e}")
-        
-        result = {
-            "network": network,
-            "service_name": service_name,
-            "is_active": status['is_active'],
-            "is_enabled": status['is_enabled'],
-            "exists": True,
-            "pid": status['pid'],
-            "memory_mb": memory_mb,
-            "cpu_percent": cpu_percent
-        }
-        logger.debug(f"Returning status result: {result}")
-        return result
-    except Exception as e:
-        # If D-Bus fails, service might not exist or be inaccessible
-        logger.error(f"Error getting service status for {full_service_name}: {type(e).__name__}: {e}", exc_info=True)
+    # Use the same get_service_status function that other services use
+    # This uses systemctl which works for reading status without sudo
+    status = get_service_status(service_name)
+    
+    if status is None:
+        logger.debug(f"Service {service_name} not found")
         return {
             "network": network,
             "service_name": service_name,
             "is_active": False,
             "is_enabled": False,
-            "exists": False,
-            "error": str(e)
+            "exists": False
         }
+    
+    logger.debug(f"Retrieved status for {service_name}: active={status.is_active}, enabled={status.is_enabled}, pid={status.pid}")
+    
+    return {
+        "network": network,
+        "service_name": service_name,
+        "is_active": status.is_active,
+        "is_enabled": status.is_enabled,
+        "exists": True,
+        "pid": status.pid,
+        "memory_mb": status.memory_mb,
+        "cpu_percent": status.cpu_percent
+    }
 
 
 @router.post("/service/{network}/{action}")
