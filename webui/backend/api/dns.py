@@ -9,6 +9,7 @@ import subprocess
 import shutil
 import os
 import re
+import logging
 
 from ..database import get_db, DnsZoneDB, DnsRecordDB
 from ..models import (
@@ -17,6 +18,8 @@ from ..models import (
 )
 from ..api.auth import get_current_user
 from ..collectors.services import get_service_status
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/dns", tags=["dns"])
 
@@ -29,14 +32,18 @@ NETWORK_SERVICE_MAP = {
 
 def _find_dbus_send() -> str:
     """Find dbus-send binary path (NixOS way)"""
+    logger.debug("Finding dbus-send binary...")
+    
     # Check environment variable first (set by NixOS service)
     env_path = os.environ.get("DBUS_SEND_BIN")
     if env_path and os.path.exists(env_path):
+        logger.debug(f"Found dbus-send via DBUS_SEND_BIN env var: {env_path}")
         return env_path
     
     # Try shutil.which first (uses PATH)
     dbus_path = shutil.which('dbus-send')
     if dbus_path:
+        logger.debug(f"Found dbus-send via PATH: {dbus_path}")
         return dbus_path
     
     # Try common NixOS paths
@@ -48,8 +55,10 @@ def _find_dbus_send() -> str:
     
     for path in candidates:
         if os.path.exists(path) and os.access(path, os.X_OK):
+            logger.debug(f"Found dbus-send at: {path}")
             return path
     
+    logger.error("dbus-send binary not found in any location")
     raise RuntimeError("dbus-send binary not found. Please ensure dbus is installed.")
 
 
@@ -166,6 +175,7 @@ def _control_service_via_dbus(service_name: str, action: str) -> None:
     Raises:
         subprocess.CalledProcessError: If the D-Bus call fails
     """
+    logger.debug(f"Controlling service via D-Bus: {service_name}, action: {action}")
     dbus_send = _find_dbus_send()
     
     # Map action names to systemd Manager D-Bus method names
@@ -178,7 +188,10 @@ def _control_service_via_dbus(service_name: str, action: str) -> None:
     
     manager_method = manager_method_map.get(action.lower())
     if not manager_method:
+        logger.error(f"Invalid action: {action}")
         raise ValueError(f"Invalid action: {action}")
+    
+    logger.debug(f"Mapped action '{action}' to Manager method '{manager_method}'")
     
     # Use systemd Manager interface to control the unit
     # Format: dbus-send --system --dest=org.freedesktop.systemd1 \
@@ -187,23 +200,28 @@ def _control_service_via_dbus(service_name: str, action: str) -> None:
     # Methods: StartUnit, StopUnit, RestartUnit, ReloadUnit
     # All take: (unit_name, mode) where mode is "replace", "fail", etc.
     
+    cmd = [
+        dbus_send,
+        '--system',
+        '--type=method_call',
+        '--print-reply',
+        '--dest=org.freedesktop.systemd1',
+        '/org/freedesktop/systemd1',
+        f'org.freedesktop.systemd1.Manager.{manager_method}',
+        f'string:{service_name}',
+        'string:replace'  # Mode: replace existing job if any
+    ]
+    logger.debug(f"Executing D-Bus command: {' '.join(cmd)}")
+    
     result = subprocess.run(
-        [
-            dbus_send,
-            '--system',
-            '--type=method_call',
-            '--print-reply',
-            '--dest=org.freedesktop.systemd1',
-            '/org/freedesktop/systemd1',
-            f'org.freedesktop.systemd1.Manager.{manager_method}',
-            f'string:{service_name}',
-            'string:replace'  # Mode: replace existing job if any
-        ],
+        cmd,
         capture_output=True,
         text=True,
         timeout=30,
         check=True
     )
+    
+    logger.debug(f"D-Bus command succeeded - stdout: {result.stdout[:500]}, stderr: {result.stderr[:500]}")
 
 
 @router.get("/zones", response_model=List[DnsZone])
@@ -650,15 +668,21 @@ async def get_dns_service_status(
     Returns:
         Service status information
     """
+    logger.debug(f"Getting DNS service status for network: {network}")
+    
     if network not in NETWORK_SERVICE_MAP:
+        logger.warning(f"Invalid network requested: {network}")
         raise HTTPException(status_code=400, detail="Network must be 'homelab' or 'lan'")
     
     service_name = NETWORK_SERVICE_MAP[network]
     full_service_name = f"{service_name}.service"
+    logger.debug(f"Mapped network '{network}' to service '{service_name}' (full name: '{full_service_name}')")
     
     try:
         # Get status via D-Bus
+        logger.debug(f"Querying service status via D-Bus for: {full_service_name}")
         status = _get_service_status_via_dbus(full_service_name)
+        logger.debug(f"Retrieved status: {status}")
         
         # Get process stats if we have a PID
         memory_mb = None
@@ -670,10 +694,11 @@ async def get_dns_service_status(
                 mem_info = process.memory_info()
                 memory_mb = mem_info.rss / 1024 / 1024  # Convert to MB
                 cpu_percent = process.cpu_percent(interval=0.1)
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
+                logger.debug(f"Process stats - PID: {status['pid']}, Memory: {memory_mb}MB, CPU: {cpu_percent}%")
+            except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+                logger.warning(f"Could not get process stats for PID {status['pid']}: {e}")
         
-        return {
+        result = {
             "network": network,
             "service_name": service_name,
             "is_active": status['is_active'],
@@ -683,8 +708,11 @@ async def get_dns_service_status(
             "memory_mb": memory_mb,
             "cpu_percent": cpu_percent
         }
+        logger.debug(f"Returning status result: {result}")
+        return result
     except Exception as e:
         # If D-Bus fails, service might not exist or be inaccessible
+        logger.error(f"Error getting service status for {full_service_name}: {type(e).__name__}: {e}", exc_info=True)
         return {
             "network": network,
             "service_name": service_name,
@@ -710,18 +738,25 @@ async def control_dns_service(
     Returns:
         Success message
     """
+    logger.debug(f"Control DNS service request - network: {network}, action: {action}")
+    
     if network not in NETWORK_SERVICE_MAP:
+        logger.warning(f"Invalid network requested: {network}")
         raise HTTPException(status_code=400, detail="Network must be 'homelab' or 'lan'")
     
     if action not in ['start', 'stop', 'restart', 'reload']:
+        logger.warning(f"Invalid action requested: {action}")
         raise HTTPException(status_code=400, detail="Action must be 'start', 'stop', 'restart', or 'reload'")
     
     service_name = NETWORK_SERVICE_MAP[network]
     full_service_name = f"{service_name}.service"
+    logger.debug(f"Mapped network '{network}' to service '{service_name}' (full name: '{full_service_name}')")
+    logger.debug(f"Attempting to {action} service: {full_service_name}")
     
     try:
         # Use D-Bus to control the service (works with polkit, doesn't need sudo)
         _control_service_via_dbus(full_service_name, action)
+        logger.info(f"Successfully {action}ed service {service_name} for network {network}")
         
         return {
             "message": f"Service {service_name} {action}ed successfully",
@@ -731,11 +766,13 @@ async def control_dns_service(
         }
     except subprocess.CalledProcessError as e:
         error_msg = e.stderr or e.stdout or str(e)
+        logger.error(f"Failed to {action} service {service_name}: returncode={e.returncode}, stderr={e.stderr[:500] if e.stderr else None}, stdout={e.stdout[:500] if e.stdout else None}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to {action} service {service_name}: {error_msg}"
         )
     except (subprocess.TimeoutExpired, ValueError, RuntimeError) as e:
+        logger.error(f"Error while trying to {action} service {service_name}: {type(e).__name__}: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Error while trying to {action} service {service_name}: {str(e)}"
