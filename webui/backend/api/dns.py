@@ -6,9 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 import subprocess
-import shutil
 import os
-import re
 import logging
 
 from ..database import get_db, DnsZoneDB, DnsRecordDB
@@ -30,188 +28,88 @@ NETWORK_SERVICE_MAP = {
 }
 
 
-def _find_dbus_send() -> str:
-    """Find dbus-send binary path (NixOS way)"""
-    logger.debug("Finding dbus-send binary...")
+def _find_sudo() -> str:
+    """Find sudo binary path (NixOS way)"""
+    logger.debug("Finding sudo binary...")
     
     # Check environment variable first (set by NixOS service)
-    env_path = os.environ.get("DBUS_SEND_BIN")
+    env_path = os.environ.get("SUDO_BIN")
     if env_path and os.path.exists(env_path):
-        logger.debug(f"Found dbus-send via DBUS_SEND_BIN env var: {env_path}")
+        logger.debug(f"Found sudo via SUDO_BIN env var: {env_path}")
         return env_path
     
-    # Try shutil.which first (uses PATH)
-    dbus_path = shutil.which('dbus-send')
-    if dbus_path:
-        logger.debug(f"Found dbus-send via PATH: {dbus_path}")
-        return dbus_path
-    
-    # Try common NixOS paths
+    # Try common paths
     candidates = [
-        '/run/current-system/sw/bin/dbus-send',
-        '/usr/bin/dbus-send',
-        '/bin/dbus-send',
+        '/run/current-system/sw/bin/sudo',
+        '/usr/bin/sudo',
+        '/bin/sudo',
     ]
     
     for path in candidates:
         if os.path.exists(path) and os.access(path, os.X_OK):
-            logger.debug(f"Found dbus-send at: {path}")
+            logger.debug(f"Found sudo at: {path}")
             return path
     
-    logger.error("dbus-send binary not found in any location")
-    raise RuntimeError("dbus-send binary not found. Please ensure dbus is installed.")
+    logger.error("sudo binary not found in any location")
+    raise RuntimeError("sudo binary not found. Please ensure sudo is installed.")
 
 
-def _get_service_status_via_dbus(service_name: str) -> dict:
-    """Get systemd service status via D-Bus (doesn't require sudo)
+def _find_systemctl() -> str:
+    """Find systemctl binary path (NixOS way)"""
+    logger.debug("Finding systemctl binary...")
     
-    Args:
-        service_name: Name of the service (e.g., "unbound-homelab.service")
-        
-    Returns:
-        Dictionary with is_active, is_enabled, and other status info
-    """
-    dbus_send = _find_dbus_send()
+    # Check environment variable first (set by NixOS service)
+    env_path = os.environ.get("SYSTEMCTL_BIN")
+    if env_path and os.path.exists(env_path):
+        logger.debug(f"Found systemctl via SYSTEMCTL_BIN env var: {env_path}")
+        return env_path
     
-    # Escape service name for D-Bus object path
-    # D-Bus object paths escape: . -> _2e, - -> _2d, \ -> _5c
-    escaped_name = service_name.replace('\\', '_5c').replace('-', '_2d').replace('.', '_2e')
-    unit_path = f"/org/freedesktop/systemd1/unit/{escaped_name}"
+    # Try common paths
+    candidates = [
+        '/run/current-system/sw/bin/systemctl',
+        '/usr/bin/systemctl',
+        '/bin/systemctl',
+    ]
     
-    # Get ActiveState property (active, inactive, activating, deactivating, failed)
-    result = subprocess.run(
-        [
-            dbus_send,
-            '--system',
-            '--type=method_call',
-            '--print-reply',
-            '--dest=org.freedesktop.systemd1',
-            unit_path,
-            'org.freedesktop.DBus.Properties.Get',
-            'string:org.freedesktop.systemd1.Unit',
-            'string:ActiveState'
-        ],
-        capture_output=True,
-        text=True,
-        timeout=5,
-        check=False
-    )
+    for path in candidates:
+        if os.path.exists(path) and os.access(path, os.X_OK):
+            logger.debug(f"Found systemctl at: {path}")
+            return path
     
-    is_active = False
-    if result.returncode == 0:
-        # Parse the response: variant string "active"
-        active_state = result.stdout.strip()
-        if 'string "active"' in active_state or 'string "activating"' in active_state:
-            is_active = True
-    
-    # Get UnitFileState property (enabled, disabled, static, etc.)
-    result = subprocess.run(
-        [
-            dbus_send,
-            '--system',
-            '--type=method_call',
-            '--print-reply',
-            '--dest=org.freedesktop.systemd1',
-            unit_path,
-            'org.freedesktop.DBus.Properties.Get',
-            'string:org.freedesktop.systemd1.Unit',
-            'string:UnitFileState'
-        ],
-        capture_output=True,
-        text=True,
-        timeout=5,
-        check=False
-    )
-    
-    is_enabled = False
-    if result.returncode == 0:
-        # Parse the response: variant string "enabled"
-        unit_file_state = result.stdout.strip()
-        if 'string "enabled"' in unit_file_state:
-            is_enabled = True
-    
-    # Get MainPID property
-    result = subprocess.run(
-        [
-            dbus_send,
-            '--system',
-            '--type=method_call',
-            '--print-reply',
-            '--dest=org.freedesktop.systemd1',
-            unit_path,
-            'org.freedesktop.DBus.Properties.Get',
-            'string:org.freedesktop.systemd1.Unit',
-            'string:MainPID'
-        ],
-        capture_output=True,
-        text=True,
-        timeout=5,
-        check=False
-    )
-    
-    pid = None
-    if result.returncode == 0:
-        # Parse the response: variant uint32 12345
-        match = re.search(r'uint32 (\d+)', result.stdout)
-        if match:
-            pid_val = int(match.group(1))
-            if pid_val > 0:
-                pid = pid_val
-    
-    return {
-        'is_active': is_active,
-        'is_enabled': is_enabled,
-        'pid': pid
-    }
+    logger.error("systemctl binary not found in any location")
+    raise RuntimeError("systemctl binary not found. Please ensure systemd is installed.")
 
 
-def _control_service_via_dbus(service_name: str, action: str) -> None:
-    """Control a systemd service via D-Bus (doesn't require sudo)
+def _control_service_via_systemctl(service_name: str, action: str) -> None:
+    """Control a systemd service via sudo systemctl
     
     Args:
         service_name: Name of the service (e.g., "unbound-homelab.service")
         action: Action to perform ("start", "stop", "restart", "reload")
         
     Raises:
-        subprocess.CalledProcessError: If the D-Bus call fails
+        subprocess.CalledProcessError: If the systemctl command fails
     """
-    logger.debug(f"Controlling service via D-Bus: {service_name}, action: {action}")
-    dbus_send = _find_dbus_send()
+    logger.debug(f"Controlling service via systemctl: {service_name}, action: {action}")
     
-    # Map action names to systemd Manager D-Bus method names
-    manager_method_map = {
-        'start': 'StartUnit',
-        'stop': 'StopUnit',
-        'restart': 'RestartUnit',
-        'reload': 'ReloadUnit',
-    }
+    sudo_bin = _find_sudo()
+    systemctl_bin = _find_systemctl()
     
-    manager_method = manager_method_map.get(action.lower())
-    if not manager_method:
+    # Validate action
+    valid_actions = ['start', 'stop', 'restart', 'reload']
+    if action.lower() not in valid_actions:
         logger.error(f"Invalid action: {action}")
-        raise ValueError(f"Invalid action: {action}")
+        raise ValueError(f"Invalid action: {action}. Must be one of: {valid_actions}")
     
-    logger.debug(f"Mapped action '{action}' to Manager method '{manager_method}'")
-    
-    # Use systemd Manager interface to control the unit
-    # Format: dbus-send --system --dest=org.freedesktop.systemd1 \
-    #   /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager.StartUnit \
-    #   string:unbound-homelab.service string:replace
-    # Methods: StartUnit, StopUnit, RestartUnit, ReloadUnit
-    # All take: (unit_name, mode) where mode is "replace", "fail", etc.
-    
+    # Build command: sudo systemctl <action> <service_name>
     cmd = [
-        dbus_send,
-        '--system',
-        '--type=method_call',
-        '--print-reply',
-        '--dest=org.freedesktop.systemd1',
-        '/org/freedesktop/systemd1',
-        f'org.freedesktop.systemd1.Manager.{manager_method}',
-        f'string:{service_name}',
-        'string:replace'  # Mode: replace existing job if any
+        sudo_bin,
+        systemctl_bin,
+        action.lower(),
+        service_name
     ]
-    logger.debug(f"Executing D-Bus command: {' '.join(cmd)}")
+    
+    logger.debug(f"Executing command: {' '.join(cmd)}")
     
     result = subprocess.run(
         cmd,
@@ -221,7 +119,7 @@ def _control_service_via_dbus(service_name: str, action: str) -> None:
         check=True
     )
     
-    logger.debug(f"D-Bus command succeeded - stdout: {result.stdout[:500]}, stderr: {result.stderr[:500]}")
+    logger.debug(f"systemctl command succeeded - stdout: {result.stdout[:500] if result.stdout else None}, stderr: {result.stderr[:500] if result.stderr else None}")
 
 
 @router.get("/zones", response_model=List[DnsZone])
@@ -737,8 +635,8 @@ async def control_dns_service(
     logger.debug(f"Attempting to {action} service: {full_service_name}")
     
     try:
-        # Use D-Bus to control the service (works with polkit, doesn't need sudo)
-        _control_service_via_dbus(full_service_name, action)
+        # Use sudo systemctl to control the service
+        _control_service_via_systemctl(full_service_name, action)
         logger.info(f"Successfully {action}ed service {service_name} for network {network}")
         
         return {

@@ -290,7 +290,8 @@ in
         CONNTRACK_BIN = "${pkgs.conntrack-tools}/bin/conntrack";
         FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
         SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
-        DBUS_SEND_BIN = "${pkgs.dbus}/bin/dbus-send";
+        SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
+        SUDO_BIN = "${pkgs.sudo}/bin/sudo";
       };
       
       serviceConfig = {
@@ -306,7 +307,6 @@ in
         Environment = [ "DEBUG=${if cfg.debug then "true" else "false"}" ];
         
         # Security hardening
-        NoNewPrivileges = true;
         PrivateTmp = true;
         ProtectSystem = "strict";
         ProtectHome = true;
@@ -460,23 +460,19 @@ in
       router-webui-backend
     '';
     
-    # Polkit rules to allow router-webui user to control DNS/DHCP services via D-Bus
-    # This allows D-Bus calls to systemd without sudo (works with NoNewPrivileges)
-    # Note: We validate unit names in the API, so we can grant access to all unit management
-    security.polkit.extraConfig = ''
-      polkit.addRule(function(action, subject) {
-        if (subject.user == "router-webui") {
-          // Allow systemd unit management (we validate specific units in the API)
-          if (action.id == "org.freedesktop.systemd1.manage-units") {
-            return polkit.Result.YES;
+    # Sudo rules to allow router-webui user to run systemctl commands
+    # We validate specific service names in the API, so we can grant access to systemctl
+    security.sudo.extraRules = [
+      {
+        users = [ "router-webui" ];
+        commands = [
+          {
+            command = "${pkgs.systemd}/bin/systemctl";
+            options = [ "NOPASSWD" ];
           }
-          // Allow reading unit properties
-          if (action.id == "org.freedesktop.systemd1.get-unit-properties") {
-            return polkit.Result.YES;
-          }
-        }
-      });
-    '';
+        ];
+      }
+    ];
   };
 }
 
