@@ -31,8 +31,11 @@ logging.getLogger('apprise.plugins').setLevel(logging.DEBUG)
 logging.getLogger('apprise.attachment').setLevel(logging.DEBUG)
 
 # Disable SQLAlchemy engine INFO logging (suppress INSERT/UPDATE/DELETE statements)
-# Only show WARNING and above for SQLAlchemy engine
+# Only show WARNING and above for SQLAlchemy engine and related loggers
 logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+logging.getLogger('sqlalchemy.pool').setLevel(logging.WARNING)
+logging.getLogger('sqlalchemy.dialects').setLevel(logging.WARNING)
+logging.getLogger('sqlalchemy.orm').setLevel(logging.WARNING)
 from .database import init_db, AsyncSessionLocal
 from .websocket import manager, websocket_endpoint
 from .api.auth import router as auth_router
