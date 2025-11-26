@@ -464,18 +464,67 @@ in
       router-webui-backend
     '';
     
-    # Sudo rules to allow router-webui user to run systemctl commands
-    # We validate specific service names in the API, so we can grant access to systemctl
-    security.sudo.extraRules = [
-      {
-        users = [ "router-webui" ];
-        commands = [
-          {
-            command = "${pkgs.systemd}/bin/systemctl";
-            options = [ "NOPASSWD" ];
-          }
-        ];
-      }
+    # Socket-activated helper service to control DNS/DHCP services (runs as root)
+    # This follows NixOS best practices: avoid sudo in systemd services
+    # The router-webui user can write commands to the socket
+    systemd.sockets.router-webui-service-control = {
+      description = "Router WebUI Service Control Socket";
+      wantedBy = [ "sockets.target" ];
+      socketConfig = {
+        ListenStream = "/run/router-webui/service-control.sock";
+        SocketMode = "0660";
+        SocketUser = "root";
+        SocketGroup = "router-webui";
+      };
+    };
+    
+    systemd.services.router-webui-service-control = {
+      description = "Router WebUI Service Control Helper";
+      requires = [ "router-webui-service-control.socket" ];
+      after = [ "router-webui-service-control.socket" ];
+      serviceConfig = {
+        Type = "simple";
+        User = "root";
+        StandardInput = "socket";
+        StandardOutput = "journal";
+        StandardError = "journal";
+      };
+      script = ''
+        # Read command from stdin (format: ACTION SERVICE)
+        while IFS= read -r line; do
+          # Parse action and service
+          ACTION=$(echo "$line" | cut -d' ' -f1)
+          SERVICE=$(echo "$line" | cut -d' ' -f2-)
+          
+          # Validate action
+          case "$ACTION" in
+            start|stop|restart|reload)
+              ;;
+            *)
+              echo "Invalid action: $ACTION" >&2
+              continue
+              ;;
+          esac
+          
+          # Validate service (only allow specific DNS/DHCP services)
+          case "$SERVICE" in
+            unbound-homelab.service|unbound-lan.service|kea-dhcp4-homelab.service|kea-dhcp4-lan.service)
+              ;;
+            *)
+              echo "Invalid service: $SERVICE" >&2
+              continue
+              ;;
+          esac
+          
+          # Execute systemctl command
+          ${pkgs.systemd}/bin/systemctl "$ACTION" "$SERVICE" 2>&1
+        done
+      '';
+    };
+    
+    # Create socket directory
+    systemd.tmpfiles.rules = [
+      "d /run/router-webui 0750 router-webui router-webui -"
     ];
   };
 }
