@@ -168,11 +168,11 @@ in
     systemd.services = mkMerge [
       
       # Unbound for HOMELAB (br0)
-      (mkIf homelabDnsEnabled {
-        unbound-homelab = {
+      # Always create the service, but only enable/start it if DNS is enabled
+      unbound-homelab = {
         description = "Unbound DNS Resolver for HOMELAB";
         after = [ "network.target" ];
-        wantedBy = [ "multi-user.target" ];
+        wantedBy = if homelabDnsEnabled then [ "multi-user.target" ] else [];
         
         preStart = ''
           # Create state directory
@@ -348,14 +348,13 @@ in
           ProtectHome = true;
         };
       };
-      })
       
       # Unbound for LAN (br1)
-      (mkIf lanDnsEnabled {
-        unbound-lan = {
+      # Always create the service, but only enable/start it if DNS is enabled
+      unbound-lan = {
         description = "Unbound DNS Resolver for LAN";
         after = [ "network.target" ];
-        wantedBy = [ "multi-user.target" ];
+        wantedBy = if lanDnsEnabled then [ "multi-user.target" ] else [];
         
         preStart = ''
           # Create state directory
@@ -531,7 +530,6 @@ in
           ProtectHome = true;
         };
       };
-      })
       
       # Blocklist update service for HOMELAB
       (mkIf homelabDnsEnabled {
