@@ -291,7 +291,8 @@ in
         FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
         SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
         SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
-        SUDO_BIN = "${pkgs.sudo}/bin/sudo";
+        # Note: Don't set SUDO_BIN - use the wrapped sudo from /run/wrappers/bin/sudo
+        # The store path sudo doesn't have setuid bit, but the wrapper does
       };
       
       serviceConfig = {
@@ -303,8 +304,11 @@ in
         Restart = "always";
         RestartSec = "10s";
         
-        # Set debug mode via environment variable
-        Environment = [ "DEBUG=${if cfg.debug then "true" else "false"}" ];
+        # Set debug mode and ensure PATH includes /run/wrappers/bin for wrapped sudo
+        Environment = [
+          "DEBUG=${if cfg.debug then "true" else "false"}"
+          "PATH=/run/wrappers/bin:/run/current-system/sw/bin:/usr/bin:/bin"
+        ];
         
         # Security hardening
         PrivateTmp = true;

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 import subprocess
 import os
+import shutil
 import logging
 
 from ..database import get_db, DnsZoneDB, DnsRecordDB
@@ -29,16 +30,26 @@ NETWORK_SERVICE_MAP = {
 
 
 def _find_sudo() -> str:
-    """Find sudo binary path (NixOS way)"""
+    """Find sudo binary path (NixOS way)
+    
+    In NixOS, we need to use the wrapped sudo from /run/wrappers/bin/sudo
+    which has the setuid bit set. The store path sudo doesn't have setuid.
+    """
     logger.debug("Finding sudo binary...")
     
-    # Check environment variable first (set by NixOS service)
-    env_path = os.environ.get("SUDO_BIN")
-    if env_path and os.path.exists(env_path):
-        logger.debug(f"Found sudo via SUDO_BIN env var: {env_path}")
-        return env_path
+    # First try shutil.which (uses PATH, should find the wrapper)
+    sudo_path = shutil.which('sudo')
+    if sudo_path:
+        logger.debug(f"Found sudo via PATH: {sudo_path}")
+        return sudo_path
     
-    # Try common paths
+    # Try NixOS wrapper path (has setuid bit)
+    wrapper_path = '/run/wrappers/bin/sudo'
+    if os.path.exists(wrapper_path) and os.access(wrapper_path, os.X_OK):
+        logger.debug(f"Found sudo at wrapper path: {wrapper_path}")
+        return wrapper_path
+    
+    # Fallback to other common paths
     candidates = [
         '/run/current-system/sw/bin/sudo',
         '/usr/bin/sudo',
