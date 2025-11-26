@@ -381,7 +381,7 @@ export function Dns() {
               </Select>
             </div>
 
-            {/* Zones Table */}
+            {/* Zones Cards */}
             <Card>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                 DNS Zones ({zones.length})
@@ -392,123 +392,257 @@ export function Dns() {
                   No DNS zones configured. Create a zone to get started.
                 </Alert>
               ) : (
-                <Table>
-                  <Table.Head>
-                    <Table.HeadCell>Name</Table.HeadCell>
-                    <Table.HeadCell>Network</Table.HeadCell>
-                    <Table.HeadCell>Authoritative</Table.HeadCell>
-                    <Table.HeadCell>Forward To</Table.HeadCell>
-                    <Table.HeadCell>Delegate To</Table.HeadCell>
-                    <Table.HeadCell>Status</Table.HeadCell>
-                    <Table.HeadCell>Actions</Table.HeadCell>
-                  </Table.Head>
-                  <Table.Body className="divide-y">
-                    {zones.map((zone) => (
-                      <Table.Row key={zone.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
-                        <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
-                          {zone.name}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Badge color="blue">{zone.network}</Badge>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Badge color={zone.authoritative ? "success" : "gray"}>
-                            {zone.authoritative ? "Yes" : "No"}
-                          </Badge>
-                        </Table.Cell>
-                        <Table.Cell className="text-gray-500 dark:text-gray-400">
-                          {zone.forward_to || '-'}
-                        </Table.Cell>
-                        <Table.Cell className="text-gray-500 dark:text-gray-400">
-                          {zone.delegate_to || '-'}
-                        </Table.Cell>
-                        <Table.Cell>
-                          {(() => {
-                            const serviceStatus = getServiceStatusForZone(zone);
-                            return (
-                              <Badge color={serviceStatus.is_active ? "success" : "gray"}>
-                                {serviceStatus.is_active ? "Running" : serviceStatus.is_enabled ? "Stopped" : "Disabled"}
+                <>
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <Table.Head>
+                        <Table.HeadCell>Name</Table.HeadCell>
+                        <Table.HeadCell>Network</Table.HeadCell>
+                        <Table.HeadCell>Authoritative</Table.HeadCell>
+                        <Table.HeadCell>Forward To</Table.HeadCell>
+                        <Table.HeadCell>Delegate To</Table.HeadCell>
+                        <Table.HeadCell>Status</Table.HeadCell>
+                        <Table.HeadCell>Actions</Table.HeadCell>
+                      </Table.Head>
+                      <Table.Body className="divide-y">
+                        {zones.map((zone) => (
+                          <Table.Row key={zone.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                            <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
+                              {zone.name}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <Badge color="blue">{zone.network}</Badge>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <Badge color={zone.authoritative ? "success" : "gray"}>
+                                {zone.authoritative ? "Yes" : "No"}
                               </Badge>
-                            );
-                          })()}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="flex gap-2 flex-wrap">
-                            <Button
-                              size="xs"
-                              color="blue"
-                              onClick={() => openRecordsView(zone)}
-                            >
-                              Records
-                            </Button>
-                            <Button
-                              size="xs"
-                              color="gray"
-                              onClick={() => openZoneModal(zone)}
-                            >
-                              <HiPencil className="w-4 h-4" />
-                            </Button>
-                            {(() => {
-                              const serviceStatus = getServiceStatusForZone(zone);
-                              const serviceKey = `${zone.network}-`;
-                              const isControlling = controllingService?.startsWith(serviceKey);
-                              return (
-                                <>
-                                  <Button
-                                    size="xs"
-                                    color="success"
-                                    onClick={() => handleServiceControl(zone.network, 'start')}
-                                    disabled={isControlling || serviceStatus.is_active}
-                                    title="Start Service"
-                                  >
-                                    <HiPlay className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    size="xs"
-                                    color="failure"
-                                    onClick={() => handleServiceControl(zone.network, 'stop')}
-                                    disabled={isControlling || !serviceStatus.is_active}
-                                    title="Stop Service"
-                                  >
-                                    <HiStop className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    size="xs"
-                                    color="warning"
-                                    onClick={() => handleServiceControl(zone.network, 'reload')}
-                                    disabled={isControlling || !serviceStatus.is_active}
-                                    title="Reload Service"
-                                  >
-                                    <HiRefresh className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    size="xs"
-                                    color="purple"
-                                    onClick={() => handleServiceControl(zone.network, 'restart')}
-                                    disabled={isControlling}
-                                    title="Restart Service"
-                                  >
-                                    <HiRefresh className="w-4 h-4" />
-                                  </Button>
-                                </>
-                              );
-                            })()}
-                            <Button
-                              size="xs"
-                              color="failure"
-                              onClick={() => {
-                                setZoneToDelete(zone);
-                                setDeleteZoneModalOpen(true);
-                              }}
-                            >
-                              <HiTrash className="w-4 h-4" />
-                            </Button>
+                            </Table.Cell>
+                            <Table.Cell className="text-gray-500 dark:text-gray-400">
+                              {zone.forward_to || '-'}
+                            </Table.Cell>
+                            <Table.Cell className="text-gray-500 dark:text-gray-400">
+                              {zone.delegate_to || '-'}
+                            </Table.Cell>
+                            <Table.Cell>
+                              {(() => {
+                                const serviceStatus = getServiceStatusForZone(zone);
+                                return (
+                                  <Badge color={serviceStatus.is_active ? "success" : "gray"}>
+                                    {serviceStatus.is_active ? "Running" : serviceStatus.is_enabled ? "Stopped" : "Disabled"}
+                                  </Badge>
+                                );
+                              })()}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <div className="flex gap-2 flex-wrap">
+                                <Button
+                                  size="xs"
+                                  color="blue"
+                                  onClick={() => openRecordsView(zone)}
+                                >
+                                  Records
+                                </Button>
+                                <Button
+                                  size="xs"
+                                  color="gray"
+                                  onClick={() => openZoneModal(zone)}
+                                >
+                                  <HiPencil className="w-4 h-4" />
+                                </Button>
+                                {(() => {
+                                  const serviceStatus = getServiceStatusForZone(zone);
+                                  const serviceKey = `${zone.network}-`;
+                                  const isControlling = controllingService?.startsWith(serviceKey);
+                                  return (
+                                    <>
+                                      <Button
+                                        size="xs"
+                                        color="success"
+                                        onClick={() => handleServiceControl(zone.network, 'start')}
+                                        disabled={isControlling || serviceStatus.is_active}
+                                        title="Start Service"
+                                      >
+                                        <HiPlay className="w-4 h-4" />
+                                      </Button>
+                                      <Button
+                                        size="xs"
+                                        color="failure"
+                                        onClick={() => handleServiceControl(zone.network, 'stop')}
+                                        disabled={isControlling || !serviceStatus.is_active}
+                                        title="Stop Service"
+                                      >
+                                        <HiStop className="w-4 h-4" />
+                                      </Button>
+                                      <Button
+                                        size="xs"
+                                        color="warning"
+                                        onClick={() => handleServiceControl(zone.network, 'reload')}
+                                        disabled={isControlling || !serviceStatus.is_active}
+                                        title="Reload Service"
+                                      >
+                                        <HiRefresh className="w-4 h-4" />
+                                      </Button>
+                                      <Button
+                                        size="xs"
+                                        color="purple"
+                                        onClick={() => handleServiceControl(zone.network, 'restart')}
+                                        disabled={isControlling}
+                                        title="Restart Service"
+                                      >
+                                        <HiRefresh className="w-4 h-4" />
+                                      </Button>
+                                    </>
+                                  );
+                                })()}
+                                <Button
+                                  size="xs"
+                                  color="failure"
+                                  onClick={() => {
+                                    setZoneToDelete(zone);
+                                    setDeleteZoneModalOpen(true);
+                                  }}
+                                >
+                                  <HiTrash className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </Table.Cell>
+                          </Table.Row>
+                        ))}
+                      </Table.Body>
+                    </Table>
+                  </div>
+
+                  {/* Mobile/Tablet Card View */}
+                  <div className="md:hidden space-y-3">
+                    {zones.map((zone) => {
+                      const serviceStatus = getServiceStatusForZone(zone);
+                      const serviceKey = `${zone.network}-`;
+                      const isControlling = controllingService?.startsWith(serviceKey);
+                      return (
+                        <div
+                          key={zone.id}
+                          className="p-4 rounded-lg border bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700"
+                        >
+                          {/* Header Row */}
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex-1">
+                              <div className="font-semibold text-lg mb-1 text-gray-900 dark:text-white">
+                                {zone.name}
+                              </div>
+                              <Badge color="blue" size="sm" className="mt-1">
+                                {zone.network}
+                              </Badge>
+                            </div>
+                            <Badge color={serviceStatus.is_active ? "success" : "gray"} size="sm">
+                              {serviceStatus.is_active ? "Running" : serviceStatus.is_enabled ? "Stopped" : "Disabled"}
+                            </Badge>
                           </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table>
+
+                          {/* Details Grid */}
+                          <div className="space-y-2 text-sm mb-4">
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-500 dark:text-gray-400">Authoritative:</span>
+                              <Badge color={zone.authoritative ? "success" : "gray"} size="sm">
+                                {zone.authoritative ? "Yes" : "No"}
+                              </Badge>
+                            </div>
+                            
+                            {zone.forward_to && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-500 dark:text-gray-400">Forward To:</span>
+                                <span className="text-gray-900 dark:text-gray-100 font-mono text-xs">{zone.forward_to}</span>
+                              </div>
+                            )}
+                            
+                            {zone.delegate_to && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-500 dark:text-gray-400">Delegate To:</span>
+                                <span className="text-gray-900 dark:text-gray-100 font-mono text-xs">{zone.delegate_to}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                            <div className="flex gap-2 mb-2 flex-wrap">
+                              <Button
+                                size="xs"
+                                color="blue"
+                                onClick={() => openRecordsView(zone)}
+                                className="flex-1 min-w-[80px]"
+                              >
+                                Records
+                              </Button>
+                              <Button
+                                size="xs"
+                                color="gray"
+                                onClick={() => openZoneModal(zone)}
+                                className="flex-1 min-w-[80px]"
+                              >
+                                <HiPencil className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="xs"
+                                color="failure"
+                                onClick={() => {
+                                  setZoneToDelete(zone);
+                                  setDeleteZoneModalOpen(true);
+                                }}
+                                className="flex-1 min-w-[80px]"
+                              >
+                                <HiTrash className="w-4 h-4" />
+                              </Button>
+                            </div>
+                            <div className="flex gap-2 flex-wrap">
+                              <Button
+                                size="xs"
+                                color="success"
+                                onClick={() => handleServiceControl(zone.network, 'start')}
+                                disabled={isControlling || serviceStatus.is_active}
+                                title="Start Service"
+                                className="flex-1 min-w-[70px]"
+                              >
+                                <HiPlay className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="xs"
+                                color="failure"
+                                onClick={() => handleServiceControl(zone.network, 'stop')}
+                                disabled={isControlling || !serviceStatus.is_active}
+                                title="Stop Service"
+                                className="flex-1 min-w-[70px]"
+                              >
+                                <HiStop className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="xs"
+                                color="warning"
+                                onClick={() => handleServiceControl(zone.network, 'reload')}
+                                disabled={isControlling || !serviceStatus.is_active}
+                                title="Reload Service"
+                                className="flex-1 min-w-[70px]"
+                              >
+                                <HiRefresh className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="xs"
+                                color="purple"
+                                onClick={() => handleServiceControl(zone.network, 'restart')}
+                                disabled={isControlling}
+                                title="Restart Service"
+                                className="flex-1 min-w-[70px]"
+                              >
+                                <HiRefresh className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </Card>
 

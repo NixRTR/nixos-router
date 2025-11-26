@@ -417,7 +417,7 @@ export function Clients() {
                         {formatLastSeen(device.last_seen)}
                       </Table.Cell>
                       <Table.Cell>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-wrap">
                           <Button
                             size="xs"
                             color="gray"
