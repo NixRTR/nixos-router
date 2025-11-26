@@ -8,6 +8,7 @@ from typing import List, Optional
 import subprocess
 import shutil
 import os
+import re
 
 from ..database import get_db, DnsZoneDB, DnsRecordDB
 from ..models import (
@@ -50,6 +51,109 @@ def _find_dbus_send() -> str:
             return path
     
     raise RuntimeError("dbus-send binary not found. Please ensure dbus is installed.")
+
+
+def _get_service_status_via_dbus(service_name: str) -> dict:
+    """Get systemd service status via D-Bus (doesn't require sudo)
+    
+    Args:
+        service_name: Name of the service (e.g., "unbound-homelab.service")
+        
+    Returns:
+        Dictionary with is_active, is_enabled, and other status info
+    """
+    dbus_send = _find_dbus_send()
+    
+    # Escape service name for D-Bus object path
+    # D-Bus object paths escape: . -> _2e, - -> _2d, \ -> _5c
+    escaped_name = service_name.replace('\\', '_5c').replace('-', '_2d').replace('.', '_2e')
+    unit_path = f"/org/freedesktop/systemd1/unit/{escaped_name}"
+    
+    # Get ActiveState property (active, inactive, activating, deactivating, failed)
+    result = subprocess.run(
+        [
+            dbus_send,
+            '--system',
+            '--type=method_call',
+            '--print-reply',
+            '--dest=org.freedesktop.systemd1',
+            unit_path,
+            'org.freedesktop.DBus.Properties.Get',
+            'string:org.freedesktop.systemd1.Unit',
+            'string:ActiveState'
+        ],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False
+    )
+    
+    is_active = False
+    if result.returncode == 0:
+        # Parse the response: variant string "active"
+        active_state = result.stdout.strip()
+        if 'string "active"' in active_state or 'string "activating"' in active_state:
+            is_active = True
+    
+    # Get UnitFileState property (enabled, disabled, static, etc.)
+    result = subprocess.run(
+        [
+            dbus_send,
+            '--system',
+            '--type=method_call',
+            '--print-reply',
+            '--dest=org.freedesktop.systemd1',
+            unit_path,
+            'org.freedesktop.DBus.Properties.Get',
+            'string:org.freedesktop.systemd1.Unit',
+            'string:UnitFileState'
+        ],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False
+    )
+    
+    is_enabled = False
+    if result.returncode == 0:
+        # Parse the response: variant string "enabled"
+        unit_file_state = result.stdout.strip()
+        if 'string "enabled"' in unit_file_state:
+            is_enabled = True
+    
+    # Get MainPID property
+    result = subprocess.run(
+        [
+            dbus_send,
+            '--system',
+            '--type=method_call',
+            '--print-reply',
+            '--dest=org.freedesktop.systemd1',
+            unit_path,
+            'org.freedesktop.DBus.Properties.Get',
+            'string:org.freedesktop.systemd1.Unit',
+            'string:MainPID'
+        ],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False
+    )
+    
+    pid = None
+    if result.returncode == 0:
+        # Parse the response: variant uint32 12345
+        match = re.search(r'uint32 (\d+)', result.stdout)
+        if match:
+            pid_val = int(match.group(1))
+            if pid_val > 0:
+                pid = pid_val
+    
+    return {
+        'is_active': is_active,
+        'is_enabled': is_enabled,
+        'pid': pid
+    }
 
 
 def _control_service_via_dbus(service_name: str, action: str) -> None:
@@ -538,6 +642,8 @@ async def get_dns_service_status(
 ):
     """Get DNS service status for a network
     
+    Uses D-Bus to retrieve status directly from systemd (doesn't require sudo).
+    
     Args:
         network: Network name ("homelab" or "lan")
         
@@ -548,27 +654,45 @@ async def get_dns_service_status(
         raise HTTPException(status_code=400, detail="Network must be 'homelab' or 'lan'")
     
     service_name = NETWORK_SERVICE_MAP[network]
-    status = get_service_status(service_name)
+    full_service_name = f"{service_name}.service"
     
-    if status is None:
+    try:
+        # Get status via D-Bus
+        status = _get_service_status_via_dbus(full_service_name)
+        
+        # Get process stats if we have a PID
+        memory_mb = None
+        cpu_percent = None
+        if status['pid']:
+            try:
+                import psutil
+                process = psutil.Process(status['pid'])
+                mem_info = process.memory_info()
+                memory_mb = mem_info.rss / 1024 / 1024  # Convert to MB
+                cpu_percent = process.cpu_percent(interval=0.1)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        
+        return {
+            "network": network,
+            "service_name": service_name,
+            "is_active": status['is_active'],
+            "is_enabled": status['is_enabled'],
+            "exists": True,
+            "pid": status['pid'],
+            "memory_mb": memory_mb,
+            "cpu_percent": cpu_percent
+        }
+    except Exception as e:
+        # If D-Bus fails, service might not exist or be inaccessible
         return {
             "network": network,
             "service_name": service_name,
             "is_active": False,
             "is_enabled": False,
-            "exists": False
+            "exists": False,
+            "error": str(e)
         }
-    
-    return {
-        "network": network,
-        "service_name": service_name,
-        "is_active": status.is_active,
-        "is_enabled": status.is_enabled,
-        "exists": True,
-        "pid": status.pid,
-        "memory_mb": status.memory_mb,
-        "cpu_percent": status.cpu_percent
-    }
 
 
 @router.post("/service/{network}/{action}")
