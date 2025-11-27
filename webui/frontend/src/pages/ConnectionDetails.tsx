@@ -318,7 +318,7 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
               )}
             </div>
 
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden min-[1000px]:block overflow-x-auto">
               <Table>
                 <Table.Head>
                   <Table.HeadCell 
@@ -392,7 +392,7 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
             </div>
 
             {/* Mobile Card View */}
-            <div className="md:hidden">
+            <div className="min-[1000px]:hidden">
               {/* Sort Controls for Mobile */}
               <div className="mb-4 flex gap-2">
                 <div className="flex-1">
@@ -476,7 +476,7 @@ export function ConnectionDetails({ sourcePage }: ConnectionDetailsProps) {
             <Modal.Header>
               Connection - {selectedConnection ? `${selectedConnection.remoteIp}:${selectedConnection.remotePort}` : ''}
             </Modal.Header>
-            <Modal.Body>
+            <Modal.Body className="max-h-[80vh] overflow-y-auto">
               <div className="space-y-4">
                 {/* Controls */}
                 <div className="flex flex-wrap gap-4">

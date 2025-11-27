@@ -16,8 +16,9 @@ const SystemInfo = lazy(() => import('./pages/SystemInfo').then(m => ({ default:
 const Documentation = lazy(() => import('./pages/Documentation').then(m => ({ default: m.Documentation })));
 const Speedtest = lazy(() => import('./pages/Speedtest').then(m => ({ default: m.Speedtest })));
 const TrafficShaping = lazy(() => import('./pages/TrafficShaping').then(m => ({ default: m.TrafficShaping })));
-const Apprise = lazy(() => import('./pages/Apprise').then(m => ({ default: m.Apprise })));
 const Notifications = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
+const Dns = lazy(() => import('./pages/Dns').then(m => ({ default: m.Dns })));
+const Dhcp = lazy(() => import('./pages/Dhcp').then(m => ({ default: m.Dhcp })));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -147,21 +148,31 @@ export default function App() {
           }
         />
         <Route
-          path="/apprise"
-          element={
-            <ProtectedRoute>
-              <Suspense fallback={<PageLoader />}>
-                <Apprise />
-              </Suspense>
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/notifications"
           element={
             <ProtectedRoute>
               <Suspense fallback={<PageLoader />}>
                 <Notifications />
+              </Suspense>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dns"
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoader />}>
+                <Dns />
+              </Suspense>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dhcp"
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoader />}>
+                <Dhcp />
               </Suspense>
             </ProtectedRoute>
           }

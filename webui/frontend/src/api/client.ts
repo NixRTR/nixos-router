@@ -10,7 +10,27 @@ import type {
   NotificationHistory,
   NotificationParameterMetadata,
   NotificationTestResponse,
+  AppriseServiceInfo,
+  AppriseService,
+  AppriseServiceCreate,
+  AppriseServiceUpdate,
 } from '../types/notifications';
+import type {
+  DnsZone,
+  DnsZoneCreate,
+  DnsZoneUpdate,
+  DnsRecord,
+  DnsRecordCreate,
+  DnsRecordUpdate,
+} from '../types/dns';
+import type {
+  DhcpNetwork,
+  DhcpNetworkCreate,
+  DhcpNetworkUpdate,
+  DhcpReservation,
+  DhcpReservationCreate,
+  DhcpReservationUpdate,
+} from '../types/dhcp';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -263,8 +283,33 @@ class APIClient {
     return response.data;
   }
 
-  async getAppriseServices(): Promise<{ url: string; description: string }[]> {
-    const response = await this.client.get<{ url: string; description: string }[]>('/api/apprise/services');
+  async getAppriseServices(): Promise<AppriseServiceInfo[]> {
+    const response = await this.client.get<AppriseServiceInfo[]>('/api/apprise/services');
+    return response.data;
+  }
+
+  async getAppriseService(id: number): Promise<AppriseService> {
+    const response = await this.client.get<AppriseService>(`/api/apprise/services/${id}`);
+    return response.data;
+  }
+
+  async createAppriseService(service: AppriseServiceCreate): Promise<AppriseService> {
+    const response = await this.client.post<AppriseService>('/api/apprise/services', service);
+    return response.data;
+  }
+
+  async updateAppriseService(id: number, service: AppriseServiceUpdate): Promise<AppriseService> {
+    const response = await this.client.put<AppriseService>(`/api/apprise/services/${id}`, service);
+    return response.data;
+  }
+
+  async deleteAppriseService(id: number): Promise<{ message: string }> {
+    const response = await this.client.delete<{ message: string }>(`/api/apprise/services/${id}`);
+    return response.data;
+  }
+
+  async testAppriseServiceById(serviceId: number): Promise<{ success: boolean; message: string; details?: string }> {
+    const response = await this.client.post<{ success: boolean; message: string; details?: string }>(`/api/apprise/services/${serviceId}/test`);
     return response.data;
   }
 
@@ -314,6 +359,23 @@ class APIClient {
     return response.data;
   }
 
+  async sendAppriseNotificationToServiceById(
+    serviceId: number,
+    body: string,
+    title?: string,
+    notificationType?: string
+  ): Promise<{ success: boolean; message: string; details?: string }> {
+    const response = await this.client.post<{ success: boolean; message: string; details?: string }>(
+      `/api/apprise/services/${serviceId}/send`,
+      {
+        body,
+        title,
+        notification_type: notificationType,
+      }
+    );
+    return response.data;
+  }
+
   async getCakeHistory(
     range: string = '1h',
     interfaceName?: string
@@ -323,6 +385,153 @@ class APIClient {
     const response = await this.client.get<{ interface: string; data: any[] }>('/api/cake/history', {
       params,
     });
+    return response.data;
+  }
+
+  // DNS Zone methods
+  async getDnsZones(network?: 'homelab' | 'lan'): Promise<DnsZone[]> {
+    const params: Record<string, string> = {};
+    if (network) params.network = network;
+    const response = await this.client.get<DnsZone[]>('/api/dns/zones', { params });
+    return response.data;
+  }
+
+  async createDnsZone(zone: DnsZoneCreate): Promise<DnsZone> {
+    const response = await this.client.post<DnsZone>('/api/dns/zones', zone);
+    return response.data;
+  }
+
+  async getDnsZone(zoneId: number): Promise<DnsZone> {
+    const response = await this.client.get<DnsZone>(`/api/dns/zones/${zoneId}`);
+    return response.data;
+  }
+
+  async updateDnsZone(zoneId: number, zone: DnsZoneUpdate): Promise<DnsZone> {
+    const response = await this.client.put<DnsZone>(`/api/dns/zones/${zoneId}`, zone);
+    return response.data;
+  }
+
+  async deleteDnsZone(zoneId: number): Promise<{ message: string }> {
+    const response = await this.client.delete<{ message: string }>(`/api/dns/zones/${zoneId}`);
+    return response.data;
+  }
+
+  // DNS Record methods
+  async getDnsRecords(zoneId: number): Promise<DnsRecord[]> {
+    const response = await this.client.get<DnsRecord[]>(`/api/dns/zones/${zoneId}/records`);
+    return response.data;
+  }
+
+  async createDnsRecord(zoneId: number, record: DnsRecordCreate): Promise<DnsRecord> {
+    const response = await this.client.post<DnsRecord>(`/api/dns/zones/${zoneId}/records`, record);
+    return response.data;
+  }
+
+  async getDnsRecord(recordId: number): Promise<DnsRecord> {
+    const response = await this.client.get<DnsRecord>(`/api/dns/records/${recordId}`);
+    return response.data;
+  }
+
+  async updateDnsRecord(recordId: number, record: DnsRecordUpdate): Promise<DnsRecord> {
+    const response = await this.client.put<DnsRecord>(`/api/dns/records/${recordId}`, record);
+    return response.data;
+  }
+
+  async deleteDnsRecord(recordId: number): Promise<{ message: string }> {
+    const response = await this.client.delete<{ message: string }>(`/api/dns/records/${recordId}`);
+    return response.data;
+  }
+
+  // DHCP Network methods
+  async getDhcpNetworks(network?: 'homelab' | 'lan'): Promise<DhcpNetwork[]> {
+    const params: Record<string, string> = {};
+    if (network) params.network = network;
+    const response = await this.client.get<DhcpNetwork[]>('/api/dhcp/networks', { params });
+    return response.data;
+  }
+
+  async createDhcpNetwork(network: DhcpNetworkCreate): Promise<DhcpNetwork> {
+    const response = await this.client.post<DhcpNetwork>('/api/dhcp/networks', network);
+    return response.data;
+  }
+
+  async getDhcpNetwork(networkId: number): Promise<DhcpNetwork> {
+    const response = await this.client.get<DhcpNetwork>(`/api/dhcp/networks/${networkId}`);
+    return response.data;
+  }
+
+  async updateDhcpNetwork(networkId: number, network: DhcpNetworkUpdate): Promise<DhcpNetwork> {
+    const response = await this.client.put<DhcpNetwork>(`/api/dhcp/networks/${networkId}`, network);
+    return response.data;
+  }
+
+  async deleteDhcpNetwork(networkId: number): Promise<{ message: string }> {
+    const response = await this.client.delete<{ message: string }>(`/api/dhcp/networks/${networkId}`);
+    return response.data;
+  }
+
+  // DHCP Reservation methods
+  async getDhcpReservations(networkId: number): Promise<DhcpReservation[]> {
+    const response = await this.client.get<DhcpReservation[]>(`/api/dhcp/networks/${networkId}/reservations`);
+    return response.data;
+  }
+
+  async createDhcpReservation(networkId: number, reservation: DhcpReservationCreate): Promise<DhcpReservation> {
+    const response = await this.client.post<DhcpReservation>(`/api/dhcp/networks/${networkId}/reservations`, reservation);
+    return response.data;
+  }
+
+  async getDhcpReservation(reservationId: number): Promise<DhcpReservation> {
+    const response = await this.client.get<DhcpReservation>(`/api/dhcp/reservations/${reservationId}`);
+    return response.data;
+  }
+
+  async updateDhcpReservation(reservationId: number, reservation: DhcpReservationUpdate): Promise<DhcpReservation> {
+    const response = await this.client.put<DhcpReservation>(`/api/dhcp/reservations/${reservationId}`, reservation);
+    return response.data;
+  }
+
+  async deleteDhcpReservation(reservationId: number): Promise<{ message: string }> {
+    const response = await this.client.delete<{ message: string }>(`/api/dhcp/reservations/${reservationId}`);
+    return response.data;
+  }
+
+  // DNS Service Control
+  async getDnsServiceStatus(network: 'homelab' | 'lan'): Promise<{
+    network: string;
+    service_name: string;
+    is_active: boolean;
+    is_enabled: boolean;
+    exists: boolean;
+    pid?: number | null;
+    memory_mb?: number | null;
+    cpu_percent?: number | null;
+  }> {
+    const response = await this.client.get(`/api/dns/service-status/${network}`);
+    return response.data;
+  }
+
+  async controlDnsService(network: 'homelab' | 'lan', action: 'start' | 'stop' | 'restart' | 'reload'): Promise<{ message: string }> {
+    const response = await this.client.post(`/api/dns/service/${network}/${action}`);
+    return response.data;
+  }
+
+  // DHCP Service Control
+  async getDhcpServiceStatus(): Promise<{
+    service_name: string;
+    is_active: boolean;
+    is_enabled: boolean;
+    exists: boolean;
+    pid?: number | null;
+    memory_mb?: number | null;
+    cpu_percent?: number | null;
+  }> {
+    const response = await this.client.get(`/api/dhcp/service-status`);
+    return response.data;
+  }
+
+  async controlDhcpService(action: 'start' | 'stop' | 'restart' | 'reload'): Promise<{ message: string }> {
+    const response = await this.client.post(`/api/dhcp/service/${action}`);
     return response.data;
   }
 }

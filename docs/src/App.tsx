@@ -20,6 +20,8 @@ const WebUISpeedtest = lazy(() => import('./pages/webui/Speedtest').then(m => ({
 const WebUISystemInfo = lazy(() => import('./pages/webui/SystemInfo').then(m => ({ default: m.SystemInfo })));
 const WebUIApprise = lazy(() => import('./pages/webui/Apprise').then(m => ({ default: m.Apprise })));
 const WebUINotifications = lazy(() => import('./pages/webui/Notifications').then(m => ({ default: m.Notifications })));
+const WebUIDns = lazy(() => import('./pages/webui/Dns').then(m => ({ default: m.Dns })));
+const WebUIDhcp = lazy(() => import('./pages/webui/Dhcp').then(m => ({ default: m.Dhcp })));
 const SystemConfig = lazy(() => import('./pages/configuration/System').then(m => ({ default: m.SystemConfig })));
 const WanConfig = lazy(() => import('./pages/configuration/Wan').then(m => ({ default: m.WanConfig })));
 const CakeConfig = lazy(() => import('./pages/configuration/Cake').then(m => ({ default: m.CakeConfig })));
@@ -79,6 +81,8 @@ function App() {
             <Route path="/webui/system-info" element={<WebUISystemInfo />} />
             <Route path="/webui/apprise" element={<WebUIApprise />} />
             <Route path="/webui/notifications" element={<WebUINotifications />} />
+            <Route path="/webui/dns" element={<WebUIDns />} />
+            <Route path="/webui/dhcp" element={<WebUIDhcp />} />
             <Route path="/configuration" element={<Configuration />} />
             <Route path="/configuration/system" element={<SystemConfig />} />
             <Route path="/configuration/wan" element={<WanConfig />} />

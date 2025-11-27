@@ -164,15 +164,16 @@ in
 {
   config = mkIf (routerConfig.dns.enable or true) {
     
-    # Create unbound instances for each bridge (only if DNS enabled for that network)
+    # Create unbound instances for each bridge
+    # Always create the services, but only enable/start them if DNS is enabled
     systemd.services = mkMerge [
       
       # Unbound for HOMELAB (br0)
-      (mkIf homelabDnsEnabled {
+      {
         unbound-homelab = {
         description = "Unbound DNS Resolver for HOMELAB";
         after = [ "network.target" ];
-        wantedBy = [ "multi-user.target" ];
+        wantedBy = if homelabDnsEnabled then [ "multi-user.target" ] else [];
         
         preStart = ''
           # Create state directory
@@ -347,15 +348,15 @@ in
           ProtectSystem = "strict";
           ProtectHome = true;
         };
-      };
-      })
+        };
+      }
       
       # Unbound for LAN (br1)
-      (mkIf lanDnsEnabled {
+      {
         unbound-lan = {
         description = "Unbound DNS Resolver for LAN";
         after = [ "network.target" ];
-        wantedBy = [ "multi-user.target" ];
+        wantedBy = if lanDnsEnabled then [ "multi-user.target" ] else [];
         
         preStart = ''
           # Create state directory
@@ -530,8 +531,8 @@ in
           ProtectSystem = "strict";
           ProtectHome = true;
         };
-      };
-      })
+        };
+      }
       
       # Blocklist update service for HOMELAB
       (mkIf homelabDnsEnabled {

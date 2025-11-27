@@ -471,3 +471,304 @@ class NotificationHistory(BaseModel):
     """Notification history list"""
     rule_id: int
     items: List[NotificationHistoryRecord]
+
+
+# Apprise Service Models
+class AppriseService(BaseModel):
+    """Apprise service with full details"""
+    id: int
+    name: str
+    description: Optional[str] = None
+    url: str
+    original_secret_string: Optional[str] = None
+    enabled: bool = True
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class AppriseServiceCreate(BaseModel):
+    """Model for creating a new Apprise service"""
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    url: str = Field(..., min_length=1)
+
+
+class AppriseServiceUpdate(BaseModel):
+    """Model for updating an Apprise service"""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    url: Optional[str] = Field(None, min_length=1)
+    enabled: Optional[bool] = None
+
+
+class AppriseServiceInfo(BaseModel):
+    """Apprise service info for display (no URL)"""
+    id: int
+    name: str
+    description: Optional[str] = None
+    enabled: bool = True
+    
+    class Config:
+        from_attributes = True
+
+
+# DNS Models
+
+class DnsZoneBase(BaseModel):
+    """Base DNS zone model"""
+    name: str = Field(..., min_length=1, max_length=255, description="Domain name (e.g., jeandr.net)")
+    network: str = Field(..., pattern="^(homelab|lan)$", description="Network: homelab or lan")
+    authoritative: bool = Field(True, description="Serve locally (transparent zone)")
+    forward_to: Optional[str] = Field(None, description="Optional: Forward queries to this DNS server")
+    delegate_to: Optional[str] = Field(None, description="Optional: Delegate zone to this DNS server")
+    enabled: bool = True
+
+
+class DnsZoneCreate(DnsZoneBase):
+    """Model for creating a DNS zone"""
+    original_config_path: Optional[str] = None  # Used for migration tracking
+
+
+class DnsZoneUpdate(BaseModel):
+    """Model for updating a DNS zone"""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    network: Optional[str] = Field(None, pattern="^(homelab|lan)$")
+    authoritative: Optional[bool] = None
+    forward_to: Optional[str] = None
+    delegate_to: Optional[str] = None
+    enabled: Optional[bool] = None
+
+
+class DnsZone(DnsZoneBase):
+    """DNS zone model"""
+    id: int
+    original_config_path: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class DnsRecordBase(BaseModel):
+    """Base DNS record model"""
+    name: str = Field(..., min_length=1, max_length=255, description="Hostname (e.g., hera.jeandr.net)")
+    type: str = Field(..., pattern="^(A|CNAME)$", description="Record type: A or CNAME")
+    value: str = Field(..., min_length=1, description="IP address for A, target hostname for CNAME")
+    comment: Optional[str] = None
+    enabled: bool = True
+
+
+class DnsRecordCreate(DnsRecordBase):
+    """Model for creating a DNS record"""
+    zone_id: int = Field(..., description="Zone ID this record belongs to")
+    original_config_path: Optional[str] = None  # Used for migration tracking
+
+
+class DnsRecordUpdate(BaseModel):
+    """Model for updating a DNS record"""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    type: Optional[str] = Field(None, pattern="^(A|CNAME)$")
+    value: Optional[str] = Field(None, min_length=1)
+    comment: Optional[str] = None
+    enabled: Optional[bool] = None
+    zone_id: Optional[int] = None  # Allow moving records between zones
+
+
+class DnsRecord(DnsRecordBase):
+    """DNS record model"""
+    id: int
+    zone_id: int
+    original_config_path: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class DhcpNetworkBase(BaseModel):
+    """Base DHCP network model"""
+    network: str = Field(..., pattern="^(homelab|lan)$", description="Network: homelab or lan")
+    enabled: bool = Field(True, description="Enable DHCP for this network")
+    start: str = Field(..., description="IP range start (e.g., 192.168.2.100)")
+    end: str = Field(..., description="IP range end (e.g., 192.168.2.200)")
+    lease_time: str = Field(..., description="Lease time (e.g., 1h, 1d, 86400)")
+    dns_servers: Optional[List[str]] = Field(None, description="List of DNS server IPs")
+    dynamic_domain: Optional[str] = Field(None, description="Dynamic DNS domain (e.g., dhcp.homelab.local)")
+    
+    @field_validator('start', 'end')
+    @classmethod
+    def validate_ip(cls, v: str) -> str:
+        """Validate IP address format"""
+        try:
+            IPv4Address(v)
+            return v
+        except ValueError:
+            raise ValueError(f"Invalid IP address: {v}")
+    
+    @field_validator('dns_servers')
+    @classmethod
+    def validate_dns_servers(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        """Validate DNS server IPs"""
+        if v is None:
+            return v
+        for ip in v:
+            try:
+                IPv4Address(ip)
+            except ValueError:
+                raise ValueError(f"Invalid DNS server IP: {ip}")
+        return v
+    
+    @field_validator('lease_time')
+    @classmethod
+    def validate_lease_time(cls, v: str) -> str:
+        """Validate lease time format (number, or number with unit: s, m, h, d)"""
+        if re.match(r'^[0-9]+([smhd])?$', v):
+            return v
+        raise ValueError(f"Invalid lease time format: {v}. Use format like '1h', '1d', or '86400'")
+
+
+class DhcpNetworkCreate(DhcpNetworkBase):
+    """Model for creating a DHCP network"""
+    original_config_path: Optional[str] = None  # Used for migration tracking
+
+
+class DhcpNetworkUpdate(BaseModel):
+    """Model for updating a DHCP network"""
+    enabled: Optional[bool] = None
+    start: Optional[str] = None
+    end: Optional[str] = None
+    lease_time: Optional[str] = None
+    dns_servers: Optional[List[str]] = None
+    dynamic_domain: Optional[str] = None
+    
+    @field_validator('start', 'end')
+    @classmethod
+    def validate_ip(cls, v: Optional[str]) -> Optional[str]:
+        """Validate IP address format"""
+        if v is None:
+            return v
+        try:
+            IPv4Address(v)
+            return v
+        except ValueError:
+            raise ValueError(f"Invalid IP address: {v}")
+    
+    @field_validator('dns_servers')
+    @classmethod
+    def validate_dns_servers(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        """Validate DNS server IPs"""
+        if v is None:
+            return v
+        for ip in v:
+            try:
+                IPv4Address(ip)
+            except ValueError:
+                raise ValueError(f"Invalid DNS server IP: {ip}")
+        return v
+    
+    @field_validator('lease_time')
+    @classmethod
+    def validate_lease_time(cls, v: Optional[str]) -> Optional[str]:
+        """Validate lease time format"""
+        if v is None:
+            return v
+        if re.match(r'^[0-9]+([smhd])?$', v):
+            return v
+        raise ValueError(f"Invalid lease time format: {v}. Use format like '1h', '1d', or '86400'")
+
+
+class DhcpNetwork(DhcpNetworkBase):
+    """DHCP network model"""
+    id: int
+    original_config_path: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class DhcpReservationBase(BaseModel):
+    """Base DHCP reservation model"""
+    hostname: str = Field(..., min_length=1, max_length=255, description="Hostname for the device")
+    hw_address: str = Field(..., description="MAC address (e.g., 11:22:33:44:55:66)")
+    ip_address: str = Field(..., description="Reserved IP address")
+    comment: Optional[str] = None
+    enabled: bool = True
+    
+    @field_validator('hw_address')
+    @classmethod
+    def validate_mac(cls, v: str) -> str:
+        """Validate MAC address format"""
+        # Accept formats: XX:XX:XX:XX:XX:XX or XX-XX-XX-XX-XX-XX
+        mac_pattern = r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
+        if re.match(mac_pattern, v):
+            # Normalize to colon format
+            return v.replace('-', ':').upper()
+        raise ValueError(f"Invalid MAC address format: {v}. Use format like 11:22:33:44:55:66")
+    
+    @field_validator('ip_address')
+    @classmethod
+    def validate_ip(cls, v: str) -> str:
+        """Validate IP address format"""
+        try:
+            IPv4Address(v)
+            return v
+        except ValueError:
+            raise ValueError(f"Invalid IP address: {v}")
+
+
+class DhcpReservationCreate(DhcpReservationBase):
+    """Model for creating a DHCP reservation"""
+    network_id: int = Field(..., description="Network ID this reservation belongs to")
+    original_config_path: Optional[str] = None  # Used for migration tracking
+
+
+class DhcpReservationUpdate(BaseModel):
+    """Model for updating a DHCP reservation"""
+    hostname: Optional[str] = Field(None, min_length=1, max_length=255)
+    hw_address: Optional[str] = None
+    ip_address: Optional[str] = None
+    comment: Optional[str] = None
+    enabled: Optional[bool] = None
+    network_id: Optional[int] = None  # Allow moving reservations between networks
+    
+    @field_validator('hw_address')
+    @classmethod
+    def validate_mac(cls, v: Optional[str]) -> Optional[str]:
+        """Validate MAC address format"""
+        if v is None:
+            return v
+        mac_pattern = r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
+        if re.match(mac_pattern, v):
+            return v.replace('-', ':').upper()
+        raise ValueError(f"Invalid MAC address format: {v}")
+    
+    @field_validator('ip_address')
+    @classmethod
+    def validate_ip(cls, v: Optional[str]) -> Optional[str]:
+        """Validate IP address format"""
+        if v is None:
+            return v
+        try:
+            IPv4Address(v)
+            return v
+        except ValueError:
+            raise ValueError(f"Invalid IP address: {v}")
+
+
+class DhcpReservation(DhcpReservationBase):
+    """DHCP reservation model"""
+    id: int
+    network_id: int
+    original_config_path: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True

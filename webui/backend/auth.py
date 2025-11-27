@@ -15,6 +15,80 @@ from .models import LoginRequest, LoginResponse
 security = HTTPBearer()
 
 
+def _authenticate_via_socket(username: str, password: str) -> bool:
+    """Authenticate user via socket-activated helper service (runs as root)
+    
+    This is required because PAM can only authenticate other users when running as root.
+    Reference: https://pypi.org/project/python-pam/ - "You have root: you can check any account's password for validity"
+    
+    Uses a socket-activated service that runs as root and accepts authentication requests via
+    a Unix socket. This follows NixOS best practices by avoiding direct PAM usage in unprivileged service.
+    
+    Args:
+        username: System username
+        password: User password
+        
+    Returns:
+        bool: True if credentials are valid
+    """
+    import logging
+    import socket
+    logger = logging.getLogger(__name__)
+    
+    socket_path = "/run/router-webui/auth.sock"
+    
+    try:
+        # Connect to authentication socket
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(10)  # 10 second timeout
+        sock.connect(socket_path)
+        
+        # Send authentication request (format: "USERNAME\tPASSWORD\n")
+        # Using tab as delimiter since passwords may contain spaces
+        request = f"{username}\t{password}\n"
+        sock.sendall(request.encode('utf-8'))
+        sock.shutdown(socket.SHUT_WR)
+        
+        # Read response
+        response = b""
+        while True:
+            data = sock.recv(4096)
+            if not data:
+                break
+            response += data
+        
+        sock.close()
+        
+        # Parse response
+        response_str = response.decode('utf-8', errors='ignore').strip()
+        
+        if not response_str:
+            logger.error("Empty response from authentication helper")
+            return False
+        elif response_str == "SUCCESS":
+            logger.info("PAM authentication successful")
+            return True
+        elif response_str.startswith("FAILURE"):
+            logger.warning("PAM authentication failed")
+            return False
+        elif response_str.startswith("ERROR") or response_str.startswith("INVALID"):
+            logger.error(f"Authentication helper error: {response_str}")
+            return False
+        else:
+            logger.error(f"Unexpected response from authentication helper (length={len(response_str)})")
+            return False
+            
+    except FileNotFoundError:
+        logger.error(f"Authentication socket not found: {socket_path}")
+        return False
+    except (socket.timeout, socket.error) as e:
+        logger.error(f"Error communicating with authentication socket: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error during socket authentication: {e}")
+        return False
+
+
 def verify_system_user(username: str, password: str) -> bool:
     """Verify user credentials against system users
     
@@ -25,30 +99,42 @@ def verify_system_user(username: str, password: str) -> bool:
     Returns:
         bool: True if credentials are valid
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         # Check if user exists
         pwd.getpwnam(username)
         
-        # Try PAM authentication
+        # Try authentication via socket-activated helper (runs as root)
+        # This is required because PAM can only authenticate other users when running as root
         try:
-            import pamela
-            pamela.authenticate(username, password, service='login')
-            return True
-        except ImportError:
-            # PAM not available (e.g., on Windows for development)
-            # In development, accept any password for existing system user
+            result = _authenticate_via_socket(username, password)
+            return result
+        except Exception as e:
+            logger.error("Socket authentication exception", exc_info=True)
+            # Fallback to direct PAM authentication (only works for same user)
+            # This is mainly for development/debugging
             if settings.debug:
-                return True
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="PAM authentication not available"
-            )
-        except pamela.PAMError:
-            # Authentication failed
+                try:
+                    import pam
+                    # In debug mode, try direct PAM (may only work for router-webui user)
+                    p = pam.pam()
+                    result = p.authenticate(username, password, service='login')
+                    if result:
+                        logger.info("Direct PAM authentication successful")
+                    return result
+                except Exception as pam_error:
+                    logger.warning("Direct PAM authentication also failed", exc_info=True)
+            
             return False
             
     except KeyError:
         # User doesn't exist
+        logger.warning("User does not exist")
+        return False
+    except Exception as e:
+        logger.error("Unexpected error in verify_system_user", exc_info=True)
         return False
 
 
@@ -137,18 +223,27 @@ async def authenticate_user(login: LoginRequest) -> LoginResponse:
     Raises:
         HTTPException: If credentials are invalid
     """
-    if not verify_system_user(login.username, login.password):
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info("Authentication attempt")
+    auth_result = verify_system_user(login.username, login.password)
+    
+    if not auth_result:
+        logger.warning("Authentication failed")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    logger.info("Authentication successful, creating JWT token")
     access_token = create_access_token(login.username)
     
-    return LoginResponse(
+    response = LoginResponse(
         access_token=access_token,
         token_type="bearer",
         username=login.username
     )
+    return response
 

@@ -15,7 +15,8 @@ import {
   HiLightningBolt,
   HiTrendingUp,
   HiBell,
-  HiClipboardCheck,
+  HiGlobe,
+  HiServer,
 } from 'react-icons/hi';
 import { FaGithub } from 'react-icons/fa';
 import { apiClient } from '../../api/client';
@@ -177,28 +178,36 @@ export function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
               </FlowbiteSidebar.Item>
 
               {appriseEnabled && (
-                <>
-                  <FlowbiteSidebar.Item
-                    as={Link}
-                    to="/apprise"
-                    icon={HiBell}
-                    active={location.pathname === '/apprise'}
-                    onClick={handleItemClick}
-                  >
-                    Apprise
-                  </FlowbiteSidebar.Item>
-
-                  <FlowbiteSidebar.Item
-                    as={Link}
-                    to="/notifications"
-                    icon={HiClipboardCheck}
-                    active={location.pathname === '/notifications'}
-                    onClick={handleItemClick}
-                  >
-                    Notifications
-                  </FlowbiteSidebar.Item>
-                </>
+                <FlowbiteSidebar.Item
+                  as={Link}
+                  to="/notifications"
+                  icon={HiBell}
+                  active={location.pathname === '/notifications'}
+                  onClick={handleItemClick}
+                >
+                  Notifications
+                </FlowbiteSidebar.Item>
               )}
+
+              <FlowbiteSidebar.Item
+                as={Link}
+                to="/dns"
+                icon={HiGlobe}
+                active={location.pathname === '/dns'}
+                onClick={handleItemClick}
+              >
+                DNS
+              </FlowbiteSidebar.Item>
+
+              <FlowbiteSidebar.Item
+                as={Link}
+                to="/dhcp"
+                icon={HiServer}
+                active={location.pathname === '/dhcp'}
+                onClick={handleItemClick}
+              >
+                DHCP
+              </FlowbiteSidebar.Item>
 
               {cakeEnabled && (
                 <FlowbiteSidebar.Item

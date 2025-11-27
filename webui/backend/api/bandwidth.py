@@ -9,7 +9,8 @@ from pydantic import BaseModel
 import re
 
 from ..auth import get_current_user
-from ..database import AsyncSessionLocal, InterfaceStatsDB, ClientBandwidthStatsDB, ClientConnectionStatsDB
+from ..database import AsyncSessionLocal, InterfaceStatsDB, ClientBandwidthStatsDB, ClientConnectionStatsDB, SpeedtestResultDB
+from ipaddress import ip_address, IPv4Address
 from ..models import (
     ClientBandwidthHistory, ClientBandwidthCurrent, ClientBandwidthDataPoint,
     ClientConnectionCurrent, ClientConnectionHistory, ClientConnectionDataPoint
@@ -34,6 +35,15 @@ def _is_ipv4(ip: str) -> bool:
             if num < 0 or num > 255:
                 return False
         return True
+    except (ValueError, AttributeError):
+        return False
+
+
+def _is_private_ip(ip_str: str) -> bool:
+    """Check if an IP address is in a private range"""
+    try:
+        ip = ip_address(ip_str)
+        return ip.is_private
     except (ValueError, AttributeError):
         return False
 
@@ -137,6 +147,33 @@ async def get_bandwidth_history(
         
         result = await session.execute(query)
         stats = result.scalars().all()
+        
+        # For WAN interface, identify and subtract speedtest connection bytes
+        # Fetch speedtest results for the same time range
+        speedtest_query = select(SpeedtestResultDB).where(
+            SpeedtestResultDB.timestamp >= start_time
+        ).order_by(SpeedtestResultDB.timestamp.asc())
+        
+        speedtest_result = await session.execute(speedtest_query)
+        speedtests = speedtest_result.scalars().all()
+        
+        # Build a set of time windows to exclude for speedtests
+        # Since router-initiated connections aren't tracked in client_connection_stats,
+        # we'll exclude time periods around speedtests
+        speedtest_exclude_windows: List[Tuple[datetime, datetime]] = []
+        
+        if (interface is None or interface == 'ppp0') and speedtests:
+            # For each speedtest, estimate the duration and create an exclusion window
+            for st in speedtests:
+                # Estimate speedtest duration based on typical values:
+                # - Ping: ~1 second
+                # - Download test: typically 10-30 seconds depending on speed
+                # - Upload test: typically 10-30 seconds depending on speed
+                # Total: ~30-60 seconds, we'll use 2 minutes to be safe
+                # Start 30 seconds before (for connection setup and to catch ramp-up) and end 30 seconds after
+                window_start = st.timestamp - timedelta(seconds=30)
+                window_end = st.timestamp + timedelta(seconds=120)
+                speedtest_exclude_windows.append((window_start, window_end))
     
     # Group by interface
     interfaces = {}
@@ -144,9 +181,6 @@ async def get_bandwidth_history(
         if stat.interface not in interfaces:
             interfaces[stat.interface] = []
         
-        # Calculate bandwidth in Mbps
-        # Note: We store cumulative bytes, need to calculate rate
-        # For now, we'll use the raw bytes and let frontend calculate rate
         interfaces[stat.interface].append({
             'timestamp': stat.timestamp,
             'rx_bytes': stat.rx_bytes,
@@ -173,11 +207,48 @@ async def get_bandwidth_history(
                 prev = data_points[i - 1]
                 curr = data_points[i]
                 
+                # For WAN interface, check if this data point or interval overlaps with any speedtest window
+                if iface == 'ppp0' and speedtest_exclude_windows:
+                    # Check if either endpoint of the interval is in a speedtest window, or if the interval overlaps
+                    interval_start = prev['timestamp']
+                    interval_end = curr['timestamp']
+                    prev_timestamp = prev['timestamp']
+                    curr_timestamp = curr['timestamp']
+                    
+                    should_exclude = False
+                    for window_start, window_end in speedtest_exclude_windows:
+                        # Check if previous timestamp is in window (delta would include speedtest start)
+                        if window_start <= prev_timestamp <= window_end:
+                            should_exclude = True
+                            break
+                        # Check if current timestamp is in window (delta would include speedtest end)
+                        if window_start <= curr_timestamp <= window_end:
+                            should_exclude = True
+                            break
+                        # Check if interval overlaps with window (interval spans across speedtest)
+                        if not (interval_end < window_start or interval_start > window_end):
+                            should_exclude = True
+                            break
+                    
+                    if should_exclude:
+                        # Exclude this interval - set rate to 0
+                        # This creates a gap in the chart, which is better than showing inflated values
+                        processed_points.append(InterfaceDataPoint(
+                            timestamp=curr['timestamp'],
+                            rx_mbps=0.0,
+                            tx_mbps=0.0
+                        ))
+                        continue
+                
                 time_diff = (curr['timestamp'] - prev['timestamp']).total_seconds()
                 if time_diff > 0:
+                    # Calculate delta (interval bytes)
+                    rx_delta = curr['rx_bytes'] - prev['rx_bytes']
+                    tx_delta = curr['tx_bytes'] - prev['tx_bytes']
+                    
                     # Bytes per second -> Megabits per second
-                    rx_mbps = ((curr['rx_bytes'] - prev['rx_bytes']) * 8) / (time_diff * 1_000_000)
-                    tx_mbps = ((curr['tx_bytes'] - prev['tx_bytes']) * 8) / (time_diff * 1_000_000)
+                    rx_mbps = (rx_delta * 8) / (time_diff * 1_000_000)
+                    tx_mbps = (tx_delta * 8) / (time_diff * 1_000_000)
                     
                     # Clamp to reasonable values (ignore spikes/anomalies)
                     rx_mbps = max(0, min(rx_mbps, 10000))  # Max 10 Gbps

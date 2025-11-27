@@ -4,8 +4,9 @@
  * Supports 30+ popular notification services
  */
 import { useState } from 'react';
-import { Card, Button, Label, TextInput, Select, Alert } from 'flowbite-react';
+import { Button, Label, TextInput, Select, Alert, Modal, Textarea } from 'flowbite-react';
 import { HiClipboard, HiCheckCircle } from 'react-icons/hi';
+import { apiClient } from '../api/client';
 
 type ServiceType = 
   // Email
@@ -29,11 +30,35 @@ interface ServiceConfig {
   [key: string]: string | number | boolean;
 }
 
-export function AppriseUrlGenerator() {
+type EmailProvider = 
+  | 'gmail'
+  | 'yahoo'
+  | 'hotmail'
+  | 'live'
+  | 'fastmail'
+  | 'zoho'
+  | 'yandex'
+  | 'sendgrid'
+  | 'qq'
+  | '163'
+  | 'custom';
+
+interface AppriseUrlGeneratorProps {
+  onServiceSaved?: () => void;
+}
+
+export function AppriseUrlGenerator({ onServiceSaved }: AppriseUrlGeneratorProps = {}) {
   const [serviceType, setServiceType] = useState<ServiceType | ''>('');
   const [config, setConfig] = useState<ServiceConfig>({});
   const [generatedUrl, setGeneratedUrl] = useState<string>('');
   const [copied, setCopied] = useState(false);
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [saveDescription, setSaveDescription] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [emailProvider, setEmailProvider] = useState<EmailProvider>('custom');
 
   const serviceTypes: { value: ServiceType; label: string; category?: string }[] = [
     // Email
@@ -94,12 +119,42 @@ export function AppriseUrlGenerator() {
       case 'email': {
         const username = String(config.username || '');
         const password = String(config.password || '');
-        const smtpHost = String(config.smtpHost || '');
-        const port = String(config.port || '587');
         const to = String(config.to || '');
         const from = String(config.from || username);
-        const scheme = port === '465' ? 'mailtos' : 'mailto';
-        url = `${scheme}://${urlEncode(username)}:${urlEncode(password)}@${smtpHost}:${port}?to=${urlEncode(to)}&from=${urlEncode(from)}`;
+        
+        // Handle built-in email providers
+        if (emailProvider !== 'custom') {
+          const providerDomains: Record<EmailProvider, string> = {
+            gmail: 'gmail.com',
+            yahoo: 'yahoo.com',
+            hotmail: 'hotmail.com',
+            live: 'live.com',
+            fastmail: 'fastmail.com',
+            zoho: 'zoho.com',
+            yandex: 'yandex.com',
+            sendgrid: 'sendgrid.com',
+            qq: 'qq.com',
+            '163': '163.com',
+            custom: '',
+          };
+          
+          const domain = providerDomains[emailProvider];
+          
+          // For built-in providers, use mailto:// (secure is implied)
+          if (emailProvider === 'sendgrid') {
+            // SendGrid requires from parameter
+            const fromEmail = from || username;
+            url = `mailto://${urlEncode(username)}:${urlEncode(password)}@${domain}?from=${urlEncode(fromEmail)}`;
+          } else {
+            url = `mailto://${urlEncode(username)}:${urlEncode(password)}@${domain}`;
+          }
+        } else {
+          // Custom SMTP server
+          const smtpHost = String(config.smtpHost || '');
+          const port = String(config.port || '587');
+          const scheme = port === '465' ? 'mailtos' : 'mailto';
+          url = `${scheme}://${urlEncode(username)}:${urlEncode(password)}@${smtpHost}:${port}?to=${urlEncode(to)}&from=${urlEncode(from)}`;
+        }
         break;
       }
 
@@ -412,71 +467,176 @@ export function AppriseUrlGenerator() {
         return (
           <div className="space-y-4">
             <div>
-              <Label htmlFor="smtpHost">SMTP Host</Label>
-              <TextInput
-                id="smtpHost"
-                type="text"
-                placeholder="smtp.gmail.com"
-                value={String(config.smtpHost || '')}
-                onChange={(e) => handleConfigChange('smtpHost', e.target.value)}
-              />
+              <Label htmlFor="emailProvider">Email Provider</Label>
+              <Select
+                id="emailProvider"
+                value={emailProvider}
+                onChange={(e) => {
+                  setEmailProvider(e.target.value as EmailProvider);
+                  // Clear config when switching providers
+                  setConfig({});
+                }}
+              >
+                <option value="custom">Custom SMTP Server</option>
+                <option value="gmail">Gmail</option>
+                <option value="yahoo">Yahoo</option>
+                <option value="hotmail">Hotmail</option>
+                <option value="live">Live.com</option>
+                <option value="fastmail">Fastmail</option>
+                <option value="zoho">Zoho</option>
+                <option value="yandex">Yandex</option>
+                <option value="sendgrid">SendGrid</option>
+                <option value="qq">QQ Mail</option>
+                <option value="163">163 Mail</option>
+              </Select>
             </div>
+
+            {/* Provider-specific notes */}
+            {emailProvider === 'gmail' && (
+              <Alert color="info">
+                <div className="text-sm">
+                  <strong>Note:</strong> Google users using 2-Step Verification will be required to generate an{' '}
+                  <a 
+                    href="https://myaccount.google.com/apppasswords" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-600 dark:text-blue-400 underline"
+                  >
+                    app password
+                  </a>
+                  {' '}that you can use in the password field.
+                </div>
+              </Alert>
+            )}
+
+            {emailProvider === 'yahoo' && (
+              <Alert color="info">
+                <div className="text-sm">
+                  <strong>Note:</strong> Yahoo users will be required to generate an{' '}
+                  <a 
+                    href="https://login.yahoo.com/account/security/app-passwords" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-600 dark:text-blue-400 underline"
+                  >
+                    app password
+                  </a>
+                  {' '}that you can use in the password field.
+                </div>
+              </Alert>
+            )}
+
+            {emailProvider === 'fastmail' && (
+              <Alert color="info">
+                <div className="text-sm">
+                  <strong>Note:</strong> Fastmail users are required to generate a custom App password before connecting. 
+                  You must assign the <strong>SMTP</strong> option to the new App you generate. 
+                  This Fastmail plugin supports 116 domains - just make sure you identify the email address you're using when building the URL.
+                </div>
+              </Alert>
+            )}
+
+            {emailProvider === 'custom' && (
+              <>
+                <div>
+                  <Label htmlFor="smtpHost">SMTP Host</Label>
+                  <TextInput
+                    id="smtpHost"
+                    type="text"
+                    placeholder="smtp.gmail.com"
+                    value={String(config.smtpHost || '')}
+                    onChange={(e) => handleConfigChange('smtpHost', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="port">Port</Label>
+                  <TextInput
+                    id="port"
+                    type="text"
+                    placeholder="587"
+                    value={String(config.port || '587')}
+                    onChange={(e) => handleConfigChange('port', e.target.value)}
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Use 465 for SSL/TLS, 587 for STARTTLS
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="to">To (Recipient Email)</Label>
+                  <TextInput
+                    id="to"
+                    type="email"
+                    placeholder="recipient@example.com"
+                    value={String(config.to || '')}
+                    onChange={(e) => handleConfigChange('to', e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+
             <div>
-              <Label htmlFor="port">Port</Label>
-              <TextInput
-                id="port"
-                type="text"
-                placeholder="587"
-                value={String(config.port || '587')}
-                onChange={(e) => handleConfigChange('port', e.target.value)}
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Use 465 for SSL/TLS, 587 for STARTTLS
-              </p>
-            </div>
-            <div>
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">
+                {emailProvider === 'custom' ? 'Username' : 'Email Address'}
+              </Label>
               <TextInput
                 id="username"
                 type="text"
-                placeholder="user@example.com"
+                placeholder={emailProvider === 'custom' ? 'user@example.com' : 'user@provider.com'}
                 value={String(config.username || '')}
                 onChange={(e) => handleConfigChange('username', e.target.value)}
               />
             </div>
+
             <div>
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">
+                {emailProvider === 'gmail' || emailProvider === 'yahoo' || emailProvider === 'fastmail' 
+                  ? 'App Password' 
+                  : 'Password'}
+              </Label>
               <TextInput
                 id="password"
                 type="password"
-                placeholder="Your password"
+                placeholder={
+                  emailProvider === 'gmail' || emailProvider === 'yahoo' || emailProvider === 'fastmail'
+                    ? 'App password (not your regular password)'
+                    : 'Your password'
+                }
                 value={String(config.password || '')}
                 onChange={(e) => handleConfigChange('password', e.target.value)}
               />
             </div>
-            <div>
-              <Label htmlFor="to">To (Recipient Email)</Label>
-              <TextInput
-                id="to"
-                type="email"
-                placeholder="recipient@example.com"
-                value={String(config.to || '')}
-                onChange={(e) => handleConfigChange('to', e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="from">From (Sender Email - Optional)</Label>
-              <TextInput
-                id="from"
-                type="email"
-                placeholder="sender@example.com"
-                value={String(config.from || '')}
-                onChange={(e) => handleConfigChange('from', e.target.value)}
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Defaults to username if not provided
-              </p>
-            </div>
+
+            {emailProvider === 'sendgrid' && (
+              <div>
+                <Label htmlFor="from">From Email (Required for SendGrid)</Label>
+                <TextInput
+                  id="from"
+                  type="email"
+                  placeholder="noreply@your-validated-domain.com"
+                  value={String(config.from || '')}
+                  onChange={(e) => handleConfigChange('from', e.target.value)}
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Must use a validated domain from your SendGrid account
+                </p>
+              </div>
+            )}
+
+            {emailProvider === 'custom' && (
+              <div>
+                <Label htmlFor="from">From (Sender Email - Optional)</Label>
+                <TextInput
+                  id="from"
+                  type="email"
+                  placeholder="sender@example.com"
+                  value={String(config.from || '')}
+                  onChange={(e) => handleConfigChange('from', e.target.value)}
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Defaults to username if not provided
+                </p>
+              </div>
+            )}
           </div>
         );
 
@@ -1527,10 +1687,7 @@ export function AppriseUrlGenerator() {
   }, {} as Record<string, typeof serviceTypes>);
 
   return (
-    <Card className="bg-gray-50 dark:bg-gray-800">
-      <h3 className="text-xl font-bold mb-4">Apprise URL Generator</h3>
-      
-      <div className="space-y-4">
+    <div className="space-y-4">
         <div>
           <Label htmlFor="serviceType">Service Type</Label>
           <Select
@@ -1597,16 +1754,119 @@ export function AppriseUrlGenerator() {
                   </>
                 )}
               </Button>
+              <Button
+                onClick={() => {
+                  setSaveModalOpen(true);
+                  setSaveName('');
+                  setSaveDescription('');
+                  setSaveError(null);
+                  setSaveSuccess(false);
+                }}
+                color="blue"
+                size="sm"
+              >
+                Save Service
+              </Button>
             </div>
             <Alert color="info" className="mt-2">
               <div className="text-sm">
-                <strong>Note:</strong> This URL contains sensitive information. 
-                Store it securely in your secrets.yaml file.
+                <strong>Note:</strong> You can save this service to the database for easier management, or copy it to store in secrets.yaml.
               </div>
             </Alert>
           </div>
         )}
-      </div>
-    </Card>
+
+        {/* Save Service Modal */}
+        <Modal show={saveModalOpen} onClose={() => setSaveModalOpen(false)}>
+          <Modal.Header>Save Apprise Service</Modal.Header>
+          <Modal.Body>
+            <div className="space-y-4">
+              {saveError && (
+                <Alert color="failure">
+                  {saveError}
+                </Alert>
+              )}
+              {saveSuccess && (
+                <Alert color="success">
+                  Service saved successfully!
+                </Alert>
+              )}
+              <div>
+                <Label htmlFor="saveName" value="Service Name *" />
+                <TextInput
+                  id="saveName"
+                  value={saveName}
+                  onChange={(e) => setSaveName(e.target.value)}
+                  placeholder="e.g., Discord Notifications"
+                  required
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="saveDescription" value="Description (optional)" />
+                <Textarea
+                  id="saveDescription"
+                  value={saveDescription}
+                  onChange={(e) => setSaveDescription(e.target.value)}
+                  placeholder="Optional description for this service"
+                  rows={3}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="saveUrl" value="Service URL" />
+                <TextInput
+                  id="saveUrl"
+                  readOnly
+                  value={generatedUrl}
+                  className="mt-1 font-mono text-sm"
+                />
+              </div>
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              color="blue"
+              onClick={async () => {
+                if (!saveName.trim()) {
+                  setSaveError('Service name is required');
+                  return;
+                }
+                setSaving(true);
+                setSaveError(null);
+                setSaveSuccess(false);
+                try {
+                  await apiClient.createAppriseService({
+                    name: saveName.trim(),
+                    description: saveDescription.trim() || null,
+                    url: generatedUrl,
+                  });
+                  setSaveSuccess(true);
+                  setTimeout(() => {
+                    setSaveModalOpen(false);
+                    setSaveName('');
+                    setSaveDescription('');
+                    setSaveSuccess(false);
+                    // Call the callback if provided
+                    if (onServiceSaved) {
+                      onServiceSaved();
+                    }
+                  }, 1500);
+                } catch (error: any) {
+                  setSaveError(error.response?.data?.detail || error.message || 'Failed to save service');
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              disabled={saving || !saveName.trim()}
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </Button>
+            <Button color="gray" onClick={() => setSaveModalOpen(false)}>
+              Cancel
+            </Button>
+          </Modal.Footer>
+        </Modal>
+    </div>
   );
 }
