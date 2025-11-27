@@ -62,9 +62,8 @@ def _authenticate_via_socket(username: str, password: str) -> bool:
         # Parse response
         response_str = response.decode('utf-8', errors='ignore').strip()
         
-        # Log the raw response for debugging (only if not SUCCESS to avoid logging passwords)
-        if response_str != "SUCCESS":
-            logger.debug(f"Authentication helper raw response: {repr(response_str)}")
+        # Log the raw response for debugging
+        logger.debug(f"Authentication helper raw response: {repr(response_str)}")
         
         if not response_str:
             logger.error(f"Empty response from authentication helper for user {username}")
@@ -109,15 +108,19 @@ def verify_system_user(username: str, password: str) -> bool:
     
     try:
         # Check if user exists
+        logger.debug(f"Checking if user exists: {username}")
         pwd.getpwnam(username)
+        logger.debug(f"User {username} exists")
         
         # Try authentication via socket-activated helper (runs as root)
         # This is required because PAM can only authenticate other users when running as root
         try:
+            logger.debug(f"Attempting socket authentication for user: {username}")
             result = _authenticate_via_socket(username, password)
+            logger.info(f"Socket authentication result for {username}: {result}")
             return result
         except Exception as e:
-            logger.error(f"Socket authentication failed for user {username}: {e}")
+            logger.error(f"Socket authentication exception for user {username}: {e}", exc_info=True)
             # Fallback to direct PAM authentication (only works for same user)
             # This is mainly for development/debugging
             if settings.debug:
@@ -130,13 +133,16 @@ def verify_system_user(username: str, password: str) -> bool:
                         logger.info(f"Direct PAM authentication successful for user: {username}")
                     return result
                 except Exception as pam_error:
-                    logger.warning(f"Direct PAM authentication also failed: {pam_error}")
+                    logger.warning(f"Direct PAM authentication also failed: {pam_error}", exc_info=True)
             
             return False
             
     except KeyError:
         # User doesn't exist
         logger.warning(f"User does not exist: {username}")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error in verify_system_user for {username}: {e}", exc_info=True)
         return False
 
 
@@ -225,18 +231,30 @@ async def authenticate_user(login: LoginRequest) -> LoginResponse:
     Raises:
         HTTPException: If credentials are invalid
     """
-    if not verify_system_user(login.username, login.password):
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Attempting authentication for user: {login.username}")
+    auth_result = verify_system_user(login.username, login.password)
+    logger.info(f"Authentication result for {login.username}: {auth_result}")
+    
+    if not auth_result:
+        logger.warning(f"Authentication failed for user: {login.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    logger.info(f"Creating JWT token for user: {login.username}")
     access_token = create_access_token(login.username)
+    logger.info(f"JWT token created successfully for user: {login.username}")
     
-    return LoginResponse(
+    response = LoginResponse(
         access_token=access_token,
         token_type="bearer",
         username=login.username
     )
+    logger.info(f"Returning login response for user: {login.username}")
+    return response
 
