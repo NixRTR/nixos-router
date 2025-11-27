@@ -69,7 +69,7 @@ def _authenticate_via_socket(username: str, password: str) -> bool:
         if not response_str:
             logger.error(f"Empty response from authentication helper for user {username}")
             return False
-        el        if response_str == "SUCCESS":
+        elif response_str == "SUCCESS":
             logger.info(f"PAM authentication successful for user: {username}")
             return True
         elif response_str.startswith("FAILURE"):
