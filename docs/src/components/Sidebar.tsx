@@ -73,6 +73,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { path: '/webui/system-info', label: 'System Info' },
         { path: '/webui/apprise', label: 'Apprise' },
         { path: '/webui/notifications', label: 'Notifications' },
+        { path: '/webui/dns', label: 'DNS' },
+        { path: '/webui/dhcp', label: 'DHCP' },
       ],
     },
   ];

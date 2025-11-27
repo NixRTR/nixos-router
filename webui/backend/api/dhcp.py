@@ -40,8 +40,6 @@ def _control_service_via_systemctl(service_name: str, action: str) -> None:
     Raises:
         subprocess.CalledProcessError: If the command fails
     """
-    logger.debug(f"Controlling service via socket: {service_name}, action: {action}")
-    
     # Validate action
     valid_actions = ['start', 'stop', 'restart', 'reload']
     if action.lower() not in valid_actions:
@@ -74,8 +72,6 @@ def _control_service_via_systemctl(service_name: str, action: str) -> None:
         if "Invalid" in response_str or "Failed" in response_str or "error" in response_str.lower():
             logger.error(f"Service control returned error: {response_str}")
             raise subprocess.CalledProcessError(1, f"socket command", stderr=response_str)
-        
-        logger.debug(f"Service control command succeeded - response: {response_str[:500]}")
         
     except (socket.error, OSError) as e:
         logger.error(f"Failed to communicate with service control socket: {e}")
@@ -612,21 +608,16 @@ async def get_dhcp_service_status(
     Returns:
         Service status information
     """
-    logger.debug(f"Getting DHCP service status for: {DHCP_SERVICE_NAME}")
-    
     # Use the same get_service_status function that other services use
     status = get_service_status(DHCP_SERVICE_NAME)
     
     if status is None:
-        logger.debug(f"Service {DHCP_SERVICE_NAME} not found")
         return {
             "service_name": DHCP_SERVICE_NAME,
             "is_active": False,
             "is_enabled": False,
             "exists": False
         }
-    
-    logger.debug(f"Retrieved status for {DHCP_SERVICE_NAME}: active={status.is_active}, enabled={status.is_enabled}, pid={status.pid}")
     
     return {
         "service_name": DHCP_SERVICE_NAME,
@@ -652,14 +643,11 @@ async def control_dhcp_service(
     Returns:
         Success message
     """
-    logger.debug(f"Control DHCP service request - action: {action}")
-    
     if action not in ['start', 'stop', 'restart', 'reload']:
         logger.warning(f"Invalid action requested: {action}")
         raise HTTPException(status_code=400, detail="Action must be 'start', 'stop', 'restart', or 'reload'")
     
     full_service_name = f"{DHCP_SERVICE_NAME}.service"
-    logger.debug(f"Attempting to {action} service: {full_service_name}")
     
     try:
         # Use socket-based service control

@@ -19,8 +19,12 @@ The notification system provides:
 ## Accessing Notifications
 
 1. Navigate to the **Notifications** page in the WebUI sidebar
-2. View all configured notification rules
-3. Create, edit, or delete rules as needed
+2. The page is organized into sections:
+   - **Configured Rules**: Your automated notification rules
+   - **Configured Services**: Your Apprise notification services
+   - **Send Notification**: Manually send notifications
+   - **How It Works**: System overview
+3. Create, edit, or delete rules and services as needed
 
 ## Creating a Notification Rule
 
@@ -89,7 +93,7 @@ Choose which Apprise services should receive notifications for this rule:
 
 - Check the boxes next to the services you want to use
 - You can select multiple services
-- Services must be configured in your Apprise configuration first
+- Services must be configured first (see "Configured Services" section below)
 
 ### Step 6: Message Template
 
@@ -327,6 +331,46 @@ curl -X POST http://router-ip:8080/api/notifications/rules/1/test \\
 curl -X GET http://router-ip:8080/api/notifications/rules/1/history?limit=50 \\
   -H "Authorization: Bearer YOUR_TOKEN"
 \`\`\`
+
+## Configured Services
+
+The Notifications page also includes Apprise service management:
+
+### Managing Apprise Services
+
+**Add New Service:**
+1. Scroll to the **Configured Services** section
+2. Click **New Service** button
+3. Use the URL Generator modal to create an Apprise URL
+4. Enter a name and optional description
+5. Click **Save Service**
+
+**Edit Service:**
+1. Find the service in the configured services list
+2. Click **Edit** next to the service
+3. Modify the name, description, or URL
+4. Click **Save**
+
+**Delete Service:**
+1. Click **Delete** next to a service
+2. Confirm the deletion
+
+**Test Service:**
+1. Click **Test** next to a service
+2. A test notification will be sent to verify connectivity
+
+**Send to Service:**
+1. Click **Send** next to a service
+2. Enter your message and click **Send**
+
+### URL Generator
+
+The URL Generator modal helps you create Apprise URLs for supported services:
+
+- **Service Selection**: Choose from 30+ popular notification services
+- **Dynamic Forms**: Service-specific forms adapt to each service's requirements
+- **Email Provider Support**: Special handling for Gmail, Yahoo, Outlook, etc. with app password instructions
+- **URL Preview**: Real-time preview of the generated URL
 
 ## Additional Resources
 

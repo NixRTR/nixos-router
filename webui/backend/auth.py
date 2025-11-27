@@ -62,24 +62,20 @@ def _authenticate_via_socket(username: str, password: str) -> bool:
         # Parse response
         response_str = response.decode('utf-8', errors='ignore').strip()
         
-        # Log the raw response for debugging
-        logger.debug(f"Authentication helper raw response: {repr(response_str)}")
-        
         if not response_str:
-            logger.error(f"Empty response from authentication helper for user {username}")
+            logger.error("Empty response from authentication helper")
             return False
         elif response_str == "SUCCESS":
-            logger.info(f"PAM authentication successful for user: {username}")
+            logger.info("PAM authentication successful")
             return True
         elif response_str.startswith("FAILURE"):
-            # Log the detailed PAM error if available (includes code and reason)
-            logger.warning(f"PAM authentication failed for user: {username}. Response: {response_str}")
+            logger.warning("PAM authentication failed")
             return False
         elif response_str.startswith("ERROR") or response_str.startswith("INVALID"):
-            logger.error(f"Authentication helper error for user {username}: {response_str}")
+            logger.error(f"Authentication helper error: {response_str}")
             return False
         else:
-            logger.error(f"Unexpected response from authentication helper (length={len(response_str)}): {repr(response_str)}")
+            logger.error(f"Unexpected response from authentication helper (length={len(response_str)})")
             return False
             
     except FileNotFoundError:
@@ -108,19 +104,15 @@ def verify_system_user(username: str, password: str) -> bool:
     
     try:
         # Check if user exists
-        logger.debug(f"Checking if user exists: {username}")
         pwd.getpwnam(username)
-        logger.debug(f"User {username} exists")
         
         # Try authentication via socket-activated helper (runs as root)
         # This is required because PAM can only authenticate other users when running as root
         try:
-            logger.debug(f"Attempting socket authentication for user: {username}")
             result = _authenticate_via_socket(username, password)
-            logger.info(f"Socket authentication result for {username}: {result}")
             return result
         except Exception as e:
-            logger.error(f"Socket authentication exception for user {username}: {e}", exc_info=True)
+            logger.error("Socket authentication exception", exc_info=True)
             # Fallback to direct PAM authentication (only works for same user)
             # This is mainly for development/debugging
             if settings.debug:
@@ -130,19 +122,19 @@ def verify_system_user(username: str, password: str) -> bool:
                     p = pam.pam()
                     result = p.authenticate(username, password, service='login')
                     if result:
-                        logger.info(f"Direct PAM authentication successful for user: {username}")
+                        logger.info("Direct PAM authentication successful")
                     return result
                 except Exception as pam_error:
-                    logger.warning(f"Direct PAM authentication also failed: {pam_error}", exc_info=True)
+                    logger.warning("Direct PAM authentication also failed", exc_info=True)
             
             return False
             
     except KeyError:
         # User doesn't exist
-        logger.warning(f"User does not exist: {username}")
+        logger.warning("User does not exist")
         return False
     except Exception as e:
-        logger.error(f"Unexpected error in verify_system_user for {username}: {e}", exc_info=True)
+        logger.error("Unexpected error in verify_system_user", exc_info=True)
         return False
 
 
@@ -234,27 +226,24 @@ async def authenticate_user(login: LoginRequest) -> LoginResponse:
     import logging
     logger = logging.getLogger(__name__)
     
-    logger.info(f"Attempting authentication for user: {login.username}")
+    logger.info("Authentication attempt")
     auth_result = verify_system_user(login.username, login.password)
-    logger.info(f"Authentication result for {login.username}: {auth_result}")
     
     if not auth_result:
-        logger.warning(f"Authentication failed for user: {login.username}")
+        logger.warning("Authentication failed")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    logger.info(f"Creating JWT token for user: {login.username}")
+    logger.info("Authentication successful, creating JWT token")
     access_token = create_access_token(login.username)
-    logger.info(f"JWT token created successfully for user: {login.username}")
     
     response = LoginResponse(
         access_token=access_token,
         token_type="bearer",
         username=login.username
     )
-    logger.info(f"Returning login response for user: {login.username}")
     return response
 

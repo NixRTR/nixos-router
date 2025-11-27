@@ -569,18 +569,13 @@ in
         SupplementaryGroups = [ ];
       };
       script = ''
-        # Log current user for debugging (before any checks)
-        echo "DEBUG: Script started, running as UID $(id -u), user $(id -un)" >&2
-        
         # Verify we're running as root (required for PAM to authenticate other users)
         CURRENT_UID=$(id -u)
         if [ "$CURRENT_UID" != "0" ]; then
-          echo "ERROR: Service must run as root for PAM authentication (currently UID $CURRENT_UID, user $(id -un))" >&2
+          echo "ERROR: Service must run as root for PAM authentication" >&2
           echo "ERROR"  # Output ERROR so backend can detect it
           exit 1
         fi
-        
-        echo "DEBUG: Verified running as root" >&2
         
         # Read authentication request from stdin (format: USERNAME\tPASSWORD)
         # Password may contain spaces, so we use tab as delimiter

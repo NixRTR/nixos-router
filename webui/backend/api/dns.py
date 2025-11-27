@@ -35,18 +35,14 @@ def _find_sudo() -> str:
     In NixOS, we need to use the wrapped sudo from /run/wrappers/bin/sudo
     which has the setuid bit set. The store path sudo doesn't have setuid.
     """
-    logger.debug("Finding sudo binary...")
-    
     # First try shutil.which (uses PATH, should find the wrapper)
     sudo_path = shutil.which('sudo')
     if sudo_path:
-        logger.debug(f"Found sudo via PATH: {sudo_path}")
         return sudo_path
     
     # Try NixOS wrapper path (has setuid bit)
     wrapper_path = '/run/wrappers/bin/sudo'
     if os.path.exists(wrapper_path) and os.access(wrapper_path, os.X_OK):
-        logger.debug(f"Found sudo at wrapper path: {wrapper_path}")
         return wrapper_path
     
     # Fallback to other common paths
@@ -58,7 +54,6 @@ def _find_sudo() -> str:
     
     for path in candidates:
         if os.path.exists(path) and os.access(path, os.X_OK):
-            logger.debug(f"Found sudo at: {path}")
             return path
     
     logger.error("sudo binary not found in any location")
@@ -67,12 +62,9 @@ def _find_sudo() -> str:
 
 def _find_systemctl() -> str:
     """Find systemctl binary path (NixOS way)"""
-    logger.debug("Finding systemctl binary...")
-    
     # Check environment variable first (set by NixOS service)
     env_path = os.environ.get("SYSTEMCTL_BIN")
     if env_path and os.path.exists(env_path):
-        logger.debug(f"Found systemctl via SYSTEMCTL_BIN env var: {env_path}")
         return env_path
     
     # Try common paths
@@ -84,7 +76,6 @@ def _find_systemctl() -> str:
     
     for path in candidates:
         if os.path.exists(path) and os.access(path, os.X_OK):
-            logger.debug(f"Found systemctl at: {path}")
             return path
     
     logger.error("systemctl binary not found in any location")
@@ -105,8 +96,6 @@ def _control_service_via_systemctl(service_name: str, action: str) -> None:
     Raises:
         subprocess.CalledProcessError: If the command fails
     """
-    logger.debug(f"Controlling service via socket: {service_name}, action: {action}")
-    
     # Validate action
     valid_actions = ['start', 'stop', 'restart', 'reload']
     if action.lower() not in valid_actions:
@@ -140,8 +129,6 @@ def _control_service_via_systemctl(service_name: str, action: str) -> None:
         if "Invalid" in response_str or "Failed" in response_str or "error" in response_str.lower():
             logger.error(f"Service control returned error: {response_str}")
             raise subprocess.CalledProcessError(1, f"socket command", stderr=response_str)
-        
-        logger.debug(f"Service control command succeeded - response: {response_str[:500]}")
         
     except (socket.error, OSError) as e:
         logger.error(f"Failed to communicate with service control socket: {e}")
@@ -593,21 +580,17 @@ async def get_dns_service_status(
     Returns:
         Service status information
     """
-    logger.debug(f"Getting DNS service status for network: {network}")
-    
     if network not in NETWORK_SERVICE_MAP:
         logger.warning(f"Invalid network requested: {network}")
         raise HTTPException(status_code=400, detail="Network must be 'homelab' or 'lan'")
     
     service_name = NETWORK_SERVICE_MAP[network]
-    logger.debug(f"Mapped network '{network}' to service '{service_name}'")
     
     # Use the same get_service_status function that other services use
     # This uses systemctl which works for reading status without sudo
     status = get_service_status(service_name)
     
     if status is None:
-        logger.debug(f"Service {service_name} not found")
         return {
             "network": network,
             "service_name": service_name,
@@ -615,8 +598,6 @@ async def get_dns_service_status(
             "is_enabled": False,
             "exists": False
         }
-    
-    logger.debug(f"Retrieved status for {service_name}: active={status.is_active}, enabled={status.is_enabled}, pid={status.pid}")
     
     return {
         "network": network,
@@ -645,8 +626,6 @@ async def control_dns_service(
     Returns:
         Success message
     """
-    logger.debug(f"Control DNS service request - network: {network}, action: {action}")
-    
     if network not in NETWORK_SERVICE_MAP:
         logger.warning(f"Invalid network requested: {network}")
         raise HTTPException(status_code=400, detail="Network must be 'homelab' or 'lan'")
@@ -657,8 +636,6 @@ async def control_dns_service(
     
     service_name = NETWORK_SERVICE_MAP[network]
     full_service_name = f"{service_name}.service"
-    logger.debug(f"Mapped network '{network}' to service '{service_name}' (full name: '{full_service_name}')")
-    logger.debug(f"Attempting to {action} service: {full_service_name}")
     
     try:
         # Use sudo systemctl to control the service
