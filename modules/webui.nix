@@ -551,13 +551,24 @@ in
       serviceConfig = {
         Type = "simple";
         User = "root";
+        # Ensure service runs as root - required for PAM to authenticate other users
+        # Reference: https://pypi.org/project/python-pam/ - "You have root: you can check any account's password"
         StandardInput = "socket";
         StandardOutput = "journal";
         StandardError = "journal";
+        # Don't use security hardening that prevents root execution
+        NoNewPrivileges = false;
       };
       script = ''
-        # Read authentication request from stdin (format: USERNAME PASSWORD)
-        # Password may contain spaces, so we use a delimiter
+        # Verify we're running as root (required for PAM to authenticate other users)
+        if [ "$(id -u)" != "0" ]; then
+          echo "ERROR: Service must run as root for PAM authentication" >&2
+          echo "ERROR: Currently running as UID $(id -u), user $(id -un)" >&2
+          exit 1
+        fi
+        
+        # Read authentication request from stdin (format: USERNAME\tPASSWORD)
+        # Password may contain spaces, so we use tab as delimiter
         IFS=$'\t' read -r username password || exit 0
         
         # Validate username (alphanumeric, dash, underscore only, no spaces)
@@ -578,10 +589,15 @@ in
         PYTHON_SCRIPT=$(mktemp)
         cat > "$PYTHON_SCRIPT" <<'PYEOF'
 import sys
+import os
 try:
     import pamela
     username = sys.argv[1]
     password = sys.argv[2]
+    # Verify we're running as root
+    if os.geteuid() != 0:
+        print("ERROR: Python process is not running as root (euid={})".format(os.geteuid()), flush=True)
+        sys.exit(1)
     result = pamela.authenticate(username, password, service="login")
     if result:
         print("SUCCESS", flush=True)
