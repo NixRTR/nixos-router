@@ -15,6 +15,77 @@ from .models import LoginRequest, LoginResponse
 security = HTTPBearer()
 
 
+def _authenticate_via_socket(username: str, password: str) -> bool:
+    """Authenticate user via socket-activated helper service (runs as root)
+    
+    This is required because PAM can only authenticate other users when running as root.
+    Reference: https://pypi.org/project/python-pam/ - "You have root: you can check any account's password for validity"
+    
+    Uses a socket-activated service that runs as root and accepts authentication requests via
+    a Unix socket. This follows NixOS best practices by avoiding direct PAM usage in unprivileged service.
+    
+    Args:
+        username: System username
+        password: User password
+        
+    Returns:
+        bool: True if credentials are valid
+    """
+    import logging
+    import socket
+    logger = logging.getLogger(__name__)
+    
+    socket_path = "/run/router-webui/auth.sock"
+    
+    try:
+        # Connect to authentication socket
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(10)  # 10 second timeout
+        sock.connect(socket_path)
+        
+        # Send authentication request (format: "USERNAME\tPASSWORD\n")
+        # Using tab as delimiter since passwords may contain spaces
+        request = f"{username}\t{password}\n"
+        sock.sendall(request.encode('utf-8'))
+        sock.shutdown(socket.SHUT_WR)
+        
+        # Read response
+        response = b""
+        while True:
+            data = sock.recv(4096)
+            if not data:
+                break
+            response += data
+        
+        sock.close()
+        
+        # Parse response
+        response_str = response.decode('utf-8', errors='ignore').strip()
+        
+        if response_str == "SUCCESS":
+            logger.info(f"PAM authentication successful for user: {username}")
+            return True
+        elif response_str.startswith("FAILURE"):
+            logger.warning(f"PAM authentication failed for user: {username}")
+            return False
+        elif response_str.startswith("ERROR") or response_str.startswith("INVALID"):
+            logger.error(f"Authentication helper error for user {username}: {response_str}")
+            return False
+        else:
+            logger.error(f"Unexpected response from authentication helper: {response_str}")
+            return False
+            
+    except FileNotFoundError:
+        logger.error(f"Authentication socket not found: {socket_path}")
+        return False
+    except (socket.timeout, socket.error) as e:
+        logger.error(f"Error communicating with authentication socket: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error during socket authentication: {e}")
+        return False
+
+
 def verify_system_user(username: str, password: str) -> bool:
     """Verify user credentials against system users
     
@@ -32,32 +103,27 @@ def verify_system_user(username: str, password: str) -> bool:
         # Check if user exists
         pwd.getpwnam(username)
         
-        # Try PAM authentication
+        # Try authentication via socket-activated helper (runs as root)
+        # This is required because PAM can only authenticate other users when running as root
         try:
-            import pamela
-            # Use 'login' service for authenticating system users
-            # This works with standard NixOS PAM configuration
-            try:
-                result = pamela.authenticate(username, password, service='login')
-                if result:
-                    logger.info(f"PAM authentication successful for user: {username}")
-                else:
-                    logger.warning(f"PAM authentication failed for user: {username}")
-                return result
-            except pamela.PAMError as e:
-                # Authentication failed - log the error for debugging
-                logger.warning(f"PAM authentication error for user {username}: {e}")
-                return False
-        except ImportError:
-            # PAM not available (e.g., on Windows for development)
-            # In development, accept any password for existing system user
+            result = _authenticate_via_socket(username, password)
+            return result
+        except Exception as e:
+            logger.error(f"Socket authentication failed for user {username}: {e}")
+            # Fallback to direct PAM authentication (only works for same user)
+            # This is mainly for development/debugging
             if settings.debug:
-                logger.warning("PAM not available, using debug mode (accepting any password)")
-                return True
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="PAM authentication not available"
-            )
+                try:
+                    import pamela
+                    # In debug mode, try direct PAM (may only work for router-webui user)
+                    result = pamela.authenticate(username, password, service='login')
+                    if result:
+                        logger.info(f"Direct PAM authentication successful for user: {username}")
+                    return result
+                except Exception as pam_error:
+                    logger.warning(f"Direct PAM authentication also failed: {pam_error}")
+            
+            return False
             
     except KeyError:
         # User doesn't exist

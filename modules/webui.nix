@@ -313,15 +313,18 @@ in
         
         # Security hardening
         PrivateTmp = true;
-        ProtectSystem = "strict";
+        # Don't use ProtectSystem as it prevents PAM from accessing necessary system files
+        # Instead, rely on other security measures and the fact that the service runs as unprivileged user
         ProtectHome = true;
-        ReadWritePaths = [ "/var/lib/router-webui" ];
+        ReadWritePaths = [ "/var/lib/router-webui" "/run" ];
         ReadOnlyPaths = [ 
           "/var/lib/kea" 
           "/run/unbound-homelab" 
           "/run/unbound-lan"
           "/proc"
           "/sys"
+          "/usr"  # Protect /usr (read-only)
+          "/boot"  # Protect /boot (read-only)
         ];
         
         # Allow access to system monitoring
@@ -522,6 +525,80 @@ in
         
         # Execute systemctl command and output result
         ${pkgs.systemd}/bin/systemctl "$ACTION" "$SERVICE" 2>&1
+      '';
+    };
+    
+    # Socket-activated helper service for PAM authentication (runs as root)
+    # This is required because PAM can only authenticate other users when running as root
+    # The router-webui user can write authentication requests to the socket
+    systemd.sockets.router-webui-auth = {
+      description = "Router WebUI Authentication Socket";
+      wantedBy = [ "sockets.target" ];
+      before = [ "router-webui-backend.service" ];
+      socketConfig = {
+        ListenStream = "/run/router-webui/auth.sock";
+        SocketMode = "0660";
+        SocketUser = "root";
+        SocketGroup = "router-webui";
+        # Accept one connection at a time, spawn new service instance per connection
+        Accept = true;
+      };
+    };
+    
+    # Template service for authentication helper (systemd will spawn instances automatically)
+    systemd.services."router-webui-auth@" = {
+      description = "Router WebUI Authentication Helper";
+      serviceConfig = {
+        Type = "simple";
+        User = "root";
+        StandardInput = "socket";
+        StandardOutput = "journal";
+        StandardError = "journal";
+      };
+      script = ''
+        # Read authentication request from stdin (format: USERNAME PASSWORD)
+        # Password may contain spaces, so we use a delimiter
+        IFS=$'\t' read -r username password || exit 0
+        
+        # Validate username (alphanumeric, dash, underscore only, no spaces)
+        if ! echo "$username" | grep -qE '^[a-zA-Z0-9_-]+$'; then
+          echo "INVALID: Invalid username format" >&2
+          exit 1
+        fi
+        
+        # Check if user exists
+        if ! id "$username" &>/dev/null; then
+          echo "FAILURE: User does not exist"
+          exit 0
+        fi
+        
+        # Use Python to authenticate via PAM (running as root allows authenticating any user)
+        # Reference: https://pypi.org/project/python-pam/ - root can authenticate any user
+        result=$(${pythonEnv}/bin/python3 -c "
+import sys
+try:
+    import pamela
+    username = sys.argv[1]
+    password = sys.argv[2]
+    result = pamela.authenticate(username, password, service='login')
+    if result:
+        print('SUCCESS', end='')
+        sys.exit(0)
+    else:
+        print('FAILURE', end='')
+        sys.exit(0)
+except Exception as e:
+    print(f'ERROR: {e}', file=sys.stderr)
+    sys.exit(1)
+" "$username" "$password" 2>&1)
+        
+        exit_code=$?
+        if [ $exit_code -eq 0 ]; then
+          echo "$result"
+        else
+          echo "ERROR: Authentication helper failed" >&2
+          exit 1
+        fi
       '';
     };
   };
