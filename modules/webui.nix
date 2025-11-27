@@ -559,7 +559,9 @@ in
         # Ensure service runs as root - required for PAM to authenticate other users
         # Reference: https://pypi.org/project/python-pam/ - "You have root: you can check any account's password"
         StandardInput = "socket";
-        StandardOutput = "journal";
+        # Output to socket so backend can read the response
+        StandardOutput = "socket";
+        # Errors go to journal for debugging
         StandardError = "journal";
         # Don't use security hardening that prevents root execution
         NoNewPrivileges = false;
@@ -651,13 +653,15 @@ PYEOF
         rm -f "$PYTHON_SCRIPT"
         
         # Output the result to stdout (SUCCESS, FAILURE, or ERROR message)
-        # This will be captured by the backend via the socket
+        # This will be sent to the socket connection (StandardOutput = "socket")
+        # The output must go to stdout so it can be read by the backend via the socket
         if [ -n "$python_output" ]; then
-          echo "$python_output"
+          # Output the Python script's output directly to stdout
+          printf "%s" "$python_output"
         else
           # If no output but exit code indicates failure, output error
           if [ $exit_code -ne 0 ]; then
-            echo "ERROR: Python script failed with exit code $exit_code but produced no output"
+            printf "ERROR: Python script failed with exit code %s but produced no output" "$exit_code"
           fi
         fi
         
