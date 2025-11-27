@@ -122,9 +122,10 @@ def verify_system_user(username: str, password: str) -> bool:
             # This is mainly for development/debugging
             if settings.debug:
                 try:
-                    import pamela
+                    import pam
                     # In debug mode, try direct PAM (may only work for router-webui user)
-                    result = pamela.authenticate(username, password, service='login')
+                    p = pam.pam()
+                    result = p.authenticate(username, password, service='login')
                     if result:
                         logger.info(f"Direct PAM authentication successful for user: {username}")
                     return result

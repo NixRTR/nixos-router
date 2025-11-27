@@ -20,7 +20,7 @@ let
     passlib
     alembic
     bcrypt
-    pamela  # PAM authentication support
+    python-pam  # PAM authentication support
     manuf  # MAC address OUI vendor lookup
     httpx  # HTTP client for GitHub API requests
     apprise  # Notification service integration
@@ -605,7 +605,7 @@ import sys
 import os
 import traceback
 try:
-    import pamela
+    import pam
     username = sys.argv[1]
     password = sys.argv[2]
     # Verify we're running as root
@@ -617,8 +617,9 @@ try:
     # When running as root, we can authenticate any user
     # Use 'login' service which is standard for user authentication
     try:
-        # Use the simpler authenticate function directly
-        result = pamela.authenticate(username, password, service="login")
+        # python-pam uses pam.authenticate() function
+        p = pam.pam()
+        result = p.authenticate(username, password, service="login")
         
         if result:
             print("SUCCESS", flush=True)
