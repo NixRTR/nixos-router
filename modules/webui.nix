@@ -611,13 +611,27 @@ try:
     if os.geteuid() != 0:
         print("ERROR: Python process is not running as root (euid={})".format(os.geteuid()), flush=True)
         sys.exit(1)
-    result = pamela.authenticate(username, password, service="login")
-    if result:
-        print("SUCCESS", flush=True)
-        sys.exit(0)
-    else:
-        print("FAILURE", flush=True)
-        sys.exit(0)
+    
+    # Try to authenticate using PAM
+    # When running as root, we can authenticate any user
+    # Use 'login' service which is standard for user authentication
+    try:
+        p = pamela.pam()
+        result = p.authenticate(username, password, service="login")
+        # Get PAM error code and reason for debugging
+        code = p.code
+        reason = p.reason
+        
+        if result:
+            print("SUCCESS", flush=True)
+            sys.exit(0)
+        else:
+            # Authentication failed - log reason
+            print("FAILURE: PAM code={}, reason={}".format(code, reason), flush=True)
+            sys.exit(0)
+    except Exception as pam_error:
+        print("ERROR: PAM exception: {}".format(str(pam_error)), flush=True)
+        sys.exit(1)
 except Exception as e:
     # Print error to stdout so it can be captured
     print("ERROR: " + str(e), flush=True)
