@@ -574,23 +574,24 @@ in
         
         # Use Python to authenticate via PAM (running as root allows authenticating any user)
         # Reference: https://pypi.org/project/python-pam/ - root can authenticate any user
-        result=$(${pythonEnv}/bin/python3 -c "
+        # Note: Using double quotes for Python strings to avoid Nix multiline string quote escaping
+        result=$(${pythonEnv}/bin/python3 -c ''
 import sys
 try:
     import pamela
     username = sys.argv[1]
     password = sys.argv[2]
-    result = pamela.authenticate(username, password, service='login')
+    result = pamela.authenticate(username, password, service="login")
     if result:
-        print('SUCCESS', end='')
+        print("SUCCESS", end="")
         sys.exit(0)
     else:
-        print('FAILURE', end='')
+        print("FAILURE", end="")
         sys.exit(0)
 except Exception as e:
-    print(f'ERROR: {e}', file=sys.stderr)
+    print("ERROR: " + str(e), file=sys.stderr)
     sys.exit(1)
-" "$username" "$password" 2>&1)
+'' "$username" "$password" 2>&1)
         
         exit_code=$?
         if [ $exit_code -eq 0 ]; then
