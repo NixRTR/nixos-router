@@ -574,8 +574,9 @@ in
         
         # Use Python to authenticate via PAM (running as root allows authenticating any user)
         # Reference: https://pypi.org/project/python-pam/ - root can authenticate any user
-        # Note: Using double quotes for Python strings to avoid Nix multiline string quote escaping
-        result=$(${pythonEnv}/bin/python3 -c ''
+        # Write Python script to temporary file to avoid nested multiline string issues
+        PYTHON_SCRIPT=$(mktemp)
+        cat > "$PYTHON_SCRIPT" <<'PYEOF'
 import sys
 try:
     import pamela
@@ -591,9 +592,12 @@ try:
 except Exception as e:
     print("ERROR: " + str(e), file=sys.stderr)
     sys.exit(1)
-'' "$username" "$password" 2>&1)
+PYEOF
         
+        result=$(${pythonEnv}/bin/python3 "$PYTHON_SCRIPT" "$username" "$password" 2>&1)
         exit_code=$?
+        rm -f "$PYTHON_SCRIPT"
+        
         if [ $exit_code -eq 0 ]; then
           echo "$result"
         else
