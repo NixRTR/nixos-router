@@ -584,24 +584,33 @@ try:
     password = sys.argv[2]
     result = pamela.authenticate(username, password, service="login")
     if result:
-        print("SUCCESS", end="")
+        print("SUCCESS", flush=True)
         sys.exit(0)
     else:
-        print("FAILURE", end="")
+        print("FAILURE", flush=True)
         sys.exit(0)
 except Exception as e:
-    print("ERROR: " + str(e), file=sys.stderr)
+    # Print error to stdout so it can be captured
+    print("ERROR: " + str(e), flush=True)
     sys.exit(1)
 PYEOF
         
-        result=$(${pythonEnv}/bin/python3 "$PYTHON_SCRIPT" "$username" "$password" 2>&1)
+        # Run Python script and capture output
+        # Redirect stderr to stdout so we can capture errors, but separate them
+        python_output=$(${pythonEnv}/bin/python3 "$PYTHON_SCRIPT" "$username" "$password" 2>&1)
         exit_code=$?
         rm -f "$PYTHON_SCRIPT"
         
         if [ $exit_code -eq 0 ]; then
-          echo "$result"
+          # Success - output should be SUCCESS or FAILURE
+          echo "$python_output"
         else
-          echo "ERROR: Authentication helper failed" >&2
+          # Python script failed - check if there's an error message
+          if [ -n "$python_output" ]; then
+            echo "ERROR: $python_output" >&2
+          else
+            echo "ERROR: Authentication helper failed with exit code $exit_code" >&2
+          fi
           exit 1
         fi
       '';

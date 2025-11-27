@@ -62,7 +62,14 @@ def _authenticate_via_socket(username: str, password: str) -> bool:
         # Parse response
         response_str = response.decode('utf-8', errors='ignore').strip()
         
-        if response_str == "SUCCESS":
+        # Log the raw response for debugging (only if not SUCCESS to avoid logging passwords)
+        if response_str != "SUCCESS":
+            logger.debug(f"Authentication helper raw response: {repr(response_str)}")
+        
+        if not response_str:
+            logger.error(f"Empty response from authentication helper for user {username}")
+            return False
+        elif response_str == "SUCCESS":
             logger.info(f"PAM authentication successful for user: {username}")
             return True
         elif response_str.startswith("FAILURE"):
@@ -72,7 +79,7 @@ def _authenticate_via_socket(username: str, password: str) -> bool:
             logger.error(f"Authentication helper error for user {username}: {response_str}")
             return False
         else:
-            logger.error(f"Unexpected response from authentication helper: {response_str}")
+            logger.error(f"Unexpected response from authentication helper (length={len(response_str)}): {repr(response_str)}")
             return False
             
     except FileNotFoundError:
