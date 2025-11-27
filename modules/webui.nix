@@ -603,6 +603,7 @@ in
         cat > "$PYTHON_SCRIPT" <<'PYEOF'
 import sys
 import os
+import traceback
 try:
     import pamela
     username = sys.argv[1]
@@ -616,46 +617,56 @@ try:
     # When running as root, we can authenticate any user
     # Use 'login' service which is standard for user authentication
     try:
-        p = pamela.pam()
-        result = p.authenticate(username, password, service="login")
-        # Get PAM error code and reason for debugging
-        code = p.code
-        reason = p.reason
+        # Use the simpler authenticate function directly
+        result = pamela.authenticate(username, password, service="login")
         
         if result:
             print("SUCCESS", flush=True)
             sys.exit(0)
         else:
-            # Authentication failed - log reason
-            print("FAILURE: PAM code={}, reason={}".format(code, reason), flush=True)
+            # Authentication failed
+            print("FAILURE", flush=True)
             sys.exit(0)
     except Exception as pam_error:
-        print("ERROR: PAM exception: {}".format(str(pam_error)), flush=True)
+        # Get detailed error information
+        error_msg = "ERROR: PAM exception: {}".format(str(pam_error))
+        error_msg += "\nTraceback: {}".format(traceback.format_exc())
+        print(error_msg, flush=True)
         sys.exit(1)
 except Exception as e:
     # Print error to stdout so it can be captured
-    print("ERROR: " + str(e), flush=True)
+    error_msg = "ERROR: {}".format(str(e))
+    error_msg += "\nTraceback: {}".format(traceback.format_exc())
+    print(error_msg, flush=True)
     sys.exit(1)
 PYEOF
         
         # Run Python script and capture output
-        # Redirect stderr to stdout so we can capture errors, but separate them
+        # Capture both stdout and stderr
         python_output=$(${pythonEnv}/bin/python3 "$PYTHON_SCRIPT" "$username" "$password" 2>&1)
         exit_code=$?
+        
+        # Always remove the script file
         rm -f "$PYTHON_SCRIPT"
         
-        if [ $exit_code -eq 0 ]; then
-          # Success - output should be SUCCESS or FAILURE
+        # Output the result to stdout (SUCCESS, FAILURE, or ERROR message)
+        # This will be captured by the backend via the socket
+        if [ -n "$python_output" ]; then
           echo "$python_output"
         else
-          # Python script failed - check if there's an error message
-          if [ -n "$python_output" ]; then
-            echo "ERROR: $python_output" >&2
-          else
-            echo "ERROR: Authentication helper failed with exit code $exit_code" >&2
+          # If no output but exit code indicates failure, output error
+          if [ $exit_code -ne 0 ]; then
+            echo "ERROR: Python script failed with exit code $exit_code but produced no output"
           fi
-          exit 1
         fi
+        
+        # Also log errors to stderr so they appear in systemd journal
+        if [ $exit_code -ne 0 ] && [ -n "$python_output" ]; then
+          echo "ERROR: Authentication failed - $python_output" >&2
+        fi
+        
+        # Exit with the Python script's exit code
+        exit $exit_code
       '';
     };
   };
