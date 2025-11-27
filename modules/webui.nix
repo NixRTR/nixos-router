@@ -317,10 +317,10 @@ in
         # Instead, rely on other security measures and the fact that the service runs as unprivileged user
         ProtectHome = true;
         ReadWritePaths = [ "/var/lib/router-webui" "/run" ];
+        # Note: Don't include /run/unbound-* in ReadOnlyPaths as they may not exist if DNS is disabled
+        # The service will have read access to them via /run being in ReadWritePaths when they do exist
         ReadOnlyPaths = [ 
           "/var/lib/kea" 
-          "/run/unbound-homelab" 
-          "/run/unbound-lan"
           "/proc"
           "/sys"
           "/usr"  # Protect /usr (read-only)
