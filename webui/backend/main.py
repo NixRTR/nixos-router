@@ -6,9 +6,6 @@ import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, Query
 from fastapi.middleware.cors import CORSMiddleware
-import os
-import asyncio
-from datetime import datetime, time, timedelta, timezone
 
 from .config import settings
 
@@ -29,7 +26,7 @@ apprise_logger.setLevel(logging.DEBUG)
 # Also enable debug for apprise.plugins and apprise.attachment modules
 logging.getLogger('apprise.plugins').setLevel(logging.DEBUG)
 logging.getLogger('apprise.attachment').setLevel(logging.DEBUG)
-from .database import init_db, AsyncSessionLocal
+from .database import init_db
 from .websocket import manager, websocket_endpoint
 from .api.auth import router as auth_router
 from .api.history import router as history_router
@@ -40,57 +37,15 @@ from .api.speedtest import router as speedtest_router
 from .api.cake import router as cake_router
 from .api.apprise import router as apprise_router
 from .api.notifications import router as notifications_router
-from .collectors.aggregation import run_aggregation_job
-from .collectors.notifications import NotificationEvaluator
-from .workers.redis_buffer import start_buffer_flusher, stop_buffer_flusher
+from .workers import (
+    start_aggregation_worker,
+    stop_aggregation_worker,
+    start_notification_worker,
+    stop_notification_worker,
+    start_buffer_flusher,
+    stop_buffer_flusher,
+)
 from .utils.redis_client import close_redis_client
-
-notification_evaluator = NotificationEvaluator(AsyncSessionLocal)
-
-
-async def daily_aggregation_task():
-    """Background task that runs aggregation job daily at 2 AM"""
-    while True:
-        try:
-            # Calculate time until next 2 AM UTC
-            now = datetime.now(timezone.utc)
-            target_hour = 2  # 2 AM UTC
-            
-            # If it's already past 2 AM today, schedule for tomorrow
-            if now.hour >= target_hour:
-                next_run = datetime(now.year, now.month, now.day, target_hour, 0, 0, tzinfo=timezone.utc) + timedelta(days=1)
-            else:
-                next_run = datetime(now.year, now.month, now.day, target_hour, 0, 0, tzinfo=timezone.utc)
-            
-            wait_seconds = (next_run - now).total_seconds()
-            print(f"Aggregation job scheduled for {next_run} (in {wait_seconds/3600:.1f} hours)")
-            
-            await asyncio.sleep(wait_seconds)
-            
-            # Run aggregation job
-            await run_aggregation_job()
-            
-        except asyncio.CancelledError:
-            break
-        except Exception as e:
-            print(f"Error in daily aggregation task: {e}")
-            # Wait 1 hour before retrying on error
-            await asyncio.sleep(3600)
-
-
-async def notification_evaluator_task():
-    """Background task that periodically evaluates notification rules"""
-    while True:
-        try:
-            await notification_evaluator.evaluate_all()
-            await asyncio.sleep(settings.notification_check_interval)
-        except asyncio.CancelledError:
-            break
-        except Exception as exc:
-            logging.getLogger(__name__).error(
-                "Notification evaluator error: %s", exc, exc_info=True
-            )
-            await asyncio.sleep(settings.notification_check_interval)
 
 
 @asynccontextmanager
@@ -110,11 +65,12 @@ async def lifespan(app: FastAPI):
     await manager.start_broadcasting()
     print("WebSocket broadcaster started")
     
-    # Start daily aggregation task
-    aggregation_task = asyncio.create_task(daily_aggregation_task())
-    print("Daily aggregation task started")
-    notification_task = asyncio.create_task(notification_evaluator_task())
-    print("Notification evaluator task started")
+    # Start background workers
+    await start_aggregation_worker()
+    print("Aggregation worker started")
+    
+    await start_notification_worker()
+    print("Notification worker started")
     
     # Start Redis buffer flush worker if enabled
     if settings.redis_write_buffer_enabled:
@@ -125,19 +81,13 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     print("Shutting down...")
-    aggregation_task.cancel()
-    try:
-        await aggregation_task
-    except asyncio.CancelledError:
-        pass
-    print("Aggregation task stopped")
-
-    notification_task.cancel()
-    try:
-        await notification_task
-    except asyncio.CancelledError:
-        pass
-    print("Notification evaluator task stopped")
+    
+    # Stop background workers
+    await stop_aggregation_worker()
+    print("Aggregation worker stopped")
+    
+    await stop_notification_worker()
+    print("Notification worker stopped")
     
     await manager.stop_broadcasting()
     print("WebSocket broadcaster stopped")
