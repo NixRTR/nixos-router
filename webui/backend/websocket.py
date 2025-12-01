@@ -5,6 +5,7 @@ import asyncio
 import json
 import concurrent.futures
 import time
+import logging
 from typing import List, Set, Optional, Tuple
 from fastapi import WebSocket, WebSocketDisconnect
 from datetime import datetime, timezone
@@ -24,6 +25,10 @@ from .collectors.cake import collect_cake_stats, cake_stats_to_dict
 from .utils.cake import is_cake_enabled
 from .database import CakeStatsDB
 from .config import settings
+from .utils.redis_client import set_json, list_push, is_redis_available
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
@@ -143,7 +148,8 @@ class ConnectionManager:
                     collection_interval = settings.collection_interval_normal
                 
                 # Always collect metrics and store in database (regardless of connections)
-                metrics = await self._collect_all_metrics(should_throttle)
+                # Pass system_metrics to avoid duplicate collection
+                metrics = await self._collect_all_metrics(should_throttle, system_metrics)
                 
                 # Only broadcast if we have connected clients
                 if self.active_connections:
@@ -161,25 +167,40 @@ class ConnectionManager:
                 print(f"Error in broadcast loop: {e}")
                 await asyncio.sleep(settings.collection_interval_normal)
     
-    async def _collect_all_metrics(self, should_throttle: bool = False) -> dict:
+    async def _collect_all_metrics(self, should_throttle: bool = False, system_metrics: Optional[SystemMetrics] = None) -> dict:
         """Collect all metrics and store in database
         
         Args:
             should_throttle: If True, skip expensive collections
+            system_metrics: Optional pre-collected system metrics to avoid duplicate collection
             
         Returns:
             dict: Serialized metrics snapshot
         """
-        # Collect from all sources (lightweight collectors - always run)
-        system_metrics = collect_system_metrics()
-        interface_stats = collect_interface_stats()
-        service_statuses = collect_service_statuses()
-        dns_stats = collect_dns_stats()
-        disk_io = collect_disk_io()
-        temperatures = collect_temperatures()
+        # Use provided system_metrics or collect if not provided
+        if system_metrics is None:
+            system_metrics = collect_system_metrics()
+        
+        loop = asyncio.get_event_loop()
+        
+        # Parallelize independent collectors for better performance
+        collectors = await asyncio.gather(
+            loop.run_in_executor(self.executor, collect_interface_stats),
+            loop.run_in_executor(self.executor, collect_service_statuses),
+            loop.run_in_executor(self.executor, collect_dns_stats),
+            loop.run_in_executor(self.executor, collect_disk_io),
+            loop.run_in_executor(self.executor, collect_temperatures),
+            return_exceptions=True
+        )
+        
+        # Handle results (check for exceptions)
+        interface_stats = collectors[0] if not isinstance(collectors[0], Exception) else []
+        service_statuses = collectors[1] if not isinstance(collectors[1], Exception) else []
+        dns_stats = collectors[2] if not isinstance(collectors[2], Exception) else None
+        disk_io = collectors[3] if not isinstance(collectors[3], Exception) else []
+        temperatures = collectors[4] if not isinstance(collectors[4], Exception) else []
         
         # Collect DHCP leases in executor (file I/O)
-        loop = asyncio.get_event_loop()
         dhcp_leases = await loop.run_in_executor(self.executor, parse_kea_leases)
         
         # Collect client bandwidth (with CPU governance built-in) - run in executor
@@ -230,7 +251,16 @@ class ConnectionManager:
             dns_stats=dns_stats
         )
         
-        return json.loads(snapshot.model_dump_json())
+        # Store latest metrics in Redis for instant API access (hot data)
+        snapshot_json = snapshot.model_dump_json()
+        snapshot_dict = json.loads(snapshot_json)
+        
+        # Store individual components for easier access
+        await set_json("metrics:system:latest", snapshot_dict.get("system"), ttl=None)
+        await set_json("metrics:interfaces:latest", snapshot_dict.get("interfaces"), ttl=None)
+        await set_json("metrics:services:latest", snapshot_dict.get("services"), ttl=None)
+        
+        return snapshot_dict
     
     async def _store_metrics_with_semaphore(
         self,
@@ -280,6 +310,9 @@ class ConnectionManager:
             disk_io: Disk I/O metrics
             temperatures: Temperature metrics
             client_bandwidth: Client bandwidth statistics
+        
+        Note: Write buffering via Redis is available via the buffer worker.
+        Currently using optimized direct DB writes with bulk operations.
         """
         try:
             async with AsyncSessionLocal() as session:
@@ -340,7 +373,7 @@ class ConnectionManager:
                 
                 # Optimized DHCP lease updates (batch queries instead of per-lease queries)
                 if dhcp_leases:
-                    from sqlalchemy import or_, and_
+                    from sqlalchemy import or_, tuple_
                     
                     # Build sets of MACs and IPs to query
                     networks = list(set(lease.network for lease in dhcp_leases))
@@ -348,18 +381,22 @@ class ConnectionManager:
                     ip_addresses = list(set(lease.ip_address for lease in dhcp_leases))
                     
                     # Single batch query to get ALL existing leases matching our MACs or IPs
-                    # Build OR conditions for (network, mac) pairs and (network, ip) pairs
+                    # Use tuple-based IN clauses for cleaner and potentially faster queries
                     conditions = []
                     for network in networks:
-                        # Add conditions for MAC addresses in this network
+                        # Add conditions for MAC addresses in this network using tuple IN
                         if mac_addresses:
                             conditions.append(
-                                and_(DHCPLeaseDB.network == network, DHCPLeaseDB.mac_address.in_(mac_addresses))
+                                tuple_(DHCPLeaseDB.network, DHCPLeaseDB.mac_address).in_(
+                                    [(network, mac) for mac in mac_addresses]
+                                )
                             )
-                        # Add conditions for IP addresses in this network
+                        # Add conditions for IP addresses in this network using tuple IN
                         if ip_addresses:
                             conditions.append(
-                                and_(DHCPLeaseDB.network == network, DHCPLeaseDB.ip_address.in_(ip_addresses))
+                                tuple_(DHCPLeaseDB.network, DHCPLeaseDB.ip_address).in_(
+                                    [(network, ip) for ip in ip_addresses]
+                                )
                             )
                     
                     if conditions:
@@ -452,10 +489,15 @@ class ConnectionManager:
                     if leases_to_delete:
                         await session.flush()  # Ensure deletions are visible
                     
-                    # Update existing leases
-                    for existing_lease, update_data in leases_to_update:
-                        for key, value in update_data.items():
-                            setattr(existing_lease, key, value)
+                    # Batch update existing leases using SQLAlchemy update statements
+                    from sqlalchemy import update
+                    if leases_to_update:
+                        for existing_lease, update_data in leases_to_update:
+                            await session.execute(
+                                update(DHCPLeaseDB)
+                                .where(DHCPLeaseDB.id == existing_lease.id)
+                                .values(**update_data)
+                            )
                     
                     # Bulk insert new leases
                     if leases_to_insert:

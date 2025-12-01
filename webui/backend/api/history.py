@@ -13,6 +13,31 @@ from ..auth import get_current_user
 
 router = APIRouter(prefix="/api/history", tags=["history"], dependencies=[Depends(get_current_user)])
 
+from ..utils.redis_client import get_json, set_json
+from ..config import settings
+import hashlib
+import json as json_lib
+
+
+def _generate_cache_key(endpoint: str, params: dict) -> str:
+    """Generate cache key from endpoint and parameters"""
+    # Sort params for consistent hashing
+    sorted_params = json_lib.dumps(params, sort_keys=True, default=str)
+    params_hash = hashlib.md5(sorted_params.encode()).hexdigest()
+    return f"cache:api:{endpoint}:{params_hash}"
+
+
+async def _get_cached_response(endpoint: str, params: dict):
+    """Get cached API response if available"""
+    cache_key = _generate_cache_key(endpoint, params)
+    return await get_json(cache_key)
+
+
+async def _set_cached_response(endpoint: str, params: dict, response: any):
+    """Cache API response"""
+    cache_key = _generate_cache_key(endpoint, params)
+    await set_json(cache_key, response, ttl=settings.redis_cache_ttl_api)
+
 
 @router.get("/system")
 async def get_system_history(
@@ -37,6 +62,16 @@ async def get_system_history(
     if start is None:
         start = end - timedelta(hours=1)
     
+    # Check cache
+    cache_params = {
+        "start": start.isoformat() if start else None,
+        "end": end.isoformat() if end else None,
+        "interval": interval
+    }
+    cached = await _get_cached_response("history/system", cache_params)
+    if cached:
+        return cached
+    
     # Calculate time buckets for aggregation
     bucket_size = interval
     
@@ -55,7 +90,7 @@ async def get_system_history(
     result = await db.execute(query)
     rows = result.all()
     
-    return [
+    response = [
         {
             "timestamp": row.time_bucket.isoformat(),
             "cpu_percent": float(row.avg_cpu) if row.avg_cpu else None,
@@ -64,6 +99,11 @@ async def get_system_history(
         }
         for row in rows
     ]
+    
+    # Cache the response
+    await _set_cached_response("history/system", cache_params, response)
+    
+    return response
 
 
 @router.get("/interface/{interface_name}")
@@ -90,6 +130,17 @@ async def get_interface_history(
         end = datetime.now(timezone.utc)
     if start is None:
         start = end - timedelta(hours=1)
+    
+    # Check cache
+    cache_params = {
+        "interface": interface_name,
+        "start": start.isoformat() if start else None,
+        "end": end.isoformat() if end else None,
+        "interval": interval
+    }
+    cached = await _get_cached_response("history/interface", cache_params)
+    if cached:
+        return cached
     
     query = select(
         func.date_trunc('minute', InterfaceStatsDB.timestamp).label('time_bucket'),
@@ -136,6 +187,9 @@ async def get_interface_history(
         
         data.append(point)
         prev_row = point
+    
+    # Cache the response
+    await _set_cached_response("history/interface", cache_params, data)
     
     return data
 

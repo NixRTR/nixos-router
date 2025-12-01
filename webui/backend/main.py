@@ -42,6 +42,8 @@ from .api.apprise import router as apprise_router
 from .api.notifications import router as notifications_router
 from .collectors.aggregation import run_aggregation_job
 from .collectors.notifications import NotificationEvaluator
+from .workers.redis_buffer import start_buffer_flusher, stop_buffer_flusher
+from .utils.redis_client import close_redis_client
 
 notification_evaluator = NotificationEvaluator(AsyncSessionLocal)
 
@@ -114,6 +116,11 @@ async def lifespan(app: FastAPI):
     notification_task = asyncio.create_task(notification_evaluator_task())
     print("Notification evaluator task started")
     
+    # Start Redis buffer flush worker if enabled
+    if settings.redis_write_buffer_enabled:
+        await start_buffer_flusher()
+        print("Redis buffer flush worker started")
+    
     yield
     
     # Shutdown
@@ -134,6 +141,15 @@ async def lifespan(app: FastAPI):
     
     await manager.stop_broadcasting()
     print("WebSocket broadcaster stopped")
+    
+    # Stop Redis buffer flush worker
+    if settings.redis_write_buffer_enabled:
+        await stop_buffer_flusher()
+        print("Redis buffer flush worker stopped")
+    
+    # Close Redis client connection
+    await close_redis_client()
+    print("Redis client closed")
 
 
 # Create FastAPI app

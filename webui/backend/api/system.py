@@ -21,6 +21,7 @@ from ..collectors.system import (
 )
 from ..collectors.clients import collect_client_stats
 from ..database import AsyncSessionLocal, SystemMetricsDB, DiskIOMetricsDB, TemperatureMetricsDB
+from ..utils.redis_client import get_json
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -125,7 +126,16 @@ async def get_current_system_metrics(
 async def get_system_metrics(
     _: str = Depends(get_current_user)
 ) -> SystemMetrics:
-    """Get basic system metrics (CPU, memory, load)"""
+    """Get basic system metrics (CPU, memory, load)
+    
+    Tries Redis hot data first, falls back to collecting if unavailable.
+    """
+    # Try Redis hot data first
+    cached = await get_json("metrics:system:latest")
+    if cached:
+        return SystemMetrics(**cached)
+    
+    # Fallback to collecting
     return collect_system_metrics()
 
 

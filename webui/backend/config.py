@@ -61,6 +61,18 @@ class Settings(BaseSettings):
     # For development, allow localhost origins
     cors_origins: list = ["http://localhost:3000", "http://localhost:5173", "http://localhost:8080"]
     
+    # Redis Configuration
+    redis_host: str = "127.0.0.1"
+    redis_port: int = 6379
+    redis_db: int = 0
+    redis_password: Optional[str] = None
+    redis_write_buffer_enabled: bool = True
+    redis_buffer_flush_interval: int = 5  # seconds
+    redis_buffer_max_size: int = 100  # items per buffer
+    redis_cache_ttl_rules: int = 60  # seconds
+    redis_cache_ttl_overrides: int = 30  # seconds
+    redis_cache_ttl_api: int = 10  # seconds
+    
     class Config:
         env_file = "/etc/router-webui/config.env"
         env_file_encoding = "utf-8"

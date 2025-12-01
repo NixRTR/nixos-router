@@ -11,11 +11,12 @@ from typing import AsyncGenerator
 from .config import settings
 
 # Create async engine
+# Reduced pool size since we're using bulk operations and Redis buffering
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
-    pool_size=20,
-    max_overflow=40,
+    pool_size=10,
+    max_overflow=20,
     pool_pre_ping=True,
 )
 

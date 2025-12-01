@@ -35,6 +35,7 @@ let
     httpx  # HTTP client for GitHub API requests
     apprise  # Notification service integration
     jinja2  # Template engine for notification messages
+    redis  # Redis client for caching and write buffering
   ]);
   
   # Backend source
@@ -127,6 +128,18 @@ in
         host all all 127.0.0.1/32 trust
         host all all ::1/128 trust
       '';
+    };
+    
+    # Enable Redis for caching and write buffering
+    services.redis = {
+      enable = true;
+      bind = "127.0.0.1";
+      port = 6379;
+      # In-memory only (no persistence)
+      save = [];  # Disable RDB snapshots
+      appendonly = false;  # Disable AOF persistence
+      maxmemory = "256mb";  # Limit memory usage
+      maxmemoryPolicy = "allkeys-lru";  # LRU eviction
     };
     
     # Create system user for the service
