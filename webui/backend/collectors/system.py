@@ -52,6 +52,25 @@ def get_uptime() -> int:
     return int(datetime.now().timestamp() - boot_time)
 
 
+def get_io_wait_percent() -> float:
+    """Get I/O wait percentage
+    
+    Returns:
+        float: Percentage of CPU time spent in I/O wait
+    """
+    try:
+        cpu_times = psutil.cpu_times_percent(interval=0.1)
+        # On Linux, iowait is available; on other systems it may not be
+        if hasattr(cpu_times, 'iowait'):
+            return cpu_times.iowait
+        else:
+            # Fallback: estimate based on idle vs busy time
+            # If we can't get iowait, return 0 (no I/O wait data available)
+            return 0.0
+    except Exception:
+        return 0.0
+
+
 def collect_system_metrics() -> SystemMetrics:
     """Collect all system metrics
     

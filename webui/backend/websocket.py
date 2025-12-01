@@ -3,7 +3,9 @@ WebSocket connection manager and metrics broadcaster
 """
 import asyncio
 import json
-from typing import List, Set
+import concurrent.futures
+import time
+from typing import List, Set, Optional, Tuple
 from fastapi import WebSocket, WebSocketDisconnect
 from datetime import datetime, timezone
 from sqlalchemy import select
@@ -11,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import MetricsSnapshot, SystemMetrics, InterfaceStats, ServiceStatus, DHCPLease, DNSMetrics
 from .database import AsyncSessionLocal, SystemMetricsDB, InterfaceStatsDB, ServiceStatusDB, DHCPLeaseDB, DiskIOMetricsDB, TemperatureMetricsDB, ClientBandwidthStatsDB, ClientConnectionStatsDB
-from .collectors.system import collect_system_metrics, collect_disk_io, collect_temperatures
+from .collectors.system import collect_system_metrics, collect_disk_io, collect_temperatures, get_io_wait_percent
 from .collectors.network import collect_interface_stats
 from .collectors.dhcp import parse_kea_leases
 from .collectors.services import collect_service_statuses
@@ -32,6 +34,9 @@ class ConnectionManager:
         self.broadcast_task: asyncio.Task = None
         self.pending_store_tasks: Set[asyncio.Task] = set()
         self._store_semaphore = asyncio.Semaphore(5)  # Limit concurrent store operations
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)  # For CPU-bound/sync operations
+        self._db_write_times: List[float] = []  # Track recent DB write latencies (keep last 5)
+        self._last_db_write_time: Optional[float] = None  # Last write duration in ms
         
     async def connect(self, websocket: WebSocket):
         """Accept new WebSocket connection"""
@@ -76,13 +81,69 @@ class ConnectionManager:
                 await self.broadcast_task
             except asyncio.CancelledError:
                 pass
+        # Shutdown executor
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
+    
+    def _should_throttle_collection(self, system_metrics: SystemMetrics) -> Tuple[bool, str]:
+        """Check if collection should be throttled based on multiple factors
+        
+        Args:
+            system_metrics: Current system metrics
+            
+        Returns:
+            Tuple[bool, str]: (should_throttle, reason)
+        """
+        # Clean up completed tasks first
+        self.pending_store_tasks = {t for t in self.pending_store_tasks if not t.done()}
+        
+        # 1. Check pending write queue depth
+        if len(self.pending_store_tasks) >= settings.max_pending_write_tasks:
+            return (True, f"pending_writes:{len(self.pending_store_tasks)}")
+        
+        # 2. Check DB write latency (average of last 3 writes)
+        if self._db_write_times:
+            avg_latency = sum(self._db_write_times[-3:]) / min(3, len(self._db_write_times))
+            if avg_latency > settings.max_db_write_latency_ms:
+                return (True, f"db_latency:{avg_latency:.1f}ms")
+        
+        # 3. Check I/O wait percentage
+        io_wait = get_io_wait_percent()
+        if io_wait > settings.max_io_wait_percent:
+            return (True, f"io_wait:{io_wait:.1f}%")
+        
+        # 4. Check CPU usage
+        if system_metrics.cpu_percent > settings.bandwidth_max_cpu_percent:
+            return (True, f"cpu:{system_metrics.cpu_percent:.1f}%")
+        
+        # 5. Check loadavg (fallback)
+        if system_metrics.load_avg_1m > settings.max_loadavg_1m:
+            return (True, f"loadavg_1m:{system_metrics.load_avg_1m:.2f}")
+        if system_metrics.load_avg_5m > settings.max_loadavg_5m:
+            return (True, f"loadavg_5m:{system_metrics.load_avg_5m:.2f}")
+        
+        return (False, "")
     
     async def _broadcast_loop(self):
         """Background task that collects and broadcasts metrics"""
         while True:
             try:
+                # Get system metrics first to check throttling
+                system_metrics = collect_system_metrics()
+                
+                # Check if we should throttle collection
+                should_throttle, throttle_reason = self._should_throttle_collection(system_metrics)
+                
+                if should_throttle:
+                    print(f"Collection throttled: {throttle_reason}")
+                    # Use throttled interval
+                    collection_interval = settings.collection_interval_throttled
+                else:
+                    # Use normal interval
+                    collection_interval = settings.collection_interval_normal
+                
                 # Always collect metrics and store in database (regardless of connections)
-                metrics = await self._collect_all_metrics()
+                metrics = await self._collect_all_metrics(should_throttle)
                 
                 # Only broadcast if we have connected clients
                 if self.active_connections:
@@ -91,40 +152,52 @@ class ConnectionManager:
                         "data": metrics
                     })
                 
-                # Wait for next collection interval
-                await asyncio.sleep(settings.collection_interval)
+                # Wait for next collection interval (dynamic based on throttling)
+                await asyncio.sleep(collection_interval)
                 
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 print(f"Error in broadcast loop: {e}")
-                await asyncio.sleep(settings.collection_interval)
+                await asyncio.sleep(settings.collection_interval_normal)
     
-    async def _collect_all_metrics(self) -> dict:
+    async def _collect_all_metrics(self, should_throttle: bool = False) -> dict:
         """Collect all metrics and store in database
         
+        Args:
+            should_throttle: If True, skip expensive collections
+            
         Returns:
             dict: Serialized metrics snapshot
         """
-        # Collect from all sources
+        # Collect from all sources (lightweight collectors - always run)
         system_metrics = collect_system_metrics()
         interface_stats = collect_interface_stats()
-        dhcp_leases = parse_kea_leases()
         service_statuses = collect_service_statuses()
         dns_stats = collect_dns_stats()
         disk_io = collect_disk_io()
         temperatures = collect_temperatures()
         
-        # Collect client bandwidth (with CPU governance built-in)
-        client_bandwidth = collect_client_bandwidth() if settings.bandwidth_collection_enabled else []
+        # Collect DHCP leases in executor (file I/O)
+        loop = asyncio.get_event_loop()
+        dhcp_leases = await loop.run_in_executor(self.executor, parse_kea_leases)
         
-        # Collect client connections
-        client_connections = collect_client_connections() if settings.bandwidth_collection_enabled else []
+        # Collect client bandwidth (with CPU governance built-in) - run in executor
+        client_bandwidth = []
+        if settings.bandwidth_collection_enabled and not (should_throttle and not settings.bandwidth_collection_enabled_under_load):
+            client_bandwidth = await loop.run_in_executor(self.executor, collect_client_bandwidth)
         
-        # Collect CAKE statistics if enabled
+        # Collect client connections - run in executor, skip if throttled
+        client_connections = []
+        if settings.bandwidth_collection_enabled and not should_throttle:
+            client_connections = await loop.run_in_executor(self.executor, collect_client_connections)
+        
+        # Collect CAKE statistics if enabled - run in executor
         cake_stats = None
-        if is_cake_enabled()[0]:  # Check if CAKE is enabled
-            cake_stats = collect_cake_stats()
+        if not should_throttle:
+            is_enabled, _ = await loop.run_in_executor(self.executor, is_cake_enabled)
+            if is_enabled:
+                cake_stats = await loop.run_in_executor(self.executor, collect_cake_stats)
         
         # Store in database asynchronously with task tracking
         # Clean up completed tasks first
@@ -224,175 +297,229 @@ class ConnectionManager:
                 )
                 session.add(system_db)
                 
-                # Store interface stats
-                for iface in interfaces:
-                    iface_db = InterfaceStatsDB(
-                        timestamp=iface.timestamp,
-                        interface=iface.interface,
-                        rx_bytes=iface.rx_bytes,
-                        tx_bytes=iface.tx_bytes,
-                        rx_packets=iface.rx_packets,
-                        tx_packets=iface.tx_packets,
-                        rx_errors=iface.rx_errors,
-                        tx_errors=iface.tx_errors,
-                        rx_dropped=iface.rx_dropped,
-                        tx_dropped=iface.tx_dropped
-                    )
-                    session.add(iface_db)
+                # Store interface stats (bulk insert)
+                if interfaces:
+                    interface_mappings = [
+                        {
+                            'timestamp': iface.timestamp,
+                            'interface': iface.interface,
+                            'rx_bytes': iface.rx_bytes,
+                            'tx_bytes': iface.tx_bytes,
+                            'rx_packets': iface.rx_packets,
+                            'tx_packets': iface.tx_packets,
+                            'rx_errors': iface.rx_errors,
+                            'tx_errors': iface.tx_errors,
+                            'rx_dropped': iface.rx_dropped,
+                            'tx_dropped': iface.tx_dropped
+                        }
+                        for iface in interfaces
+                    ]
+                    session.bulk_insert_mappings(InterfaceStatsDB, interface_mappings)
                 
-                # Store service statuses
-                for service in services:
-                    service_db = ServiceStatusDB(
-                        timestamp=service.timestamp,
-                        service_name=service.service_name,
-                        is_active=service.is_active,
-                        is_enabled=service.is_enabled,
-                        pid=service.pid,
-                        memory_mb=service.memory_mb,
-                        cpu_percent=service.cpu_percent
-                    )
-                    session.add(service_db)
+                # Store service statuses (bulk insert)
+                if services:
+                    service_mappings = [
+                        {
+                            'timestamp': service.timestamp,
+                            'service_name': service.service_name,
+                            'is_active': service.is_active,
+                            'is_enabled': service.is_enabled,
+                            'pid': service.pid,
+                            'memory_mb': service.memory_mb,
+                            'cpu_percent': service.cpu_percent
+                        }
+                        for service in services
+                    ]
+                    session.bulk_insert_mappings(ServiceStatusDB, service_mappings)
                 
-                # Update DHCP leases (upsert based on MAC+network or IP+network)
-                # Process all leases first to identify conflicts, then resolve them
-                leases_to_process = []
-                for lease in dhcp_leases:
-                    # First check if device (MAC) exists in this network
-                    result_mac = await session.execute(
-                        select(DHCPLeaseDB).where(
-                            DHCPLeaseDB.network == lease.network,
-                            DHCPLeaseDB.mac_address == lease.mac_address
-                        )
-                    )
-                    existing_by_mac = result_mac.scalar_one_or_none()
+                # Optimized DHCP lease updates (batch queries instead of per-lease queries)
+                if dhcp_leases:
+                    from sqlalchemy import or_, and_
                     
-                    # Also check if IP address exists in this network (IP may have been reassigned)
-                    result_ip = await session.execute(
-                        select(DHCPLeaseDB).where(
-                            DHCPLeaseDB.network == lease.network,
-                            DHCPLeaseDB.ip_address == lease.ip_address
-                        )
-                    )
-                    existing_by_ip = result_ip.scalar_one_or_none()
+                    # Build sets of MACs and IPs to query
+                    networks = list(set(lease.network for lease in dhcp_leases))
+                    mac_addresses = list(set(lease.mac_address for lease in dhcp_leases))
+                    ip_addresses = list(set(lease.ip_address for lease in dhcp_leases))
                     
-                    leases_to_process.append((lease, existing_by_mac, existing_by_ip))
-                
-                # Now process leases and handle conflicts
-                for lease, existing_by_mac, existing_by_ip in leases_to_process:
-                    if existing_by_mac:
-                        # Update existing device lease (IP may have changed)
-                        # Check if the new IP is already assigned to a different device
-                        if existing_by_mac.ip_address != lease.ip_address:
-                            # IP is changing - check if new IP conflicts with another device
-                            if existing_by_ip and existing_by_ip.id != existing_by_mac.id:
-                                # IP was reassigned to a different device - delete the conflicting record
-                                await session.delete(existing_by_ip)
-                                # Flush to ensure deletion is visible before update
-                                await session.flush()
-                        
-                        existing_by_mac.ip_address = lease.ip_address
-                        existing_by_mac.hostname = lease.hostname
-                        existing_by_mac.lease_start = lease.lease_start
-                        existing_by_mac.lease_end = lease.lease_end
-                        existing_by_mac.last_seen = lease.last_seen
-                        existing_by_mac.is_static = lease.is_static
-                    elif existing_by_ip:
-                        # IP was reassigned to a different MAC
-                        # Check if the new MAC already has a lease (to avoid MAC constraint violation)
-                        result_new_mac = await session.execute(
-                            select(DHCPLeaseDB).where(
-                                DHCPLeaseDB.network == lease.network,
-                                DHCPLeaseDB.mac_address == lease.mac_address
+                    # Single batch query to get ALL existing leases matching our MACs or IPs
+                    # Build OR conditions for (network, mac) pairs and (network, ip) pairs
+                    conditions = []
+                    for network in networks:
+                        # Add conditions for MAC addresses in this network
+                        if mac_addresses:
+                            conditions.append(
+                                and_(DHCPLeaseDB.network == network, DHCPLeaseDB.mac_address.in_(mac_addresses))
                             )
+                        # Add conditions for IP addresses in this network
+                        if ip_addresses:
+                            conditions.append(
+                                and_(DHCPLeaseDB.network == network, DHCPLeaseDB.ip_address.in_(ip_addresses))
+                            )
+                    
+                    if conditions:
+                        result = await session.execute(
+                            select(DHCPLeaseDB).where(or_(*conditions))
                         )
-                        existing_new_mac = result_new_mac.scalar_one_or_none()
-                        
-                        if existing_new_mac:
-                            # New MAC already has a lease - delete the old IP lease and update the MAC's lease
-                            await session.delete(existing_by_ip)
-                            existing_new_mac.ip_address = lease.ip_address
-                            existing_new_mac.hostname = lease.hostname
-                            existing_new_mac.lease_start = lease.lease_start
-                            existing_new_mac.lease_end = lease.lease_end
-                            existing_new_mac.last_seen = lease.last_seen
-                            existing_new_mac.is_static = lease.is_static
-                        else:
-                            # Update the IP lease with the new MAC
-                            existing_by_ip.mac_address = lease.mac_address
-                            existing_by_ip.hostname = lease.hostname
-                            existing_by_ip.lease_start = lease.lease_start
-                            existing_by_ip.lease_end = lease.lease_end
-                            existing_by_ip.last_seen = lease.last_seen
-                            existing_by_ip.is_static = lease.is_static
+                        existing_leases = result.scalars().all()
                     else:
-                        # Insert new device
-                        lease_db = DHCPLeaseDB(
-                            network=lease.network,
-                            mac_address=lease.mac_address,
-                            ip_address=lease.ip_address,
-                            hostname=lease.hostname,
-                            lease_start=lease.lease_start,
-                            lease_end=lease.lease_end,
-                            last_seen=lease.last_seen,
-                            is_static=lease.is_static
-                        )
-                        session.add(lease_db)
+                        existing_leases = []
+                    
+                    # Build lookup dictionaries: (network, mac) -> lease and (network, ip) -> lease
+                    existing_by_mac_key: dict = {}  # (network, mac) -> DHCPLeaseDB
+                    existing_by_ip_key: dict = {}   # (network, ip) -> DHCPLeaseDB
+                    for existing in existing_leases:
+                        mac_key = (existing.network, existing.mac_address)
+                        ip_key = (existing.network, existing.ip_address)
+                        existing_by_mac_key[mac_key] = existing
+                        existing_by_ip_key[ip_key] = existing
+                    
+                    # Process leases in memory
+                    leases_to_update = []  # List of (existing_lease, new_data)
+                    leases_to_delete = []  # List of leases to delete
+                    leases_to_insert = []  # List of new lease data
+                    
+                    for lease in dhcp_leases:
+                        mac_key = (lease.network, lease.mac_address)
+                        ip_key = (lease.network, lease.ip_address)
+                        existing_by_mac = existing_by_mac_key.get(mac_key)
+                        existing_by_ip = existing_by_ip_key.get(ip_key)
+                        
+                        if existing_by_mac:
+                            # Device (MAC) exists - update it
+                            # If IP changed and conflicts with another device, delete the conflict
+                            if existing_by_mac.ip_address != lease.ip_address:
+                                if existing_by_ip and existing_by_ip.id != existing_by_mac.id:
+                                    leases_to_delete.append(existing_by_ip)
+                                    # Remove from lookup dicts to avoid processing again
+                                    if (existing_by_ip.network, existing_by_ip.ip_address) in existing_by_ip_key:
+                                        del existing_by_ip_key[(existing_by_ip.network, existing_by_ip.ip_address)]
+                            
+                            leases_to_update.append((existing_by_mac, {
+                                'ip_address': lease.ip_address,
+                                'hostname': lease.hostname,
+                                'lease_start': lease.lease_start,
+                                'lease_end': lease.lease_end,
+                                'last_seen': lease.last_seen,
+                                'is_static': lease.is_static
+                            }))
+                        elif existing_by_ip:
+                            # IP exists but MAC changed - check if new MAC has existing lease
+                            existing_new_mac = existing_by_mac_key.get(mac_key)
+                            if existing_new_mac:
+                                # New MAC already has a lease - delete old IP lease, update MAC's lease
+                                leases_to_delete.append(existing_by_ip)
+                                leases_to_update.append((existing_new_mac, {
+                                    'ip_address': lease.ip_address,
+                                    'hostname': lease.hostname,
+                                    'lease_start': lease.lease_start,
+                                    'lease_end': lease.lease_end,
+                                    'last_seen': lease.last_seen,
+                                    'is_static': lease.is_static
+                                }))
+                            else:
+                                # Update IP lease with new MAC
+                                leases_to_update.append((existing_by_ip, {
+                                    'mac_address': lease.mac_address,
+                                    'hostname': lease.hostname,
+                                    'lease_start': lease.lease_start,
+                                    'lease_end': lease.lease_end,
+                                    'last_seen': lease.last_seen,
+                                    'is_static': lease.is_static
+                                }))
+                        else:
+                            # New lease - insert
+                            leases_to_insert.append({
+                                'network': lease.network,
+                                'mac_address': lease.mac_address,
+                                'ip_address': lease.ip_address,
+                                'hostname': lease.hostname,
+                                'lease_start': lease.lease_start,
+                                'lease_end': lease.lease_end,
+                                'last_seen': lease.last_seen,
+                                'is_static': lease.is_static
+                            })
+                    
+                    # Execute batch operations
+                    # Delete conflicting leases first
+                    for lease_to_delete in leases_to_delete:
+                        await session.delete(lease_to_delete)
+                    if leases_to_delete:
+                        await session.flush()  # Ensure deletions are visible
+                    
+                    # Update existing leases
+                    for existing_lease, update_data in leases_to_update:
+                        for key, value in update_data.items():
+                            setattr(existing_lease, key, value)
+                    
+                    # Bulk insert new leases
+                    if leases_to_insert:
+                        session.bulk_insert_mappings(DHCPLeaseDB, leases_to_insert)
                 
-                # Store disk I/O metrics
-                for disk in disk_io:
-                    disk_db = DiskIOMetricsDB(
-                        timestamp=disk.timestamp,
-                        device=disk.device,
-                        read_bytes_per_sec=disk.read_bytes_per_sec,
-                        write_bytes_per_sec=disk.write_bytes_per_sec,
-                        read_ops_per_sec=disk.read_ops_per_sec,
-                        write_ops_per_sec=disk.write_ops_per_sec
-                    )
-                    session.add(disk_db)
+                # Store disk I/O metrics (bulk insert)
+                if disk_io:
+                    disk_mappings = [
+                        {
+                            'timestamp': disk.timestamp,
+                            'device': disk.device,
+                            'read_bytes_per_sec': disk.read_bytes_per_sec,
+                            'write_bytes_per_sec': disk.write_bytes_per_sec,
+                            'read_ops_per_sec': disk.read_ops_per_sec,
+                            'write_ops_per_sec': disk.write_ops_per_sec
+                        }
+                        for disk in disk_io
+                    ]
+                    session.bulk_insert_mappings(DiskIOMetricsDB, disk_mappings)
                 
-                # Store temperature metrics
-                for temp in temperatures:
-                    temp_db = TemperatureMetricsDB(
-                        timestamp=temp.timestamp,
-                        sensor_name=temp.sensor_name,
-                        temperature_c=temp.temperature_c,
-                        label=temp.label,
-                        critical=temp.critical
-                    )
-                    session.add(temp_db)
+                # Store temperature metrics (bulk insert)
+                if temperatures:
+                    temp_mappings = [
+                        {
+                            'timestamp': temp.timestamp,
+                            'sensor_name': temp.sensor_name,
+                            'temperature_c': temp.temperature_c,
+                            'label': temp.label,
+                            'critical': temp.critical
+                        }
+                        for temp in temperatures
+                    ]
+                    session.bulk_insert_mappings(TemperatureMetricsDB, temp_mappings)
                 
-                # Store client bandwidth statistics
+                # Store client bandwidth statistics (bulk insert)
                 if client_bandwidth:
-                    for bw_data in client_bandwidth:
-                        bw_db = ClientBandwidthStatsDB(
-                            timestamp=bw_data['timestamp'],
-                            mac_address=bw_data['mac_address'],
-                            ip_address=bw_data['ip_address'],
-                            network=bw_data['network'],
-                            rx_bytes=bw_data['rx_bytes'],
-                            tx_bytes=bw_data['tx_bytes'],
-                            rx_bytes_total=bw_data['rx_bytes_total'],
-                            tx_bytes_total=bw_data['tx_bytes_total'],
-                            aggregation_level='raw'
-                        )
-                        session.add(bw_db)
+                    bandwidth_mappings = [
+                        {
+                            'timestamp': bw_data['timestamp'],
+                            'mac_address': bw_data['mac_address'],
+                            'ip_address': bw_data['ip_address'],
+                            'network': bw_data['network'],
+                            'rx_bytes': bw_data['rx_bytes'],
+                            'tx_bytes': bw_data['tx_bytes'],
+                            'rx_bytes_total': bw_data['rx_bytes_total'],
+                            'tx_bytes_total': bw_data['tx_bytes_total'],
+                            'aggregation_level': 'raw'
+                        }
+                        for bw_data in client_bandwidth
+                    ]
+                    session.bulk_insert_mappings(ClientBandwidthStatsDB, bandwidth_mappings)
                 
-                # Store client connection statistics
+                # Store client connection statistics (bulk insert)
                 if client_connections:
-                    for conn_data in client_connections:
-                        conn_db = ClientConnectionStatsDB(
-                            timestamp=conn_data['timestamp'],
-                            client_ip=conn_data['client_ip'],
-                            client_mac=conn_data['client_mac'],
-                            remote_ip=conn_data['remote_ip'],
-                            remote_port=conn_data['remote_port'],
-                            rx_bytes=conn_data['rx_bytes'],
-                            tx_bytes=conn_data['tx_bytes'],
-                            rx_bytes_total=conn_data['rx_bytes_total'],
-                            tx_bytes_total=conn_data['tx_bytes_total'],
-                            aggregation_level='raw'
-                        )
-                        session.add(conn_db)
+                    connection_mappings = [
+                        {
+                            'timestamp': conn_data['timestamp'],
+                            'client_ip': conn_data['client_ip'],
+                            'client_mac': conn_data['client_mac'],
+                            'remote_ip': conn_data['remote_ip'],
+                            'remote_port': conn_data['remote_port'],
+                            'rx_bytes': conn_data['rx_bytes'],
+                            'tx_bytes': conn_data['tx_bytes'],
+                            'rx_bytes_total': conn_data['rx_bytes_total'],
+                            'tx_bytes_total': conn_data['tx_bytes_total'],
+                            'aggregation_level': 'raw'
+                        }
+                        for conn_data in client_connections
+                    ]
+                    session.bulk_insert_mappings(ClientConnectionStatsDB, connection_mappings)
                 
                 # Store CAKE statistics if available
                 if cake_stats:
@@ -411,7 +538,16 @@ class ConnectionManager:
                     )
                     session.add(cake_db)
                 
+                # Track DB write latency
+                commit_start = time.time()
                 await session.commit()
+                commit_duration_ms = (time.time() - commit_start) * 1000
+                
+                # Track write times (keep last 5)
+                self._db_write_times.append(commit_duration_ms)
+                if len(self._db_write_times) > 5:
+                    self._db_write_times.pop(0)
+                self._last_db_write_time = commit_duration_ms
                 
         except Exception as e:
             # Log the full error for debugging
