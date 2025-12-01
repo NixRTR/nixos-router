@@ -6,8 +6,18 @@ let
   cfg = config.services.router-webui;
   routerConfig = import ../router-config.nix;
   
+  # Override paho-mqtt to disable tests (optional MQTT dependency we don't use)
+  # This prevents build failures when paho-mqtt is pulled in as an optional dependency
+  python311WithOverrides = pkgs.python311.override {
+    packageOverrides = self: super: {
+      paho-mqtt = super.paho-mqtt.overridePythonAttrs (attrs: {
+        doCheck = false;
+      });
+    };
+  };
+  
   # Python environment with all dependencies
-  pythonEnv = pkgs.python311.withPackages (ps: with ps; [
+  pythonEnv = python311WithOverrides.withPackages (ps: with ps; [
     fastapi
     uvicorn
     websockets
