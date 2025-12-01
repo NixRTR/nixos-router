@@ -137,9 +137,12 @@ in
       port = 6379;
       # In-memory only (no persistence)
       save = [];  # Disable RDB snapshots
-      appendonly = false;  # Disable AOF persistence
       maxmemory = "256mb";  # Limit memory usage
       maxmemoryPolicy = "allkeys-lru";  # LRU eviction
+      extraConfig = ''
+        # Disable AOF persistence (in-memory only)
+        appendonly no
+      '';
     };
     
     # Create system user for the service
