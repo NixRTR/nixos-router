@@ -8,7 +8,7 @@ import time
 from typing import List, Set, Optional, Tuple
 from fastapi import WebSocket, WebSocketDisconnect
 from datetime import datetime, timezone
-from sqlalchemy import select
+from sqlalchemy import select, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import MetricsSnapshot, SystemMetrics, InterfaceStats, ServiceStatus, DHCPLease, DNSMetrics
@@ -314,7 +314,10 @@ class ConnectionManager:
                         }
                         for iface in interfaces
                     ]
-                    session.bulk_insert_mappings(InterfaceStatsDB, interface_mappings)
+                    if interface_mappings:
+                        await session.execute(
+                            insert(InterfaceStatsDB).values(interface_mappings)
+                        )
                 
                 # Store service statuses (bulk insert)
                 if services:
@@ -330,7 +333,10 @@ class ConnectionManager:
                         }
                         for service in services
                     ]
-                    session.bulk_insert_mappings(ServiceStatusDB, service_mappings)
+                    if service_mappings:
+                        await session.execute(
+                            insert(ServiceStatusDB).values(service_mappings)
+                        )
                 
                 # Optimized DHCP lease updates (batch queries instead of per-lease queries)
                 if dhcp_leases:
@@ -453,7 +459,9 @@ class ConnectionManager:
                     
                     # Bulk insert new leases
                     if leases_to_insert:
-                        session.bulk_insert_mappings(DHCPLeaseDB, leases_to_insert)
+                        await session.execute(
+                            insert(DHCPLeaseDB).values(leases_to_insert)
+                        )
                 
                 # Store disk I/O metrics (bulk insert)
                 if disk_io:
@@ -468,7 +476,10 @@ class ConnectionManager:
                         }
                         for disk in disk_io
                     ]
-                    session.bulk_insert_mappings(DiskIOMetricsDB, disk_mappings)
+                    if disk_mappings:
+                        await session.execute(
+                            insert(DiskIOMetricsDB).values(disk_mappings)
+                        )
                 
                 # Store temperature metrics (bulk insert)
                 if temperatures:
@@ -482,7 +493,10 @@ class ConnectionManager:
                         }
                         for temp in temperatures
                     ]
-                    session.bulk_insert_mappings(TemperatureMetricsDB, temp_mappings)
+                    if temp_mappings:
+                        await session.execute(
+                            insert(TemperatureMetricsDB).values(temp_mappings)
+                        )
                 
                 # Store client bandwidth statistics (bulk insert)
                 if client_bandwidth:
@@ -500,7 +514,10 @@ class ConnectionManager:
                         }
                         for bw_data in client_bandwidth
                     ]
-                    session.bulk_insert_mappings(ClientBandwidthStatsDB, bandwidth_mappings)
+                    if bandwidth_mappings:
+                        await session.execute(
+                            insert(ClientBandwidthStatsDB).values(bandwidth_mappings)
+                        )
                 
                 # Store client connection statistics (bulk insert)
                 if client_connections:
@@ -519,7 +536,10 @@ class ConnectionManager:
                         }
                         for conn_data in client_connections
                     ]
-                    session.bulk_insert_mappings(ClientConnectionStatsDB, connection_mappings)
+                    if connection_mappings:
+                        await session.execute(
+                            insert(ClientConnectionStatsDB).values(connection_mappings)
+                        )
                 
                 # Store CAKE statistics if available
                 if cake_stats:
