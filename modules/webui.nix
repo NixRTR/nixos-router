@@ -131,19 +131,21 @@ in
     };
     
     # Enable Redis for caching and write buffering
-    services.redis = {
+    # Use the servers configuration format for NixOS 25.11+
+    services.redis.servers."" = {
       enable = true;
       bind = "127.0.0.1";
       port = 6379;
       # In-memory only (no persistence)
-      save = [];  # Disable RDB snapshots
-      extraConfig = ''
+      settings = {
+        # Disable RDB snapshots (empty string disables all saves)
+        save = "";
         # Disable AOF persistence (in-memory only)
-        appendonly no
+        appendonly = "no";
         # Limit memory usage
-        maxmemory 256mb
-        maxmemory-policy allkeys-lru
-      '';
+        maxmemory = "256mb";
+        maxmemory-policy = "allkeys-lru";
+      };
     };
     
     # Create system user for the service
