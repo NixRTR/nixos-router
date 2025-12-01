@@ -10,10 +10,16 @@ from typing import Dict, List, Any
 from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import AsyncSessionLocal, (
-    SystemMetricsDB, InterfaceStatsDB, ServiceStatusDB,
-    DiskIOMetricsDB, TemperatureMetricsDB,
-    ClientBandwidthStatsDB, ClientConnectionStatsDB, DHCPLeaseDB
+from ..database import (
+    AsyncSessionLocal,
+    SystemMetricsDB,
+    InterfaceStatsDB,
+    ServiceStatusDB,
+    DiskIOMetricsDB,
+    TemperatureMetricsDB,
+    ClientBandwidthStatsDB,
+    ClientConnectionStatsDB,
+    DHCPLeaseDB,
 )
 from ..utils.redis_client import (
     list_length, list_pop, is_redis_available
