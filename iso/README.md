@@ -194,7 +194,7 @@ iso/
 
 ### What's Included in the ISO
 
-- **NixOS 25.05** minimal installation environment
+- **NixOS 25.11** minimal installation environment
 - **Auto-menu system** that starts on boot
 - **All router installation scripts** (no internet needed during install)
 - **Networking tools** (ethtool, tcpdump, nmap, etc.)
