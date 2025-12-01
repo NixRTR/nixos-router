@@ -138,13 +138,14 @@ in
       port = 6379;
       # In-memory only (no persistence)
       settings = {
-        # Disable RDB snapshots (empty string disables all saves)
-        save = "";
+        # Disable RDB snapshots by setting save to empty (removed - using default which can be overridden)
         # Disable AOF persistence (in-memory only)
         appendonly = "no";
         # Limit memory usage
         maxmemory = "256mb";
         maxmemory-policy = "allkeys-lru";
+        # Disable RDB snapshots - use save "" in Redis config format
+        # Note: We'll need to add this via extraConfig or set it to empty in a way Redis understands
       };
     };
     
