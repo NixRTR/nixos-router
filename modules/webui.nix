@@ -30,7 +30,7 @@ let
     passlib
     alembic
     bcrypt
-    pamela  # PAM authentication support
+    python-pam  # PAM authentication support
     manuf  # MAC address OUI vendor lookup
     httpx  # HTTP client for GitHub API requests
     apprise  # Notification service integration
@@ -164,11 +164,12 @@ in
       unixAuth = true;
     };
     
-    # Create state directory
+    # Create state directory and socket directory
     systemd.tmpfiles.rules = [
       "d /var/lib/router-webui 0750 router-webui router-webui -"
       "d /var/lib/router-webui/frontend 0755 router-webui router-webui -"
       "d /var/lib/router-webui/docs 0755 router-webui router-webui -"
+      "d /run/router-webui 0750 router-webui router-webui -"
     ];
     
     # Copy frontend build to state directory
@@ -319,6 +320,9 @@ in
         CONNTRACK_BIN = "${pkgs.conntrack-tools}/bin/conntrack";
         FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
         SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
+        SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
+        # Note: Don't set SUDO_BIN - use the wrapped sudo from /run/wrappers/bin/sudo
+        # The store path sudo doesn't have setuid bit, but the wrapper does
       };
       
       serviceConfig = {
@@ -330,21 +334,26 @@ in
         Restart = "always";
         RestartSec = "10s";
         
-        # Set debug mode via environment variable
-        Environment = [ "DEBUG=${if cfg.debug then "true" else "false"}" ];
+        # Set debug mode and ensure PATH includes /run/wrappers/bin for wrapped sudo
+        Environment = [
+          "DEBUG=${if cfg.debug then "true" else "false"}"
+          "PATH=/run/wrappers/bin:/run/current-system/sw/bin:/usr/bin:/bin"
+        ];
         
         # Security hardening
-        NoNewPrivileges = true;
         PrivateTmp = true;
-        ProtectSystem = "strict";
+        # Don't use ProtectSystem as it prevents PAM from accessing necessary system files
+        # Instead, rely on other security measures and the fact that the service runs as unprivileged user
         ProtectHome = true;
-        ReadWritePaths = [ "/var/lib/router-webui" ];
+        ReadWritePaths = [ "/var/lib/router-webui" "/run" ];
+        # Note: Don't include /run/unbound-* in ReadOnlyPaths as they may not exist if DNS is disabled
+        # The service will have read access to them via /run being in ReadWritePaths when they do exist
         ReadOnlyPaths = [ 
           "/var/lib/kea" 
-          "/run/unbound-homelab" 
-          "/run/unbound-lan"
           "/proc"
           "/sys"
+          "/usr"  # Protect /usr (read-only)
+          "/boot"  # Protect /boot (read-only)
         ];
         
         # Allow access to system monitoring
@@ -487,6 +496,208 @@ in
     environment.etc."router-webui/monitored-services.conf".text = ''
       router-webui-backend
     '';
+    
+    # Socket-activated helper service to control DNS/DHCP services (runs as root)
+    # This follows NixOS best practices: avoid sudo in systemd services
+    # The router-webui user can write commands to the socket
+    systemd.sockets.router-webui-service-control = {
+      description = "Router WebUI Service Control Socket";
+      wantedBy = [ "sockets.target" ];
+      before = [ "router-webui-backend.service" ];
+      socketConfig = {
+        ListenStream = "/run/router-webui/service-control.sock";
+        SocketMode = "0660";
+        SocketUser = "root";
+        SocketGroup = "router-webui";
+        # Accept one connection at a time, spawn new service instance per connection
+        Accept = true;
+      };
+    };
+    
+    # Template service for socket activation (systemd will spawn instances automatically)
+    # The @ symbol needs to be escaped in Nix attribute names
+    systemd.services."router-webui-service-control@" = {
+      description = "Router WebUI Service Control Helper";
+      serviceConfig = {
+        Type = "simple";
+        User = "root";
+        StandardInput = "socket";
+        StandardOutput = "journal";
+        StandardError = "journal";
+      };
+      script = ''
+        # Read command from stdin (format: ACTION SERVICE)
+        IFS= read -r line || exit 0
+        # Parse action and service
+        ACTION=$(echo "$line" | cut -d' ' -f1)
+        SERVICE=$(echo "$line" | cut -d' ' -f2-)
+        
+        # Validate action
+        case "$ACTION" in
+          start|stop|restart|reload)
+            ;;
+          *)
+            echo "Invalid action: $ACTION" >&2
+            exit 1
+            ;;
+        esac
+        
+        # Validate service (only allow specific DNS/DHCP services)
+        case "$SERVICE" in
+          unbound-homelab.service|unbound-lan.service|kea-dhcp4-homelab.service|kea-dhcp4-lan.service)
+            ;;
+          *)
+            echo "Invalid service: $SERVICE" >&2
+            exit 1
+            ;;
+        esac
+        
+        # Execute systemctl command and output result
+        ${pkgs.systemd}/bin/systemctl "$ACTION" "$SERVICE" 2>&1
+      '';
+    };
+    
+    # Socket-activated helper service for PAM authentication (runs as root)
+    # This is required because PAM can only authenticate other users when running as root
+    # The router-webui user can write authentication requests to the socket
+    systemd.sockets.router-webui-auth = {
+      description = "Router WebUI Authentication Socket";
+      wantedBy = [ "sockets.target" ];
+      before = [ "router-webui-backend.service" ];
+      socketConfig = {
+        ListenStream = "/run/router-webui/auth.sock";
+        SocketMode = "0660";
+        SocketUser = "root";
+        SocketGroup = "router-webui";
+        # Accept one connection at a time, spawn new service instance per connection
+        Accept = true;
+      };
+    };
+    
+    # Template service for authentication helper (systemd will spawn instances automatically)
+    systemd.services."router-webui-auth@" = {
+      description = "Router WebUI Authentication Helper";
+      # Ensure the service unit doesn't inherit user restrictions
+      unitConfig = {
+        # Allow the service to run as root
+      };
+      serviceConfig = {
+        Type = "simple";
+        User = "root";
+        Group = "root";
+        # Ensure service runs as root - required for PAM to authenticate other users
+        # Reference: https://pypi.org/project/python-pam/ - "You have root: you can check any account's password"
+        StandardInput = "socket";
+        # Output to socket so backend can read the response
+        StandardOutput = "socket";
+        # Errors go to journal for debugging
+        StandardError = "journal";
+        # Don't use security hardening that prevents root execution
+        NoNewPrivileges = false;
+        # Ensure we can actually switch to root
+        SupplementaryGroups = [ ];
+      };
+      script = ''
+        # Verify we're running as root (required for PAM to authenticate other users)
+        CURRENT_UID=$(id -u)
+        if [ "$CURRENT_UID" != "0" ]; then
+          echo "ERROR: Service must run as root for PAM authentication" >&2
+          echo "ERROR"  # Output ERROR so backend can detect it
+          exit 1
+        fi
+        
+        # Read authentication request from stdin (format: USERNAME\tPASSWORD)
+        # Password may contain spaces, so we use tab as delimiter
+        IFS=$'\t' read -r username password || exit 0
+        
+        # Validate username (alphanumeric, dash, underscore only, no spaces)
+        if ! echo "$username" | grep -qE '^[a-zA-Z0-9_-]+$'; then
+          echo "INVALID: Invalid username format" >&2
+          exit 1
+        fi
+        
+        # Check if user exists
+        if ! id "$username" &>/dev/null; then
+          echo "FAILURE: User does not exist"
+          exit 0
+        fi
+        
+        # Use Python to authenticate via PAM (running as root allows authenticating any user)
+        # Reference: https://pypi.org/project/python-pam/ - root can authenticate any user
+        # Write Python script to temporary file to avoid nested multiline string issues
+        PYTHON_SCRIPT=$(mktemp)
+        cat > "$PYTHON_SCRIPT" <<'PYEOF'
+import sys
+import os
+import traceback
+try:
+    import pam
+    username = sys.argv[1]
+    password = sys.argv[2]
+    # Verify we're running as root
+    if os.geteuid() != 0:
+        print("ERROR: Python process is not running as root (euid={})".format(os.geteuid()), flush=True)
+        sys.exit(1)
+    
+    # Try to authenticate using PAM
+    # When running as root, we can authenticate any user
+    # Use 'login' service which is standard for user authentication
+    try:
+        # python-pam uses pam.authenticate() function
+        p = pam.pam()
+        result = p.authenticate(username, password, service="login")
+        
+        if result:
+            print("SUCCESS", flush=True)
+            sys.exit(0)
+        else:
+            # Authentication failed
+            print("FAILURE", flush=True)
+            sys.exit(0)
+    except Exception as pam_error:
+        # Get detailed error information
+        error_msg = "ERROR: PAM exception: {}".format(str(pam_error))
+        error_msg += "\nTraceback: {}".format(traceback.format_exc())
+        print(error_msg, flush=True)
+        sys.exit(1)
+except Exception as e:
+    # Print error to stdout so it can be captured
+    error_msg = "ERROR: {}".format(str(e))
+    error_msg += "\nTraceback: {}".format(traceback.format_exc())
+    print(error_msg, flush=True)
+    sys.exit(1)
+PYEOF
+        
+        # Run Python script and capture output
+        # Capture both stdout and stderr
+        python_output=$(${pythonEnv}/bin/python3 "$PYTHON_SCRIPT" "$username" "$password" 2>&1)
+        exit_code=$?
+        
+        # Always remove the script file
+        rm -f "$PYTHON_SCRIPT"
+        
+        # Output the result to stdout (SUCCESS, FAILURE, or ERROR message)
+        # This will be sent to the socket connection (StandardOutput = "socket")
+        # The output must go to stdout so it can be read by the backend via the socket
+        if [ -n "$python_output" ]; then
+          # Output the Python script's output directly to stdout
+          printf "%s" "$python_output"
+        else
+          # If no output but exit code indicates failure, output error
+          if [ $exit_code -ne 0 ]; then
+            printf "ERROR: Python script failed with exit code %s but produced no output" "$exit_code"
+          fi
+        fi
+        
+        # Also log errors to stderr so they appear in systemd journal
+        if [ $exit_code -ne 0 ] && [ -n "$python_output" ]; then
+          echo "ERROR: Authentication failed - $python_output" >&2
+        fi
+        
+        # Exit with the Python script's exit code
+        exit $exit_code
+      '';
+    };
   };
 }
 

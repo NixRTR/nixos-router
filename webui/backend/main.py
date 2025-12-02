@@ -26,7 +26,14 @@ apprise_logger.setLevel(logging.DEBUG)
 # Also enable debug for apprise.plugins and apprise.attachment modules
 logging.getLogger('apprise.plugins').setLevel(logging.DEBUG)
 logging.getLogger('apprise.attachment').setLevel(logging.DEBUG)
-from .database import init_db
+
+# Disable SQLAlchemy engine INFO logging (suppress INSERT/UPDATE/DELETE statements)
+# Only show WARNING and above for SQLAlchemy engine and related loggers
+logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+logging.getLogger('sqlalchemy.pool').setLevel(logging.WARNING)
+logging.getLogger('sqlalchemy.dialects').setLevel(logging.WARNING)
+logging.getLogger('sqlalchemy.orm').setLevel(logging.WARNING)
+from .database import init_db, AsyncSessionLocal
 from .websocket import manager, websocket_endpoint
 from .api.auth import router as auth_router
 from .api.history import router as history_router
@@ -37,6 +44,8 @@ from .api.speedtest import router as speedtest_router
 from .api.cake import router as cake_router
 from .api.apprise import router as apprise_router
 from .api.notifications import router as notifications_router
+from .api.dns import router as dns_router
+from .api.dhcp import router as dhcp_router
 from .workers import (
     start_aggregation_worker,
     stop_aggregation_worker,
@@ -46,6 +55,9 @@ from .workers import (
     stop_buffer_flusher,
 )
 from .utils.redis_client import close_redis_client
+from .utils.apprise import migrate_secrets_to_database
+from .utils.dns import migrate_dns_config_to_database
+from .utils.dhcp import migrate_dhcp_config_to_database
 
 
 @asynccontextmanager
@@ -59,7 +71,36 @@ async def lifespan(app: FastAPI):
     
     # Initialize database
     await init_db()
-    print("Database initialized")
+    
+    # Migrate Apprise services from secrets/config file to database
+    try:
+        async with AsyncSessionLocal() as session:
+            await migrate_secrets_to_database(session)
+    except Exception as e:
+        logging.getLogger(__name__).error(
+            f"Error migrating Apprise services: {e}", exc_info=True
+        )
+        # Don't fail startup if migration fails
+    
+    # Migrate DNS configuration from router-config.nix to database
+    try:
+        async with AsyncSessionLocal() as session:
+            await migrate_dns_config_to_database(session)
+    except Exception as e:
+        logging.getLogger(__name__).error(
+            f"Error migrating DNS configuration: {e}", exc_info=True
+        )
+        # Don't fail startup if migration fails
+    
+    # Migrate DHCP configuration from router-config.nix to database
+    try:
+        async with AsyncSessionLocal() as session:
+            await migrate_dhcp_config_to_database(session)
+    except Exception as e:
+        logging.getLogger(__name__).error(
+            f"Error migrating DHCP configuration: {e}", exc_info=True
+        )
+        # Don't fail startup if migration fails
     
     # Start WebSocket broadcast loop
     await manager.start_broadcasting()
@@ -132,6 +173,8 @@ app.include_router(speedtest_router)
 app.include_router(cake_router)
 app.include_router(apprise_router)
 app.include_router(notifications_router)
+app.include_router(dns_router)
+app.include_router(dhcp_router)
 
 
 @app.get("/api")

@@ -77,7 +77,33 @@ export interface NotificationTestResponse {
 }
 
 export interface AppriseServiceInfo {
+  id: number;
+  name: string;
+  description?: string | null;
+  enabled: boolean;
+}
+
+export interface AppriseService {
+  id: number;
+  name: string;
+  description?: string | null;
   url: string;
-  description: string;
+  original_secret_string?: string | null;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppriseServiceCreate {
+  name: string;
+  description?: string | null;
+  url: string;
+}
+
+export interface AppriseServiceUpdate {
+  name?: string;
+  description?: string | null;
+  url?: string;
+  enabled?: boolean;
 }
 
