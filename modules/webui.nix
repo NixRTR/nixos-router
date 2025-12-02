@@ -6,8 +6,18 @@ let
   cfg = config.services.router-webui;
   routerConfig = import ../router-config.nix;
   
+  # Override paho-mqtt to disable tests (optional MQTT dependency we don't use)
+  # This prevents build failures when paho-mqtt is pulled in as an optional dependency
+  python311WithOverrides = pkgs.python311.override {
+    packageOverrides = self: super: {
+      paho-mqtt = super.paho-mqtt.overridePythonAttrs (attrs: {
+        doCheck = false;
+      });
+    };
+  };
+  
   # Python environment with all dependencies
-  pythonEnv = pkgs.python311.withPackages (ps: with ps; [
+  pythonEnv = python311WithOverrides.withPackages (ps: with ps; [
     fastapi
     uvicorn
     websockets
@@ -25,6 +35,7 @@ let
     httpx  # HTTP client for GitHub API requests
     apprise  # Notification service integration
     jinja2  # Template engine for notification messages
+    redis  # Redis client for caching and write buffering
   ]);
   
   # Backend source
@@ -117,6 +128,24 @@ in
         host all all 127.0.0.1/32 trust
         host all all ::1/128 trust
       '';
+    };
+    
+    # Enable Redis for caching and write buffering
+    # Use the servers configuration format for NixOS 25.11+
+    services.redis.servers."" = {
+      enable = true;
+      bind = "127.0.0.1";
+      port = 6379;
+      # In-memory only (no persistence)
+      settings = {
+        # Disable AOF persistence (in-memory only)
+        appendonly = "no";
+        # Limit memory usage
+        maxmemory = "256mb";
+        maxmemory-policy = "allkeys-lru";
+        # Note: RDB snapshots are enabled by default, but since data is ephemeral
+        # and we're using maxmemory with eviction, this is acceptable for caching
+      };
     };
     
     # Create system user for the service

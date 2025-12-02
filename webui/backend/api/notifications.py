@@ -29,8 +29,14 @@ from ..collectors.notifications import (
     determine_rule_level,
 )
 from ..utils.apprise import send_notification
+from ..utils.redis_client import delete as redis_delete
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
+
+
+async def _invalidate_rules_cache():
+    """Invalidate notification rules cache"""
+    await redis_delete("notification_rules:enabled:ids")
 
 
 def _serialize_rule(
@@ -135,6 +141,7 @@ async def create_rule(
     )
     db.add(rule)
     await db.flush()
+    await _invalidate_rules_cache()  # Invalidate cache after creation
     return _serialize_rule(rule, None)
 
 
@@ -168,6 +175,7 @@ async def update_rule(
         rule.apprise_service_indices = payload.apprise_service_indices
 
     await db.flush()
+    await _invalidate_rules_cache()  # Invalidate cache after update
     state = await db.get(NotificationStateDB, rule.id)
     return _serialize_rule(rule, state)
 
@@ -181,6 +189,7 @@ async def delete_rule(
     rule = await _load_rule(db, rule_id)
     await db.delete(rule)
     await db.flush()
+    await _invalidate_rules_cache()  # Invalidate cache after deletion
 
 
 @router.get("/rules/{rule_id}/history", response_model=NotificationHistory)

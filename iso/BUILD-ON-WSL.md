@@ -168,7 +168,7 @@ nix-build '<nixpkgs/nixos>' -A config.system.build.isoImage -I nixos-config=./co
 
 The ISO includes:
 
-- **NixOS 25.05** minimal installer
+- **NixOS 25.11** minimal installer
 - **Automated boot menu** that starts on boot
 - **All router installation scripts** embedded (no internet needed)
 - **Networking tools** for debugging

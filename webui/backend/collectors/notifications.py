@@ -401,10 +401,34 @@ class NotificationEvaluator:
 
     async def evaluate_all(self) -> None:
         async with self.session_factory() as session:
-            result = await session.execute(
-                select(NotificationRuleDB).where(NotificationRuleDB.enabled.is_(True))
-            )
-            rules = result.scalars().all()
+            # Try to get enabled rule IDs from Redis cache first
+            from ..utils.redis_client import get_json, set_json
+            from ..config import settings
+            
+            cache_key = "notification_rules:enabled:ids"
+            cached_rule_ids = await get_json(cache_key)
+            
+            if cached_rule_ids:
+                # Fetch rules by cached IDs
+                result = await session.execute(
+                    select(NotificationRuleDB).where(
+                        NotificationRuleDB.id.in_(cached_rule_ids),
+                        NotificationRuleDB.enabled.is_(True)
+                    )
+                )
+                rules = result.scalars().all()
+            else:
+                # Cache miss - fetch from database
+                result = await session.execute(
+                    select(NotificationRuleDB).where(NotificationRuleDB.enabled.is_(True))
+                )
+                rules = result.scalars().all()
+                
+                # Cache the rule IDs for next time
+                if rules:
+                    rule_ids = [rule.id for rule in rules]
+                    await set_json(cache_key, rule_ids, ttl=settings.redis_cache_ttl_rules)
+            
             for rule in rules:
                 try:
                     await self._evaluate_rule(session, rule)

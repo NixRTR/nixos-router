@@ -171,5 +171,5 @@ in
   services.openssh.enable = true;
 
   # NixOS version (don't change unless you know what you're doing)
-  system.stateVersion = "25.05";
+  system.stateVersion = "25.11";
 }

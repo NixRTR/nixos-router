@@ -11,13 +11,14 @@ from typing import AsyncGenerator
 from .config import settings
 
 # Create async engine
+# Reduced pool size since we're using bulk operations and Redis buffering
 # Note: echo=False to prevent SQLAlchemy from logging all SQL statements
 # We control logging via the logger level in main.py instead
 engine = create_async_engine(
     settings.database_url,
     echo=False,  # Disable echo to prevent INFO-level SQL logging
-    pool_size=20,
-    max_overflow=40,
+    pool_size=10,
+    max_overflow=20,
     pool_pre_ping=True,
 )
 

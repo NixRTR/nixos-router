@@ -16,6 +16,7 @@ from ..auth import get_current_user
 from ..collectors.network_devices import discover_network_devices, get_device_count_by_network
 from ..collectors.dhcp import parse_kea_leases
 from ..database import AsyncSessionLocal, DeviceOverrideDB, NetworkDeviceDB
+from ..utils.redis_client import delete as redis_delete
 
 
 def _is_ipv4(ip: str) -> bool:
@@ -118,18 +119,41 @@ async def get_all_devices(
                 devices.append(device)
                 seen_macs.add(mac_lower)
 
-    # Load overrides for all MACs
-    macs = [d.mac_address for d in devices]
-    overrides: Dict[str, DeviceOverrideDB] = {}
-    if macs:
+    # Load overrides for all MACs (with Redis caching)
+    from ..utils.redis_client import get_json, set_json
+    from ..config import settings
+    
+    cache_key = "device_overrides:all"
+    cached_overrides = await get_json(cache_key)
+    
+    overrides: Dict[str, Dict] = {}
+    if cached_overrides:
+        # Use cached overrides directly as dict
+        overrides = {mac.lower(): data for mac, data in cached_overrides.items()}
+    else:
+        # Cache miss - fetch from database
         async with AsyncSessionLocal() as session:
-            result = await session.execute(select(DeviceOverrideDB).where(DeviceOverrideDB.mac_address.in_(macs)))
+            # Fetch ALL overrides for caching
+            result = await session.execute(select(DeviceOverrideDB))
+            all_overrides = {}
             for ov in result.scalars().all():
-                overrides[str(ov.mac_address).lower()] = ov
+                mac_key = str(ov.mac_address).lower()
+                all_overrides[mac_key] = {
+                    'nickname': ov.nickname,
+                    'favorite': ov.favorite
+                }
+            
+            # Cache all overrides
+            if all_overrides:
+                await set_json(cache_key, all_overrides, ttl=settings.redis_cache_ttl_overrides)
+            
+            # Populate overrides dict from database
+            overrides = all_overrides
 
     enriched: List[NetworkDevice] = []
     for device in devices:
         key = device.mac_address.lower()
+        ov = overrides.get(key)
         ov = overrides.get(key)
         enriched.append(NetworkDevice(
             network=device.network,
@@ -141,8 +165,8 @@ async def get_all_devices(
             is_static=device.is_static,
             is_online=device.is_online,
             last_seen=device.last_seen,
-            nickname=ov.nickname if ov else None,
-            favorite=ov.favorite if ov else False,
+            nickname=ov.get('nickname') if ov else None,
+            favorite=ov.get('favorite', False) if ov else False,
         ))
 
     # Sort: favorites first, then by nickname/hostname
@@ -361,6 +385,8 @@ async def upsert_override(req: OverrideRequest, _: str = Depends(get_current_use
             row = DeviceOverrideDB(mac_address=req.mac_address, nickname=req.nickname, favorite=bool(req.favorite))
             session.add(row)
         await session.commit()
+        # Invalidate device overrides cache
+        await redis_delete("device_overrides:all")
         return {"status": "ok"}
 
 
@@ -372,5 +398,7 @@ async def delete_override(mac: str, _: str = Depends(get_current_user)) -> dict:
         if row:
             await session.delete(row)
             await session.commit()
+        # Invalidate device overrides cache
+        await redis_delete("device_overrides:all")
         return {"status": "ok"}
 

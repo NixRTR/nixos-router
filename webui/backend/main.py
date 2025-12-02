@@ -6,9 +6,6 @@ import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, Query
 from fastapi.middleware.cors import CORSMiddleware
-import os
-import asyncio
-from datetime import datetime, time, timedelta, timezone
 
 from .config import settings
 
@@ -49,58 +46,18 @@ from .api.apprise import router as apprise_router
 from .api.notifications import router as notifications_router
 from .api.dns import router as dns_router
 from .api.dhcp import router as dhcp_router
-from .collectors.aggregation import run_aggregation_job
-from .collectors.notifications import NotificationEvaluator
+from .workers import (
+    start_aggregation_worker,
+    stop_aggregation_worker,
+    start_notification_worker,
+    stop_notification_worker,
+    start_buffer_flusher,
+    stop_buffer_flusher,
+)
+from .utils.redis_client import close_redis_client
 from .utils.apprise import migrate_secrets_to_database
 from .utils.dns import migrate_dns_config_to_database
 from .utils.dhcp import migrate_dhcp_config_to_database
-
-notification_evaluator = NotificationEvaluator(AsyncSessionLocal)
-
-
-async def daily_aggregation_task():
-    """Background task that runs aggregation job daily at 2 AM"""
-    while True:
-        try:
-            # Calculate time until next 2 AM UTC
-            now = datetime.now(timezone.utc)
-            target_hour = 2  # 2 AM UTC
-            
-            # If it's already past 2 AM today, schedule for tomorrow
-            if now.hour >= target_hour:
-                next_run = datetime(now.year, now.month, now.day, target_hour, 0, 0, tzinfo=timezone.utc) + timedelta(days=1)
-            else:
-                next_run = datetime(now.year, now.month, now.day, target_hour, 0, 0, tzinfo=timezone.utc)
-            
-            wait_seconds = (next_run - now).total_seconds()
-            print(f"Aggregation job scheduled for {next_run} (in {wait_seconds/3600:.1f} hours)")
-            
-            await asyncio.sleep(wait_seconds)
-            
-            # Run aggregation job
-            await run_aggregation_job()
-            
-        except asyncio.CancelledError:
-            break
-        except Exception as e:
-            print(f"Error in daily aggregation task: {e}")
-            # Wait 1 hour before retrying on error
-            await asyncio.sleep(3600)
-
-
-async def notification_evaluator_task():
-    """Background task that periodically evaluates notification rules"""
-    while True:
-        try:
-            await notification_evaluator.evaluate_all()
-            await asyncio.sleep(settings.notification_check_interval)
-        except asyncio.CancelledError:
-            break
-        except Exception as exc:
-            logging.getLogger(__name__).error(
-                "Notification evaluator error: %s", exc, exc_info=True
-            )
-            await asyncio.sleep(settings.notification_check_interval)
 
 
 @asynccontextmanager
@@ -149,32 +106,41 @@ async def lifespan(app: FastAPI):
     await manager.start_broadcasting()
     print("WebSocket broadcaster started")
     
-    # Start daily aggregation task
-    aggregation_task = asyncio.create_task(daily_aggregation_task())
-    print("Daily aggregation task started")
-    notification_task = asyncio.create_task(notification_evaluator_task())
-    print("Notification evaluator task started")
+    # Start background workers
+    await start_aggregation_worker()
+    print("Aggregation worker started")
+    
+    await start_notification_worker()
+    print("Notification worker started")
+    
+    # Start Redis buffer flush worker if enabled
+    if settings.redis_write_buffer_enabled:
+        await start_buffer_flusher()
+        print("Redis buffer flush worker started")
     
     yield
     
     # Shutdown
     print("Shutting down...")
-    aggregation_task.cancel()
-    try:
-        await aggregation_task
-    except asyncio.CancelledError:
-        pass
-    print("Aggregation task stopped")
-
-    notification_task.cancel()
-    try:
-        await notification_task
-    except asyncio.CancelledError:
-        pass
-    print("Notification evaluator task stopped")
+    
+    # Stop background workers
+    await stop_aggregation_worker()
+    print("Aggregation worker stopped")
+    
+    await stop_notification_worker()
+    print("Notification worker stopped")
     
     await manager.stop_broadcasting()
     print("WebSocket broadcaster stopped")
+    
+    # Stop Redis buffer flush worker
+    if settings.redis_write_buffer_enabled:
+        await stop_buffer_flusher()
+        print("Redis buffer flush worker stopped")
+    
+    # Close Redis client connection
+    await close_redis_client()
+    print("Redis client closed")
 
 
 # Create FastAPI app
