@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, inputs, ... }:
 
 with lib;
 
@@ -38,16 +38,14 @@ let
     redis  # Redis client for caching and write buffering
   ]);
   
-  # Backend source
-  backendSrc = ../webui/backend;
+  # Backend source (from flake input)
+  backendSrc = inputs.router-webui + "/backend";
   
-  # Frontend build (pre-built, committed to repository)
-  frontendSrc = ../webui/frontend;
-  frontendBuild = frontendSrc + "/dist";
+  # Frontend build (pre-built, committed to repository, from flake input)
+  frontendBuild = inputs.router-webui + "/frontend/dist";
   
-  # Documentation source and build (pre-built, committed to repository)
-  docsSrc = ../docs;
-  docsBuild = docsSrc + "/dist";
+  # Documentation build (pre-built, committed to repository, from flake input)
+  docsBuild = inputs.router-docs + "/dist";
   
 in
 
@@ -306,7 +304,7 @@ in
       
       environment = {
         DATABASE_URL = "postgresql+asyncpg://${cfg.database.user}@${cfg.database.host}:${toString cfg.database.port}/${cfg.database.name}";
-        PYTHONPATH = "${../webui}";
+        PYTHONPATH = "${inputs.router-webui}";
         COLLECTION_INTERVAL = toString cfg.collectionInterval;
         PORT = toString cfg.backendPort;
         KEA_LEASE_FILE = "/var/lib/kea/dhcp4.leases";
@@ -329,7 +327,7 @@ in
         Type = "simple";
         User = "router-webui";
         Group = "router-webui";
-        WorkingDirectory = "${../webui}";
+        WorkingDirectory = "${inputs.router-webui}";
         ExecStart = "${pythonEnv}/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port ${toString cfg.backendPort}";
         Restart = "always";
         RestartSec = "10s";
