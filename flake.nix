@@ -7,6 +7,14 @@
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    router-webui = {
+      url = "github:NixRTR/webui";
+      flake = false;
+    };
+    router-docs = {
+      url = "github:NixRTR/docs";
+      flake = false;
+    };
   };
 
   outputs = inputs@{ nixpkgs, sops-nix, ... }:
