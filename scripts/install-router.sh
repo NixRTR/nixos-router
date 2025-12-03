@@ -6,7 +6,7 @@
 set -euo pipefail
 
 # Configuration
-REPO_URL="https://github.com/beardedtek/nixos-router.git"  # Update this with your actual repo URL
+REPO_URL="https://github.com/NixRTR/nixos-router.git"  # Update this with your actual repo URL
 
 # Initialize variables
 PPPOE_USER=""

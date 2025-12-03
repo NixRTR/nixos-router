@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/beardedtek/nixos-router.git" # update if using a fork
+REPO_URL="https://github.com/NixRTR/nixos-router.git" # update if using a fork
 BRANCH="main"
 TARGET_DIR="/etc/nixos"
 
@@ -41,7 +41,7 @@ Usage: $0 [OPTIONS]
 Options:
   -h, --help          Show this help message and exit
   -r, --repo-url URL  Override the repository URL
-                      Default: https://github.com/beardedtek/nixos-router.git
+                      Default: https://github.com/NixRTR/nixos-router.git
   -b, --branch NAME   Override the git branch to use
                       Default: main
 

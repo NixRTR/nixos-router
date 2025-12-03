@@ -21,7 +21,7 @@ A NixOS-based router configuration for home networks.
 
 ## Documentation
 Documentation is available at:
-- **GitHub Pages**: [https://beardedtek.github.io/nixos-router/](https://beardedtek.github.io/nixos-router/)
+- **GitHub Pages**: [https://NixRTR.github.io/nixos-router/](https://NixRTR.github.io/nixos-router/)
 - **Local (on router)**: Access via WebUI at `http://router-ip:8080/documentation`
 - **Source**: [docs/](docs/)
 
