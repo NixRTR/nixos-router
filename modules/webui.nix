@@ -36,6 +36,7 @@ let
     apprise  # Notification service integration
     jinja2  # Template engine for notification messages
     redis  # Redis client for caching and write buffering
+    celery  # Task queue for background workers
   ]);
   
   # Backend source (from flake input)
@@ -352,6 +353,124 @@ in
           "/sys"
           "/usr"  # Protect /usr (read-only)
           "/boot"  # Protect /boot (read-only)
+        ];
+        
+        # Allow access to system monitoring
+        CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_SYS_PTRACE" "CAP_DAC_READ_SEARCH" ];
+        AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_SYS_PTRACE" "CAP_DAC_READ_SEARCH" ];
+      };
+    };
+    
+    # Celery worker service for background tasks
+    systemd.services.router-webui-celery-worker = {
+      description = "Router WebUI Celery Worker";
+      after = [ "network.target" "postgresql.service" "redis.service" "router-webui-initdb.service" ];
+      wants = [ "postgresql.service" "redis.service" ];
+      requires = [ "router-webui-initdb.service" ];
+      wantedBy = [ "multi-user.target" ];
+      
+      environment = {
+        DATABASE_URL = "postgresql+asyncpg://${cfg.database.user}@${cfg.database.host}:${toString cfg.database.port}/${cfg.database.name}";
+        PYTHONPATH = "${inputs.router-webui}";
+        COLLECTION_INTERVAL = toString cfg.collectionInterval;
+        KEA_LEASE_FILE = "/var/lib/kea/dhcp4.leases";
+        ROUTER_CONFIG_FILE = "/etc/nixos/router-config.nix";
+        JWT_SECRET_FILE = "/var/lib/router-webui/jwt-secret";
+        DOCUMENTATION_DIR = "/var/lib/router-webui/docs";
+        # Provide absolute binary paths for commands used by backend
+        NFT_BIN = "${pkgs.nftables}/bin/nft";
+        IP_BIN = "${pkgs.iproute2}/bin/ip";
+        TC_BIN = "${pkgs.iproute2}/bin/tc";
+        CONNTRACK_BIN = "${pkgs.conntrack-tools}/bin/conntrack";
+        FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
+        SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
+        SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
+      };
+      
+      serviceConfig = {
+        Type = "simple";
+        User = "router-webui";
+        Group = "router-webui";
+        WorkingDirectory = "${inputs.router-webui}";
+        ExecStart = "${pythonEnv}/bin/python -m celery -A backend.celery_app worker --loglevel=info --concurrency=2 --queues=aggregation,notifications,buffer_flush";
+        Restart = "always";
+        RestartSec = "10s";
+        
+        # Set debug mode and ensure PATH includes /run/wrappers/bin for wrapped sudo
+        Environment = [
+          "DEBUG=${if cfg.debug then "true" else "false"}"
+          "PATH=/run/wrappers/bin:/run/current-system/sw/bin:/usr/bin:/bin"
+        ];
+        
+        # Security hardening
+        PrivateTmp = true;
+        ProtectHome = true;
+        ReadWritePaths = [ "/var/lib/router-webui" "/run" ];
+        ReadOnlyPaths = [ 
+          "/var/lib/kea" 
+          "/proc"
+          "/sys"
+          "/usr"
+          "/boot"
+        ];
+        
+        # Allow access to system monitoring
+        CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_SYS_PTRACE" "CAP_DAC_READ_SEARCH" ];
+        AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_SYS_PTRACE" "CAP_DAC_READ_SEARCH" ];
+      };
+    };
+    
+    # Celery Beat service for periodic task scheduling
+    systemd.services.router-webui-celery-beat = {
+      description = "Router WebUI Celery Beat Scheduler";
+      after = [ "network.target" "postgresql.service" "redis.service" "router-webui-celery-worker.service" ];
+      wants = [ "postgresql.service" "redis.service" "router-webui-celery-worker.service" ];
+      requires = [ "router-webui-initdb.service" ];
+      wantedBy = [ "multi-user.target" ];
+      
+      environment = {
+        DATABASE_URL = "postgresql+asyncpg://${cfg.database.user}@${cfg.database.host}:${toString cfg.database.port}/${cfg.database.name}";
+        PYTHONPATH = "${inputs.router-webui}";
+        COLLECTION_INTERVAL = toString cfg.collectionInterval;
+        KEA_LEASE_FILE = "/var/lib/kea/dhcp4.leases";
+        ROUTER_CONFIG_FILE = "/etc/nixos/router-config.nix";
+        JWT_SECRET_FILE = "/var/lib/router-webui/jwt-secret";
+        DOCUMENTATION_DIR = "/var/lib/router-webui/docs";
+        # Provide absolute binary paths for commands used by backend
+        NFT_BIN = "${pkgs.nftables}/bin/nft";
+        IP_BIN = "${pkgs.iproute2}/bin/ip";
+        TC_BIN = "${pkgs.iproute2}/bin/tc";
+        CONNTRACK_BIN = "${pkgs.conntrack-tools}/bin/conntrack";
+        FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
+        SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
+        SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
+      };
+      
+      serviceConfig = {
+        Type = "simple";
+        User = "router-webui";
+        Group = "router-webui";
+        WorkingDirectory = "${inputs.router-webui}";
+        ExecStart = "${pythonEnv}/bin/python -m celery -A backend.celery_app beat --loglevel=info";
+        Restart = "always";
+        RestartSec = "10s";
+        
+        # Set debug mode and ensure PATH includes /run/wrappers/bin for wrapped sudo
+        Environment = [
+          "DEBUG=${if cfg.debug then "true" else "false"}"
+          "PATH=/run/wrappers/bin:/run/current-system/sw/bin:/usr/bin:/bin"
+        ];
+        
+        # Security hardening
+        PrivateTmp = true;
+        ProtectHome = true;
+        ReadWritePaths = [ "/var/lib/router-webui" "/run" ];
+        ReadOnlyPaths = [ 
+          "/var/lib/kea" 
+          "/proc"
+          "/sys"
+          "/usr"
+          "/boot"
         ];
         
         # Allow access to system monitoring
