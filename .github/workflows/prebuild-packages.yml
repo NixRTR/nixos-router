@@ -21,6 +21,8 @@ jobs:
         extra_nix_config: |
           substituters = https://cache.nixos.org https://nixrtr.cachix.org
           trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= nixrtr.cachix.org-1:3iLxsXPSxPyLUKXeMXwBmspquvPq4ab8U6XkFH6yUeE=
+          # Disable post-build-hook to prevent automatic pushing during builds
+          post-build-hook =
     
     # Check if Cachix token is available
     # First, create a free account at https://cachix.org
@@ -40,8 +42,9 @@ jobs:
       with:
         name: nixrtr
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-        # Filter out secret-related paths to prevent exposure
-        pushFilter: "(secrets\\.yaml$|sops-install-secrets|manifest.*secrets)"
+        # Disable automatic post-build-hook push to avoid pushing subdirectories
+        # We'll push manually with proper filtering instead
+        skipPush: true
     
     # Create dummy secrets.yaml file for CI builds
     # This file contains placeholder values to satisfy sops-nix validation
@@ -68,12 +71,14 @@ jobs:
     
     - name: Build NixOS configuration
       run: |
+        # Disable post-build-hook for this build to avoid automatic pushing
         nix build \
           --print-build-logs \
           --no-link \
           --option warn-dirty false \
           --option max-jobs auto \
           --option cores 0 \
+          --option post-build-hook "" \
           '.#nixosConfigurations.router.config.system.build.toplevel'
     
     # Push to Cachix if configured
