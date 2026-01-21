@@ -40,6 +40,8 @@ jobs:
       with:
         name: nixrtr
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        # Filter out secret-related paths to prevent exposure
+        pushFilter: "(secrets\\.yaml$|sops-install-secrets|manifest.*secrets)"
     
     # Create dummy secrets.yaml file for CI builds
     # This file contains placeholder values to satisfy sops-nix validation
@@ -75,11 +77,9 @@ jobs:
           '.#nixosConfigurations.router.config.system.build.toplevel'
     
     # Push to Cachix if configured
-    # IMPORTANT: Filter out all secret-related paths to prevent exposure
-    - name: Push to Cachix (excluding secrets)
+    # Note: pushFilter in cachix-action above will automatically exclude secret-related paths
+    - name: Push to Cachix
       if: steps.check_cachix.outputs.has_token == 'true'
       run: |
-        # Get all store paths and filter out secret-related ones
         nix path-info --all -r '.#nixosConfigurations.router.config.system.build.toplevel' | \
-          grep -v -E "(secrets\.yaml|sops-install-secrets|.*-secrets-.*|.*password.*)" | \
           cachix push nixrtr
