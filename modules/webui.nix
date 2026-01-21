@@ -9,12 +9,16 @@ let
   # Override packages to disable tests that fail in NixOS build environment
   # - paho-mqtt: optional MQTT dependency we don't use
   # - tenacity: dependency of celery, has flaky timing tests
+  # - portalocker: has flaky multiprocessing tests that timeout in build environment
   python311WithOverrides = pkgs.python311.override {
     packageOverrides = self: super: {
       paho-mqtt = super.paho-mqtt.overridePythonAttrs (attrs: {
         doCheck = false;
       });
       tenacity = super.tenacity.overridePythonAttrs (attrs: {
+        doCheck = false;
+      });
+      portalocker = super.portalocker.overridePythonAttrs (attrs: {
         doCheck = false;
       });
     };
