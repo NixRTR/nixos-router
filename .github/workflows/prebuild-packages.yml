@@ -18,6 +18,9 @@ jobs:
       uses: cachix/install-nix-action@v26
       with:
         nix_path: nixpkgs=channel:nixos-25.11
+        extra_nix_config: |
+          substituters = https://cache.nixos.org https://nixrtr.cachix.org
+          trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= nixrtr.cachix.org-1:3iLxsXPSxPyLUKXeMXwBmspquvPq4ab8U6XkFH6yUeE=
     
     # Check if Cachix token is available
     # First, create a free account at https://cachix.org
@@ -44,6 +47,8 @@ jobs:
           --print-build-logs \
           --no-link \
           --option warn-dirty false \
+          --option max-jobs auto \
+          --option cores 0 \
           '.#nixosConfigurations.router.config.system.build.toplevel'
     
     # Push to Cachix if configured

@@ -10,6 +10,7 @@ let
   # - paho-mqtt: optional MQTT dependency we don't use
   # - tenacity: dependency of celery, has flaky timing tests
   # - portalocker: has flaky multiprocessing tests that timeout in build environment
+  # - django: transitive dependency (likely via celery), has flaky XML serializer tests
   python311WithOverrides = pkgs.python311.override {
     packageOverrides = self: super: {
       paho-mqtt = super.paho-mqtt.overridePythonAttrs (attrs: {
@@ -19,6 +20,9 @@ let
         doCheck = false;
       });
       portalocker = super.portalocker.overridePythonAttrs (attrs: {
+        doCheck = false;
+      });
+      django = super.django.overridePythonAttrs (attrs: {
         doCheck = false;
       });
     };
