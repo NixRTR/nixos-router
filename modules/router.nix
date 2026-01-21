@@ -398,27 +398,13 @@ in {
           };
         }) bridges);
 
-        networks = listToAttrs (
-          # Bridge member interfaces
-          (map (bridge: {
-            name = "${bridge.name}-members";
-            value = {
-              matchConfig.Name = concatStringsSep " " bridge.interfaces;
-              networkConfig.Bridge = bridge.name;
-            };
-          }) bridges)
-          # Bridge interfaces themselves - enable IGMP for multicast
-          ++ (map (bridge: {
-            name = bridge.name;
-            value = {
-              matchConfig.Name = bridge.name;
-              networkConfig = {
-                IGMP = true;
-                Multicast = true;
-              };
-            };
-          }) bridges)
-        );
+        networks = listToAttrs (map (bridge: {
+          name = "${bridge.name}-members";
+          value = {
+            matchConfig.Name = concatStringsSep " " bridge.interfaces;
+            networkConfig.Bridge = bridge.name;
+          };
+        }) bridges);
         
         # Enable hardware offloading on WAN interface
         links."10-${wanInterface}" = {
