@@ -41,9 +41,30 @@ jobs:
         name: nixrtr
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     
+    # Create dummy secrets.yaml file for CI builds
+    # This file contains placeholder values to satisfy sops-nix validation
+    # Real secrets are only used during actual deployment
+    - name: Create dummy secrets file for CI
+      run: |
+        mkdir -p secrets
+        cat > secrets/secrets.yaml << 'EOF'
+        # Dummy secrets file for CI builds only
+        # These are placeholder values and never used in deployment
+        password-hash: $6$dummy$CIBUILDPASSWORDHASHPLACEHOLDER
+        
+        # Apprise URLs (dummy value)
+        apprise-urls: |
+          dummy|http://localhost/dummy
+        
+        # PPPoE credentials (dummy values)
+        pppoe-username: ci_dummy_user
+        pppoe-password: ci_dummy_password
+        
+        # Dynamic DNS token (dummy value)
+        linode-api-token: ci_dummy_linode_token
+        EOF
+    
     - name: Build NixOS configuration
-      env:
-        CI_SKIP_SECRETS: "1"  # Skip password-hash secret validation for CI builds
       run: |
         nix build \
           --print-build-logs \
@@ -54,8 +75,11 @@ jobs:
           '.#nixosConfigurations.router.config.system.build.toplevel'
     
     # Push to Cachix if configured
-    - name: Push to Cachix
+    # IMPORTANT: Filter out all secret-related paths to prevent exposure
+    - name: Push to Cachix (excluding secrets)
       if: steps.check_cachix.outputs.has_token == 'true'
       run: |
+        # Get all store paths and filter out secret-related ones
         nix path-info --all -r '.#nixosConfigurations.router.config.system.build.toplevel' | \
+          grep -v -E "(secrets\.yaml|sops-install-secrets|.*-secrets-.*|.*password.*)" | \
           cachix push nixrtr

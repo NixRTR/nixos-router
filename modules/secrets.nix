@@ -22,19 +22,14 @@ in
     };
 
     # Define secrets
-    # Note: password-hash is required for deployment but can be skipped for CI builds
-    # For CI builds, we conditionally exclude it to avoid validation errors
-    secrets = 
-      # Check if we're in CI by looking for CI environment variable
-      # This allows CI builds to proceed without the password-hash secret
-      if (builtins.getEnv "CI") != "" && (builtins.getEnv "CI_SKIP_SECRETS") != "" then {
-        # CI build - skip password-hash
-      } else {
-        # Normal build or deployment - include password-hash
-        password-hash = {
-          neededForUsers = false;
-        };
-      } 
+    # Note: CI builds use a dummy secrets.yaml file created by GitHub Actions
+    # Real secrets are only used during actual deployment
+    secrets = {
+      # User password hash (hashed with mkpasswd -m sha-512)
+      password-hash = {
+        neededForUsers = false;
+      };
+    } 
     # PPPoE secrets (conditional)
     // optionalAttrs pppoeEnabled {
       pppoe-username = {
