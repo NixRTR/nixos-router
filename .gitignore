@@ -1,3 +1,8 @@
+# Build Notes
+build-notes
+build-notes/*
+build-notes/*/*
+
 # Test artifacts (Linux)
 tests/linux/files/
 tests/linux/*.qcow2

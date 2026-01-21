@@ -1,0 +1,45 @@
+name: Prebuild Packages
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Nix
+      uses: cachix/install-nix-action@v26
+      with:
+        nix_path: nixpkgs=channel:nixos-25.11
+    
+    # Option 1: Use Cachix (recommended - fastest and easiest)
+    # First, create a free account at https://cachix.org
+    # Then add your Cachix token as a GitHub secret named CACHIX_AUTH_TOKEN
+    - name: Configure Cachix
+      if: ${{ secrets.CACHIX_AUTH_TOKEN != '' }}
+      uses: cachix/cachix-action@v14
+      with:
+        name: nixrtr  # Change this to your Cachix cache name
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+    
+    - name: Build NixOS configuration
+      run: |
+        nix build \
+          --print-build-logs \
+          --no-link \
+          --option warn-dirty false \
+          '.#nixosConfigurations.router.config.system.build.toplevel'
+    
+    # Push to Cachix if configured
+    - name: Push to Cachix
+      if: ${{ secrets.CACHIX_AUTH_TOKEN != '' }}
+      run: |
+        nix path-info --all -r '.#nixosConfigurations.router.config.system.build.toplevel' | \
+          cachix push nixrtr  # Change this to your Cachix cache name
