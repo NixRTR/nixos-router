@@ -47,18 +47,6 @@ in
 
   # Enable Nix flakes and modern command syntax
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
-  
-  # Binary cache configuration for faster builds
-  # Allows the router to download pre-built packages instead of building them
-  # See CACHIX_SETUP.md for more information
-  nix.settings.substituters = [
-    "https://nixrtr.cachix.org"
-    "https://cache.nixos.org"
-  ];
-  nix.settings.trusted-public-keys = [
-    "nixrtr.cachix.org-1:3iLxsXPSxPyLUKXeMXwBmspquvPq4ab8U6XkFH6yUeE="
-    "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-  ];
 
   # Bootloader configuration
   boot.loader.systemd-boot.enable = true;
