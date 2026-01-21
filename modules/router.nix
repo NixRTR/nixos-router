@@ -398,13 +398,27 @@ in {
           };
         }) bridges);
 
-        networks = listToAttrs (flatten (map (bridge: {
-          name = "${bridge.name}-members";
-          value = {
-            matchConfig.Name = concatStringsSep " " bridge.interfaces;
-            networkConfig.Bridge = bridge.name;
-          };
-        }) bridges));
+        networks = listToAttrs (
+          # Bridge member interfaces
+          (map (bridge: {
+            name = "${bridge.name}-members";
+            value = {
+              matchConfig.Name = concatStringsSep " " bridge.interfaces;
+              networkConfig.Bridge = bridge.name;
+            };
+          }) bridges)
+          # Bridge interfaces themselves - enable IGMP for multicast
+          ++ (map (bridge: {
+            name = bridge.name;
+            value = {
+              matchConfig.Name = bridge.name;
+              networkConfig = {
+                IGMP = true;
+                Multicast = true;
+              };
+            };
+          }) bridges)
+        );
         
         # Enable hardware offloading on WAN interface
         links."10-${wanInterface}" = {
@@ -437,6 +451,20 @@ in {
                 (range (i + 1) ((length bridgeNames) - 1))
             ) (range 0 ((length bridgeNames) - 2)));
             
+            # Allow multicast traffic between bridges (UPnP/DLNA support)
+            # These rules MUST come before isolation drop rules
+            multicastRules = concatMapStrings (pair: ''
+              # Allow IGMP protocol between ${pair.from} and ${pair.to}
+              iptables -I FORWARD -p igmp -i ${pair.from} -o ${pair.to} -j ACCEPT
+              iptables -I FORWARD -p igmp -i ${pair.to} -o ${pair.from} -j ACCEPT
+              # Allow SSDP multicast (239.255.255.250:1900) for UPnP discovery
+              iptables -I FORWARD -p udp -d 239.255.255.250 --dport 1900 -i ${pair.from} -o ${pair.to} -j ACCEPT
+              iptables -I FORWARD -p udp -d 239.255.255.250 --dport 1900 -i ${pair.to} -o ${pair.from} -j ACCEPT
+              # Allow general multicast traffic (224.0.0.0/4) for DLNA
+              iptables -I FORWARD -p udp -d 224.0.0.0/4 -i ${pair.from} -o ${pair.to} -j ACCEPT
+              iptables -I FORWARD -p udp -d 224.0.0.0/4 -i ${pair.to} -o ${pair.from} -j ACCEPT
+            '') bridgePairs;
+            
             # Generate exception rules (must come BEFORE drop rules)
             exceptionRules = concatMapStrings (ex: ''
               # Exception: ${ex.description}
@@ -446,8 +474,8 @@ in {
               iptables -I FORWARD -d ${ex.source} -i ${ex.destBridge} -o ${ex.sourceBridge} -j ACCEPT
             '') isolationExceptions;
           in
-            # Apply exceptions first, then blocking rules
-            exceptionRules + (concatMapStrings (pair: ''
+            # Apply multicast rules first, then exceptions, then blocking rules
+            multicastRules + exceptionRules + (concatMapStrings (pair: ''
               # Block ${pair.from} <-> ${pair.to}
               iptables -A FORWARD -i ${pair.from} -o ${pair.to} -j DROP
               iptables -A FORWARD -i ${pair.to} -o ${pair.from} -j DROP
@@ -461,13 +489,23 @@ in {
                 (range (i + 1) ((length bridgeNames) - 1))
             ) (range 0 ((length bridgeNames) - 2)));
             
+            # Clean up multicast rules
+            cleanupMulticast = concatMapStrings (pair: ''
+              iptables -D FORWARD -p igmp -i ${pair.from} -o ${pair.to} -j ACCEPT || true
+              iptables -D FORWARD -p igmp -i ${pair.to} -o ${pair.from} -j ACCEPT || true
+              iptables -D FORWARD -p udp -d 239.255.255.250 --dport 1900 -i ${pair.from} -o ${pair.to} -j ACCEPT || true
+              iptables -D FORWARD -p udp -d 239.255.255.250 --dport 1900 -i ${pair.to} -o ${pair.from} -j ACCEPT || true
+              iptables -D FORWARD -p udp -d 224.0.0.0/4 -i ${pair.from} -o ${pair.to} -j ACCEPT || true
+              iptables -D FORWARD -p udp -d 224.0.0.0/4 -i ${pair.to} -o ${pair.from} -j ACCEPT || true
+            '') bridgePairs;
+            
             # Clean up exception rules
             cleanupExceptions = concatMapStrings (ex: ''
               iptables -D FORWARD -s ${ex.source} -i ${ex.sourceBridge} -o ${ex.destBridge} -j ACCEPT || true
               iptables -D FORWARD -d ${ex.source} -i ${ex.destBridge} -o ${ex.sourceBridge} -j ACCEPT || true
             '') isolationExceptions;
           in
-            cleanupExceptions + (concatMapStrings (pair: ''
+            cleanupMulticast + cleanupExceptions + (concatMapStrings (pair: ''
               iptables -D FORWARD -i ${pair.from} -o ${pair.to} -j DROP || true
               iptables -D FORWARD -i ${pair.to} -o ${pair.from} -j DROP || true
             '') bridgePairs)
@@ -580,6 +618,11 @@ in {
         "net.ipv4.ip_forward" = 1;
         "net.ipv6.conf.all.forwarding" = 1;
         
+        # Multicast routing for UPnP/DLNA across subnets
+        "net.ipv4.conf.all.mc_forwarding" = 1;
+        "net.ipv4.conf.all.igmpv2_unsolicited_report_interval" = 100;
+        "net.ipv4.conf.all.igmpv3_unsolicited_report_interval" = 1000;
+        
         # TCP optimization for router performance
         "net.ipv4.tcp_window_scaling" = 1;
         "net.ipv4.tcp_timestamps" = 1;
@@ -635,6 +678,40 @@ in {
       
       # Enable kernel modules for BBR
       boot.kernelModules = [ "tcp_bbr" ];
+      
+      # Install igmpproxy for multicast routing (UPnP/DLNA)
+      environment.systemPackages = [ pkgs.igmpproxy ];
+      
+      # Configure igmpproxy for multicast forwarding between bridges
+      # This enables UPnP/DLNA discovery across subnets
+      systemd.services.igmpproxy = mkIf ((length bridges) > 1) {
+        description = "IGMP Proxy for multicast routing (UPnP/DLNA)";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "network.target" ];
+        serviceConfig = {
+          Type = "forking";
+          ExecStart = "${pkgs.igmpproxy}/bin/igmpproxy /etc/igmpproxy.conf";
+          Restart = "on-failure";
+          RestartSec = "5s";
+        };
+      };
+      
+      # Create igmpproxy configuration file
+      environment.etc."igmpproxy.conf" = mkIf ((length bridges) > 1) {
+        text = 
+          let
+            # First bridge is typically upstream (HOMELAB - servers)
+            # Remaining bridges are downstream (LAN - clients)
+            upstreamBridge = if length bridges > 0 then (elemAt bridges 0).name else "";
+            downstreamBridges = if length bridges > 1 
+              then map (b: b.name) (tail bridges)
+              else [];
+          in
+            "quickleave\n" +
+            (if upstreamBridge != "" then "phyint ${upstreamBridge} upstream ratelimit 0 threshold 1\n" else "") +
+            (concatMapStrings (bridge: "phyint ${bridge} downstream ratelimit 0 threshold 1\n") downstreamBridges);
+        mode = "0644";
+      };
       
       # DNS and DHCP services configured elsewhere (e.g., blocky + dhcpd4)
     }
