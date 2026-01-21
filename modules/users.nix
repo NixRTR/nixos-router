@@ -15,7 +15,9 @@ in
     extraGroups = [ "wheel" "networkmanager" ];
     
     # Password from sops secret (pre-hashed with mkpasswd -m sha-512)
-    hashedPasswordFile = config.sops.secrets."password-hash".path;
+    # Only set if the secret exists (allows builds without secrets)
+    hashedPasswordFile = mkIf (config.sops.secrets ? "password-hash") 
+      config.sops.secrets."password-hash".path;
     
     openssh.authorizedKeys.keys = routerConfig.sshKeys or [];
   };

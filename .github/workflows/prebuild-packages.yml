@@ -42,6 +42,8 @@ jobs:
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     
     - name: Build NixOS configuration
+      env:
+        CI_SKIP_SECRETS: "1"  # Skip password-hash secret validation for CI builds
       run: |
         nix build \
           --print-build-logs \
