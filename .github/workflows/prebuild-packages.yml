@@ -23,10 +23,10 @@ jobs:
     # First, create a free account at https://cachix.org
     # Then add your Cachix token as a GitHub secret named CACHIX_AUTH_TOKEN
     - name: Configure Cachix
-      if: ${{ secrets.CACHIX_AUTH_TOKEN != '' }}
+      if: ${{ secrets.CACHIX_AUTH_TOKEN }}
       uses: cachix/cachix-action@v14
       with:
-        name: nixrtr  # Change this to your Cachix cache name
+        name: nixrtr
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     
     - name: Build NixOS configuration
@@ -39,7 +39,7 @@ jobs:
     
     # Push to Cachix if configured
     - name: Push to Cachix
-      if: ${{ secrets.CACHIX_AUTH_TOKEN != '' }}
+      if: ${{ secrets.CACHIX_AUTH_TOKEN }}
       run: |
         nix path-info --all -r '.#nixosConfigurations.router.config.system.build.toplevel' | \
-          cachix push nixrtr  # Change this to your Cachix cache name
+          cachix push nixrtr
