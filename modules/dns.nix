@@ -251,13 +251,13 @@ in
           # Local domain
           ${if homelabPrimaryDomain != "local" then ''
             domain=${homelabPrimaryDomain}
-            # Mark domain as local so dnsmasq handles it (needed for wildcards)
-            local=/${homelabPrimaryDomain}/
+            # Only use local= if we don't have wildcards (address= handles wildcards and local resolution)
+            ${if homelabWildcards == [] then "local=/${homelabPrimaryDomain}/" else ""}
           '' else ""}
           
           # Wildcard domains (from CNAME records)
           # address=/domain/IP makes all subdomains resolve to that IP
-          # Must come before specific host records
+          # This also marks the domain as local, so we don't need local= when wildcards exist
           ${concatStringsSep "\n" (map (wildcard: 
             "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
           ) homelabWildcards)}
@@ -413,13 +413,13 @@ in
           # Local domain
           ${if lanPrimaryDomain != "local" then ''
             domain=${lanPrimaryDomain}
-            # Mark domain as local so dnsmasq handles it (needed for wildcards)
-            local=/${lanPrimaryDomain}/
+            # Only use local= if we don't have wildcards (address= handles wildcards and local resolution)
+            ${if lanWildcards == [] then "local=/${lanPrimaryDomain}/" else ""}
           '' else ""}
           
           # Wildcard domains (from CNAME records)
           # address=/domain/IP makes all subdomains resolve to that IP
-          # Must come before specific host records
+          # This also marks the domain as local, so we don't need local= when wildcards exist
           ${concatStringsSep "\n" (map (wildcard: 
             "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
           ) lanWildcards)}
