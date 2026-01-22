@@ -356,8 +356,8 @@ in
           User = "dnsmasq";
           Group = "dnsmasq";
           
-          # Allow binding to privileged port 53 without running as root
-          AmbientCapabilities = "CAP_NET_BIND_SERVICE";
+          # Allow binding to privileged port 53 and DHCP configuration
+          AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" "CAP_NET_ADMIN" ];
           
           # Security hardening
           NoNewPrivileges = true;
@@ -533,8 +533,8 @@ in
           User = "dnsmasq";
           Group = "dnsmasq";
           
-          # Allow binding to privileged port 53 without running as root
-          AmbientCapabilities = "CAP_NET_BIND_SERVICE";
+          # Allow binding to privileged port 53 and DHCP configuration
+          AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" "CAP_NET_ADMIN" ];
           
           # Security hardening
           NoNewPrivileges = true;
