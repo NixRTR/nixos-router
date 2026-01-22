@@ -357,7 +357,10 @@ in
           Group = "dnsmasq";
           
           # Allow binding to privileged port 53 and DHCP configuration
-          AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" "CAP_NET_ADMIN" ];
+          # CAP_NET_BIND_SERVICE: bind to port 53 (DNS)
+          # CAP_NET_ADMIN: configure network interfaces for DHCP
+          # CAP_NET_RAW: send raw packets for DHCP
+          AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" "CAP_NET_ADMIN" "CAP_NET_RAW" ];
           
           # Security hardening
           NoNewPrivileges = true;
@@ -534,7 +537,10 @@ in
           Group = "dnsmasq";
           
           # Allow binding to privileged port 53 and DHCP configuration
-          AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" "CAP_NET_ADMIN" ];
+          # CAP_NET_BIND_SERVICE: bind to port 53 (DNS)
+          # CAP_NET_ADMIN: configure network interfaces for DHCP
+          # CAP_NET_RAW: send raw packets for DHCP
+          AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" "CAP_NET_ADMIN" "CAP_NET_RAW" ];
           
           # Security hardening
           NoNewPrivileges = true;
