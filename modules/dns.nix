@@ -62,9 +62,23 @@ let
     comment = record.comment or "";
   }) (lanDns.a_records or {});
   
+  # Get list of wildcard base domains (to exclude from host records)
+  homelabWildcardDomains = map (w: w.domain) homelabWildcards;
+  lanWildcardDomains = map (w: w.domain) lanWildcards;
+  
+  # Filter out base domains that have wildcards (address= already handles them)
+  homelabHostRecordsFiltered = lib.filter (record: 
+    !(lib.elem record.hostname homelabWildcardDomains)
+  ) homelabARecordsToHostRecords;
+  
+  lanHostRecordsFiltered = lib.filter (record: 
+    !(lib.elem record.hostname lanWildcardDomains)
+  ) lanARecordsToHostRecords;
+  
   # Merge DHCP and manual host records (manual takes precedence)
-  homelabAllHostRecords = homelabARecordsToHostRecords ++ homelabDhcpHostRecords;
-  lanAllHostRecords = lanARecordsToHostRecords ++ lanDhcpHostRecords;
+  # Exclude base domains that have wildcards
+  homelabAllHostRecords = homelabHostRecordsFiltered ++ homelabDhcpHostRecords;
+  lanAllHostRecords = lanHostRecordsFiltered ++ lanDhcpHostRecords;
   
   # Extract wildcard domains from CNAME records (e.g., "*.jeandr.net" -> "jeandr.net")
   extractWildcardDomains = cnameRecords:
@@ -245,12 +259,13 @@ in
           # Local domain
           ${if homelabPrimaryDomain != "local" then ''
             domain=${homelabPrimaryDomain}
-            # Only use local= if we don't have wildcards (address= handles wildcards)
-            ${if homelabWildcards == [] then "local=/${homelabPrimaryDomain}/" else ""}
+            # Mark domain as local so dnsmasq handles it (needed for wildcards)
+            local=/${homelabPrimaryDomain}/
           '' else ""}
           
           # Wildcard domains (from CNAME records)
           # address=/domain/IP makes all subdomains resolve to that IP
+          # Must come before specific host records
           ${concatStringsSep "\n" (map (wildcard: 
             "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
           ) homelabWildcards)}
@@ -406,12 +421,13 @@ in
           # Local domain
           ${if lanPrimaryDomain != "local" then ''
             domain=${lanPrimaryDomain}
-            # Only use local= if we don't have wildcards (address= handles wildcards)
-            ${if lanWildcards == [] then "local=/${lanPrimaryDomain}/" else ""}
+            # Mark domain as local so dnsmasq handles it (needed for wildcards)
+            local=/${lanPrimaryDomain}/
           '' else ""}
           
           # Wildcard domains (from CNAME records)
           # address=/domain/IP makes all subdomains resolve to that IP
+          # Must come before specific host records
           ${concatStringsSep "\n" (map (wildcard: 
             "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
           ) lanWildcards)}
