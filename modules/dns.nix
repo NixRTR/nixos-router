@@ -277,13 +277,16 @@ in
           conf-file=/var/lib/dnsmasq/homelab/blocklist.conf
           conf-file=/var/lib/dnsmasq/homelab/dynamic-dns.conf
           
-          # Performance
+          # Performance optimizations
           cache-size=10000
           no-negcache
+          no-resolv
+          no-poll
+          query-port=0
           
-          # Logging
-          log-queries
-          log-facility=/var/lib/dnsmasq/homelab/dnsmasq.log
+          # Logging (disabled for performance - enable only for debugging)
+          # log-queries
+          # log-facility=/var/lib/dnsmasq/homelab/dnsmasq.log
           EOF
         '';
         
@@ -439,13 +442,16 @@ in
           conf-file=/var/lib/dnsmasq/lan/blocklist.conf
           conf-file=/var/lib/dnsmasq/lan/dynamic-dns.conf
           
-          # Performance
+          # Performance optimizations
           cache-size=10000
           no-negcache
+          no-resolv
+          no-poll
+          query-port=0
           
-          # Logging
-          log-queries
-          log-facility=/var/lib/dnsmasq/lan/dnsmasq.log
+          # Logging (disabled for performance - enable only for debugging)
+          # log-queries
+          # log-facility=/var/lib/dnsmasq/lan/dnsmasq.log
           EOF
         '';
         
