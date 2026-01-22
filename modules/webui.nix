@@ -733,7 +733,7 @@ in
               echo "Invalid network: $NETWORK" >&2
               exit 1
             fi
-            CONFIG_FILE="/var/lib/dnsmasq/$NETWORK/webui-${COMMAND#write-}.conf"
+            CONFIG_FILE="/var/lib/dnsmasq/$NETWORK/webui-''${COMMAND#write-}.conf"
             ;;
           revert-dns|revert-dhcp)
             NETWORK=$1
@@ -746,7 +746,7 @@ in
               echo "Missing history_id" >&2
               exit 1
             fi
-            CONFIG_FILE="/var/lib/dnsmasq/$NETWORK/webui-${COMMAND#revert-}.conf"
+            CONFIG_FILE="/var/lib/dnsmasq/$NETWORK/webui-''${COMMAND#revert-}.conf"
             ;;
           *)
             echo "Invalid command: $COMMAND" >&2
