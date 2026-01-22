@@ -245,10 +245,12 @@ in
           # Local domain
           ${if homelabPrimaryDomain != "local" then ''
             domain=${homelabPrimaryDomain}
-            local=/${homelabPrimaryDomain}/
+            # Only use local= if we don't have wildcards (address= handles wildcards)
+            ${if homelabWildcards == [] then "local=/${homelabPrimaryDomain}/" else ""}
           '' else ""}
           
           # Wildcard domains (from CNAME records)
+          # address=/domain/IP makes all subdomains resolve to that IP
           ${concatStringsSep "\n" (map (wildcard: 
             "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
           ) homelabWildcards)}
@@ -404,10 +406,12 @@ in
           # Local domain
           ${if lanPrimaryDomain != "local" then ''
             domain=${lanPrimaryDomain}
-            local=/${lanPrimaryDomain}/
+            # Only use local= if we don't have wildcards (address= handles wildcards)
+            ${if lanWildcards == [] then "local=/${lanPrimaryDomain}/" else ""}
           '' else ""}
           
           # Wildcard domains (from CNAME records)
+          # address=/domain/IP makes all subdomains resolve to that IP
           ${concatStringsSep "\n" (map (wildcard: 
             "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
           ) lanWildcards)}
