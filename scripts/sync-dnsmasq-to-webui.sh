@@ -125,27 +125,68 @@ fi
 
 # Function to get JWT token from username/password
 get_token() {
-    local username password
+    local username password response http_code
     
     if [[ -z "$TOKEN" ]]; then
+        # Prompt for credentials
+        echo
         read -p "WebUI username: " username
+        if [[ -z "$username" ]]; then
+            log_error "Username cannot be empty"
+            exit 1
+        fi
+        
         read -sp "WebUI password: " password
         echo
         
-        log_info "Authenticating with WebUI..."
+        if [[ -z "$password" ]]; then
+            log_error "Password cannot be empty"
+            exit 1
+        fi
         
-        RESPONSE=$(curl -s -X POST "${WEBUI_URL}/api/auth/login" \
+        log_info "Authenticating with WebUI at ${WEBUI_URL}..."
+        
+        # Make login request
+        response=$(curl -s -w "\n%{http_code}" -X POST "${WEBUI_URL}/api/auth/login" \
             -H "Content-Type: application/json" \
             -d "{\"username\":\"${username}\",\"password\":\"${password}\"}")
         
-        TOKEN=$(echo "$RESPONSE" | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+        http_code=$(echo "$response" | tail -n1)
+        body=$(echo "$response" | sed '$d')
+        
+        if [[ "$http_code" != "200" ]]; then
+            log_error "Authentication failed (HTTP $http_code)"
+            if echo "$body" | grep -q "detail"; then
+                error_msg=$(echo "$body" | grep -o '"detail":"[^"]*' | cut -d'"' -f4)
+                log_error "Error: ${error_msg:-$body}"
+            else
+                log_error "Response: $body"
+            fi
+            exit 1
+        fi
+        
+        # Extract access_token from response
+        # Response format: {"access_token":"...","token_type":"bearer","username":"..."}
+        # Try using python json parsing first (more reliable)
+        if command -v python3 &> /dev/null; then
+            TOKEN=$(echo "$body" | python3 -c "import sys, json; print(json.load(sys.stdin).get('access_token', ''))" 2>/dev/null)
+        fi
+        
+        # Fallback to grep if python failed or not available
+        if [[ -z "$TOKEN" ]]; then
+            TOKEN=$(echo "$body" | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+        fi
         
         if [[ -z "$TOKEN" ]]; then
-            log_error "Failed to authenticate. Response: $RESPONSE"
+            log_error "Failed to extract token from response"
+            log_error "Response: $body"
             exit 1
         fi
         
         log_success "Authentication successful"
+        log_info "Token obtained (length: ${#TOKEN} characters)"
+    else
+        log_info "Using provided JWT token"
     fi
 }
 
