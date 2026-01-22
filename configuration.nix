@@ -34,8 +34,7 @@ in
     
     # All modules are now organized in ./modules/
     ./modules/router.nix       # Router networking (WAN, LAN bridges, firewall, NAT)
-    ./modules/dns.nix          # DNS server (Unbound with blocklists)
-    ./modules/dhcp.nix         # DHCP server (Kea)
+    ./modules/dns.nix          # DNS and DHCP server (dnsmasq with blocklists)
     ./modules/users.nix        # User account management
     ./modules/secrets.nix      # Secrets management (sops-nix)
     ./modules/dashboard.nix    # Monitoring (Grafana, Prometheus)
@@ -57,14 +56,14 @@ in
   time.timeZone = routerConfig.timezone;
   i18n.defaultLocale = "en_US.UTF-8";
 
-  # Disable systemd-resolved (conflicts with Unbound DNS)
+  # Disable systemd-resolved (conflicts with dnsmasq DNS)
   services.resolved.enable = false;
   
   # Configure DNS for the router itself
   # Use nameservers from router-config.nix
   networking.nameservers = routerConfig.nameservers or [
-    routerConfig.homelab.ipAddress  # 192.168.2.1 - HOMELAB Unbound (fallback)
-    routerConfig.lan.ipAddress       # 192.168.3.1 - LAN Unbound (fallback)
+    routerConfig.homelab.ipAddress  # 192.168.2.1 - HOMELAB dnsmasq (fallback)
+    routerConfig.lan.ipAddress       # 192.168.3.1 - LAN dnsmasq (fallback)
   ];
   
   # Explicitly manage /etc/resolv.conf to ensure it's populated on boot
@@ -140,7 +139,7 @@ in
     speedtest-cli  # Used regularly by monitoring timer
     curl           # Used by DynDNS timer (every 5 min) and health checks
     jq             # Used by DynDNS timer for JSON parsing
-    cacert         # CA certificates for SSL/TLS (required for Unbound DNS-over-TLS)
+    cacert         # CA certificates for SSL/TLS
     fastfetch      # System information display tool (used by WebUI System Info)
   ];
 

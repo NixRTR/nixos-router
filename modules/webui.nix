@@ -163,7 +163,7 @@ in
     users.users.router-webui = {
       isSystemUser = true;
       group = "router-webui";
-      extraGroups = [ "shadow" "kea" ];  # shadow for PAM auth, kea for DHCP leases
+      extraGroups = [ "shadow" "dnsmasq" ];  # shadow for PAM auth, dnsmasq for DHCP leases
       description = "Router WebUI service user";
     };
     
@@ -320,7 +320,7 @@ in
         PYTHONPATH = "${inputs.router-webui}";
         COLLECTION_INTERVAL = toString cfg.collectionInterval;
         PORT = toString cfg.backendPort;
-        KEA_LEASE_FILE = "/var/lib/kea/dhcp4.leases";
+        DNSMASQ_LEASE_FILES = "/var/lib/dnsmasq/homelab/dhcp.leases /var/lib/dnsmasq/lan/dhcp.leases";
         ROUTER_CONFIG_FILE = "/etc/nixos/router-config.nix";
         JWT_SECRET_FILE = "/var/lib/router-webui/jwt-secret";
         DOCUMENTATION_DIR = "/var/lib/router-webui/docs";
@@ -360,7 +360,7 @@ in
         # Note: Don't include /run/unbound-* in ReadOnlyPaths as they may not exist if DNS is disabled
         # The service will have read access to them via /run being in ReadWritePaths when they do exist
         ReadOnlyPaths = [ 
-          "/var/lib/kea" 
+          "/var/lib/dnsmasq" 
           "/proc"
           "/sys"
           "/usr"  # Protect /usr (read-only)
@@ -385,7 +385,7 @@ in
         DATABASE_URL = "postgresql+asyncpg://${cfg.database.user}@${cfg.database.host}:${toString cfg.database.port}/${cfg.database.name}";
         PYTHONPATH = "${inputs.router-webui}";
         COLLECTION_INTERVAL = toString cfg.collectionInterval;
-        KEA_LEASE_FILE = "/var/lib/kea/dhcp4.leases";
+        DNSMASQ_LEASE_FILES = "/var/lib/dnsmasq/homelab/dhcp.leases /var/lib/dnsmasq/lan/dhcp.leases";
         ROUTER_CONFIG_FILE = "/etc/nixos/router-config.nix";
         JWT_SECRET_FILE = "/var/lib/router-webui/jwt-secret";
         DOCUMENTATION_DIR = "/var/lib/router-webui/docs";
@@ -419,7 +419,7 @@ in
         ProtectHome = true;
         ReadWritePaths = [ "/var/lib/router-webui" "/run" ];
         ReadOnlyPaths = [ 
-          "/var/lib/kea" 
+          "/var/lib/dnsmasq" 
           "/proc"
           "/sys"
           "/usr"
@@ -444,7 +444,7 @@ in
         DATABASE_URL = "postgresql+asyncpg://${cfg.database.user}@${cfg.database.host}:${toString cfg.database.port}/${cfg.database.name}";
         PYTHONPATH = "${inputs.router-webui}";
         COLLECTION_INTERVAL = toString cfg.collectionInterval;
-        KEA_LEASE_FILE = "/var/lib/kea/dhcp4.leases";
+        DNSMASQ_LEASE_FILES = "/var/lib/dnsmasq/homelab/dhcp.leases /var/lib/dnsmasq/lan/dhcp.leases";
         ROUTER_CONFIG_FILE = "/etc/nixos/router-config.nix";
         JWT_SECRET_FILE = "/var/lib/router-webui/jwt-secret";
         DOCUMENTATION_DIR = "/var/lib/router-webui/docs";
@@ -463,9 +463,12 @@ in
         User = "router-webui";
         Group = "router-webui";
         WorkingDirectory = "${inputs.router-webui}";
-        ExecStart = "${pythonEnv}/bin/python -m celery -A backend.celery_app beat --loglevel=info";
+        ExecStart = "${pythonEnv}/bin/python -m celery -A backend.celery_app beat --loglevel=info --schedule=/var/lib/router-webui/celerybeat-schedule";
         Restart = "always";
         RestartSec = "10s";
+        
+        # Create state directory for celery beat schedule file
+        StateDirectory = "router-webui";
         
         # Set debug mode and ensure PATH includes /run/wrappers/bin for wrapped sudo
         Environment = [
@@ -478,7 +481,7 @@ in
         ProtectHome = true;
         ReadWritePaths = [ "/var/lib/router-webui" "/run" ];
         ReadOnlyPaths = [ 
-          "/var/lib/kea" 
+          "/var/lib/dnsmasq" 
           "/proc"
           "/sys"
           "/usr"
@@ -673,7 +676,7 @@ in
         
         # Validate service (only allow specific DNS/DHCP services)
         case "$SERVICE" in
-          unbound-homelab.service|unbound-lan.service|kea-dhcp4-homelab.service|kea-dhcp4-lan.service)
+          dnsmasq-homelab.service|dnsmasq-lan.service)
             ;;
           *)
             echo "Invalid service: $SERVICE" >&2
