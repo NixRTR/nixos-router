@@ -463,9 +463,12 @@ in
         User = "router-webui";
         Group = "router-webui";
         WorkingDirectory = "${inputs.router-webui}";
-        ExecStart = "${pythonEnv}/bin/python -m celery -A backend.celery_app beat --loglevel=info";
+        ExecStart = "${pythonEnv}/bin/python -m celery -A backend.celery_app beat --loglevel=info --schedule=/var/lib/router-webui/celerybeat-schedule";
         Restart = "always";
         RestartSec = "10s";
+        
+        # Create state directory for celery beat schedule file
+        StateDirectory = "router-webui";
         
         # Set debug mode and ensure PATH includes /run/wrappers/bin for wrapped sudo
         Environment = [
