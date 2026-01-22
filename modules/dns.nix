@@ -345,6 +345,40 @@ in
           # log-queries
           # log-facility=/var/lib/dnsmasq/homelab/dnsmasq.log
           EOF
+          
+          # Generate initial WebUI DNS config from router-config.nix (if file doesn't exist)
+          # This ensures dnsmasq can start even before WebUI has written configs
+          if [ ! -f /var/lib/dnsmasq/homelab/webui-dns.conf ]; then
+            cat > /var/lib/dnsmasq/homelab/webui-dns.conf << WEBUI_DNS_EOF
+          # WebUI-managed DNS configuration
+          # Generated automatically from router-config.nix - do not edit manually
+          
+          ${if homelabPrimaryDomain != "local" && homelabWildcards == [] then ''
+            local=/${homelabPrimaryDomain}/
+          '' else ""}
+          ${concatStringsSep "\n" (map (wildcard: 
+            "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
+          ) homelabWildcards)}
+          ${concatStringsSep "\n" (map (record: 
+            "host-record=${record.hostname},${record.ip}  # ${record.comment or ""}"
+          ) homelabAllHostRecords)}
+          WEBUI_DNS_EOF
+          fi
+          
+          # Generate initial WebUI DHCP config from router-config.nix (if file doesn't exist and DHCP is enabled)
+          if [ ! -f /var/lib/dnsmasq/homelab/webui-dhcp.conf ] && [ "${if homelabDhcpEnabled then "1" else "0"}" = "1" ]; then
+            cat > /var/lib/dnsmasq/homelab/webui-dhcp.conf << WEBUI_DHCP_EOF
+          # WebUI-managed DHCP configuration
+          # Generated automatically from router-config.nix - do not edit manually
+          
+          ${concatStringsSep "\n" (map (res: 
+            "dhcp-host=${res.hwAddress},${res.hostname},${res.ipAddress}  # Static reservation"
+          ) (homelabCfg.dhcp.reservations or []))}
+          WEBUI_DHCP_EOF
+          fi
+          
+          # Set proper ownership
+          chown dnsmasq:dnsmasq /var/lib/dnsmasq/homelab/webui-dns.conf /var/lib/dnsmasq/homelab/webui-dhcp.conf 2>/dev/null || true
         '';
         
         serviceConfig = {
@@ -529,6 +563,40 @@ in
           # log-queries
           # log-facility=/var/lib/dnsmasq/lan/dnsmasq.log
           EOF
+          
+          # Generate initial WebUI DNS config from router-config.nix (if file doesn't exist)
+          # This ensures dnsmasq can start even before WebUI has written configs
+          if [ ! -f /var/lib/dnsmasq/lan/webui-dns.conf ]; then
+            cat > /var/lib/dnsmasq/lan/webui-dns.conf << WEBUI_DNS_EOF
+          # WebUI-managed DNS configuration
+          # Generated automatically from router-config.nix - do not edit manually
+          
+          ${if lanPrimaryDomain != "local" && lanWildcards == [] then ''
+            local=/${lanPrimaryDomain}/
+          '' else ""}
+          ${concatStringsSep "\n" (map (wildcard: 
+            "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
+          ) lanWildcards)}
+          ${concatStringsSep "\n" (map (record: 
+            "host-record=${record.hostname},${record.ip}  # ${record.comment or ""}"
+          ) lanAllHostRecords)}
+          WEBUI_DNS_EOF
+          fi
+          
+          # Generate initial WebUI DHCP config from router-config.nix (if file doesn't exist and DHCP is enabled)
+          if [ ! -f /var/lib/dnsmasq/lan/webui-dhcp.conf ] && [ "${if lanDhcpEnabled then "1" else "0"}" = "1" ]; then
+            cat > /var/lib/dnsmasq/lan/webui-dhcp.conf << WEBUI_DHCP_EOF
+          # WebUI-managed DHCP configuration
+          # Generated automatically from router-config.nix - do not edit manually
+          
+          ${concatStringsSep "\n" (map (res: 
+            "dhcp-host=${res.hwAddress},${res.hostname},${res.ipAddress}  # Static reservation"
+          ) (lanCfg.dhcp.reservations or []))}
+          WEBUI_DHCP_EOF
+          fi
+          
+          # Set proper ownership
+          chown dnsmasq:dnsmasq /var/lib/dnsmasq/lan/webui-dns.conf /var/lib/dnsmasq/lan/webui-dhcp.conf 2>/dev/null || true
         '';
         
         serviceConfig = {
