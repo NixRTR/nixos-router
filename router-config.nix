@@ -325,9 +325,10 @@
     enable = true;
 
     # Upstream DNS servers (shared by all networks)
+    # Plain DNS format for dnsmasq (no DoT support)
     upstreamServers = [
-      "1.1.1.1@853#cloudflare-dns.com"  # Cloudflare DNS over TLS
-      "9.9.9.9@853#dns.quad9.net"        # Quad9 DNS over TLS
+      "1.1.1.1"  # Cloudflare DNS
+      "9.9.9.9"  # Quad9 DNS
     ];
   };
 
