@@ -49,46 +49,7 @@ let
   homelabDhcpHostRecords = dhcpReservationsToHostRecords (homelabCfg.dhcp.reservations or []) homelabPrimaryDomain;
   lanDhcpHostRecords = dhcpReservationsToHostRecords (lanCfg.dhcp.reservations or []) lanPrimaryDomain;
   
-  # Convert A records to host records format
-  homelabARecordsToHostRecords = lib.mapAttrsToList (name: record: {
-    hostname = name;
-    ip = record.ip;
-    comment = record.comment or "";
-  }) (homelabDns.a_records or {});
-  
-  lanARecordsToHostRecords = lib.mapAttrsToList (name: record: {
-    hostname = name;
-    ip = record.ip;
-    comment = record.comment or "";
-  }) (lanDns.a_records or {});
-  
-  # Get list of wildcard base domains (to exclude from host records)
-  homelabWildcardDomains = map (w: w.domain) homelabWildcards;
-  lanWildcardDomains = map (w: w.domain) lanWildcards;
-  
-  # Filter out base domains that have wildcards (address= already handles them)
-  homelabHostRecordsFiltered = lib.filter (record: 
-    !(lib.elem record.hostname homelabWildcardDomains)
-  ) homelabARecordsToHostRecords;
-  
-  lanHostRecordsFiltered = lib.filter (record: 
-    !(lib.elem record.hostname lanWildcardDomains)
-  ) lanARecordsToHostRecords;
-  
-  # Merge DHCP and manual host records (manual takes precedence)
-  # Exclude base domains that have wildcards
-  homelabAllHostRecords = homelabHostRecordsFiltered ++ homelabDhcpHostRecords;
-  lanAllHostRecords = lanHostRecordsFiltered ++ lanDhcpHostRecords;
-  
-  # Extract wildcard domains from CNAME records (e.g., "*.jeandr.net" -> "jeandr.net")
-  extractWildcardDomains = cnameRecords:
-    lib.mapAttrsToList (name: record:
-      if lib.hasPrefix "*." name then
-        lib.removePrefix "*." name
-      else null
-    ) (lib.filterAttrs (name: record: lib.hasPrefix "*." name) cnameRecords);
-  
-  # Get wildcard domains and their target IPs
+  # Get wildcard domains and their target IPs (must be defined before filtering)
   homelabWildcards = lib.filter (x: x != null) (
     lib.mapAttrsToList (name: record:
       if lib.hasPrefix "*." name then
@@ -122,6 +83,37 @@ let
       else null
     ) (lanDns.cname_records or {})
   );
+  
+  # Convert A records to host records format
+  homelabARecordsToHostRecords = lib.mapAttrsToList (name: record: {
+    hostname = name;
+    ip = record.ip;
+    comment = record.comment or "";
+  }) (homelabDns.a_records or {});
+  
+  lanARecordsToHostRecords = lib.mapAttrsToList (name: record: {
+    hostname = name;
+    ip = record.ip;
+    comment = record.comment or "";
+  }) (lanDns.a_records or {});
+  
+  # Get list of wildcard base domains (to exclude from host records)
+  homelabWildcardDomains = map (w: w.domain) homelabWildcards;
+  lanWildcardDomains = map (w: w.domain) lanWildcards;
+  
+  # Filter out base domains that have wildcards (address= already handles them)
+  homelabHostRecordsFiltered = lib.filter (record: 
+    !(lib.elem record.hostname homelabWildcardDomains)
+  ) homelabARecordsToHostRecords;
+  
+  lanHostRecordsFiltered = lib.filter (record: 
+    !(lib.elem record.hostname lanWildcardDomains)
+  ) lanARecordsToHostRecords;
+  
+  # Merge DHCP and manual host records (manual takes precedence)
+  # Exclude base domains that have wildcards
+  homelabAllHostRecords = homelabHostRecordsFiltered ++ homelabDhcpHostRecords;
+  lanAllHostRecords = lanHostRecordsFiltered ++ lanDhcpHostRecords;
   
   # Get enabled blocklists for HOMELAB
   homelabBlocklistsEnabled = homelabDns.blocklists.enable or false;
