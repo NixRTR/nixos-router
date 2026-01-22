@@ -317,6 +317,10 @@ in
           conf-file=/var/lib/dnsmasq/homelab/blocklist.conf
           conf-file=/var/lib/dnsmasq/homelab/dynamic-dns.conf
           
+          # WebUI-managed configurations (may not exist if WebUI hasn't written them yet)
+          conf-file=/var/lib/dnsmasq/homelab/webui-dns.conf
+          ${if homelabDhcpEnabled then "conf-file=/var/lib/dnsmasq/homelab/webui-dhcp.conf" else ""}
+          
           # DHCP Configuration
           ${if homelabDhcpEnabled then ''
             dhcp-range=${homelabBridge},${homelabCfg.dhcp.start},${homelabCfg.dhcp.end},${homelabCfg.dhcp.leaseTime}
@@ -496,6 +500,10 @@ in
           # Include blocklists and dynamic DNS
           conf-file=/var/lib/dnsmasq/lan/blocklist.conf
           conf-file=/var/lib/dnsmasq/lan/dynamic-dns.conf
+          
+          # WebUI-managed configurations (may not exist if WebUI hasn't written them yet)
+          conf-file=/var/lib/dnsmasq/lan/webui-dns.conf
+          ${if lanDhcpEnabled then "conf-file=/var/lib/dnsmasq/lan/webui-dhcp.conf" else ""}
           
           # DHCP Configuration
           ${if lanDhcpEnabled then ''

@@ -689,6 +689,97 @@ in
       '';
     };
     
+    # Socket-activated helper service to write DNS/DHCP config files (runs as root)
+    # This allows the WebUI to write configuration files to /var/lib/dnsmasq/{network}/
+    systemd.sockets.router-webui-config-writer = {
+      description = "Router WebUI Config Writer Socket";
+      wantedBy = [ "sockets.target" ];
+      before = [ "router-webui-backend.service" ];
+      socketConfig = {
+        ListenStream = "/run/router-webui/config-writer.sock";
+        SocketMode = "0660";
+        SocketUser = "root";
+        SocketGroup = "router-webui";
+        # Accept one connection at a time, spawn new service instance per connection
+        Accept = true;
+      };
+    };
+    
+    # Template service for config writer (systemd will spawn instances automatically)
+    systemd.services."router-webui-config-writer@" = {
+      description = "Router WebUI Config Writer Helper";
+      serviceConfig = {
+        Type = "simple";
+        User = "root";
+        StandardInput = "socket";
+        StandardOutput = "journal";
+        StandardError = "journal";
+      };
+      script = ''
+        # Read command from first line (format: COMMAND [args])
+        IFS= read -r command_line || exit 0
+        
+        # Parse command
+        set -- $command_line
+        COMMAND=$1
+        shift
+        ARGS="$@"
+        
+        # Validate command and arguments
+        case "$COMMAND" in
+          write-dns|write-dhcp)
+            NETWORK=$1
+            if [ -z "$NETWORK" ] || [ "$NETWORK" != "homelab" ] && [ "$NETWORK" != "lan" ]; then
+              echo "Invalid network: $NETWORK" >&2
+              exit 1
+            fi
+            CONFIG_FILE="/var/lib/dnsmasq/$NETWORK/webui-${COMMAND#write-}.conf"
+            ;;
+          revert-dns|revert-dhcp)
+            NETWORK=$1
+            HISTORY_ID=$2
+            if [ -z "$NETWORK" ] || [ "$NETWORK" != "homelab" ] && [ "$NETWORK" != "lan" ]; then
+              echo "Invalid network: $NETWORK" >&2
+              exit 1
+            fi
+            if [ -z "$HISTORY_ID" ]; then
+              echo "Missing history_id" >&2
+              exit 1
+            fi
+            CONFIG_FILE="/var/lib/dnsmasq/$NETWORK/webui-${COMMAND#revert-}.conf"
+            ;;
+          *)
+            echo "Invalid command: $COMMAND" >&2
+            exit 1
+            ;;
+        esac
+        
+        # Read config content from stdin (rest of input)
+        CONFIG_CONTENT=$(cat)
+        
+        # Write config file
+        echo "$CONFIG_CONTENT" > "$CONFIG_FILE"
+        if [ $? -ne 0 ]; then
+          echo "Failed to write config file: $CONFIG_FILE" >&2
+          exit 1
+        fi
+        
+        # Set proper permissions
+        chown dnsmasq:dnsmasq "$CONFIG_FILE"
+        chmod 644 "$CONFIG_FILE"
+        
+        # Reload dnsmasq service for this network
+        SERVICE="dnsmasq-$NETWORK.service"
+        ${pkgs.systemd}/bin/systemctl reload "$SERVICE" 2>&1
+        if [ $? -ne 0 ]; then
+          echo "Warning: Failed to reload $SERVICE" >&2
+          # Don't fail the whole operation if reload fails
+        fi
+        
+        echo "Config written successfully: $CONFIG_FILE"
+      '';
+    };
+    
     # Socket-activated helper service for PAM authentication (runs as root)
     # This is required because PAM can only authenticate other users when running as root
     # The router-webui user can write authentication requests to the socket
