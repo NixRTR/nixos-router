@@ -17,6 +17,47 @@ let
   homelabDnsEnabled = (routerConfig.dns.enable or true) && (homelabDns.enable or true);
   lanDnsEnabled = (routerConfig.dns.enable or true) && (lanDns.enable or true);
   
+  # Check if DHCP is enabled for each network
+  homelabDhcpEnabled = homelabCfg.dhcp.enable or true;
+  lanDhcpEnabled = lanCfg.dhcp.enable or true;
+  
+  # Get bridge interface names
+  homelabBridge = "br0";
+  lanBridge = "br1";
+  
+  # Helper function to convert lease time string to seconds
+  leaseToSeconds = lease:
+    let
+      numeric = builtins.match "^[0-9]+$" lease;
+      unitMatch = builtins.match "^([0-9]+)([smhd])$" lease;
+      multiplier = unit:
+        if unit == "s" then 1
+        else if unit == "m" then 60
+        else if unit == "h" then 3600
+        else if unit == "d" then 86400
+        else 1;
+    in if lease == null then 86400
+       else if numeric != null then lib.toInt lease
+       else if unitMatch != null then
+         let
+           num = lib.toInt (builtins.elemAt unitMatch 0);
+           unit = builtins.elemAt unitMatch 1;
+         in num * multiplier unit
+       else 86400;
+  
+  # Helper function to extract domain from A records (for DHCP option 15)
+  extractDomain = aRecords:
+    if aRecords == {} || aRecords == null then "local"
+    else
+      let
+        firstRecord = builtins.head (builtins.attrNames aRecords);
+        parts = lib.splitString "." firstRecord;
+        numParts = builtins.length parts;
+      in
+        if numParts >= 2 then
+          "${builtins.elemAt parts (numParts - 2)}.${builtins.elemAt parts (numParts - 1)}"
+        else firstRecord;
+  
   # Helper to extract the primary domain from A records
   extractPrimaryDomain = aRecords:
     let
@@ -194,7 +235,7 @@ in
           > /var/lib/dnsmasq/homelab/dynamic-dns.conf
           
           ${if (homelabCfg.dhcp.dynamicDomain or "") != "" then ''
-            if [ -f /var/lib/kea/dhcp4.leases ]; then
+            if [ -f /var/lib/dnsmasq/homelab/dhcp.leases ]; then
               ${pkgs.gawk}/bin/awk -v domain="${homelabCfg.dhcp.dynamicDomain}" -v subnet="${homelabCfg.subnet}" '
                 BEGIN {
                   split(subnet, parts, "/");
@@ -203,29 +244,28 @@ in
                   base = octets[1] "." octets[2] "." octets[3];
                 }
                 
-                # Parse JSON lease file
-                /"ip-address":/ {
-                  gsub(/[",]/, "");
-                  ip = $2;
-                  if (index(ip, base) == 1) {
-                    split(ip, ip_parts, ".");
-                    last_octet = ip_parts[4];
-                    hostname = "dhcp-" last_octet;
+                # Parse dnsmasq lease file format: <expiry-time> <MAC> <IP> <hostname> <client-id>
+                {
+                  if (NF >= 4) {
+                    expiry = $1;
+                    mac = $2;
+                    ip = $3;
+                    hostname = $4;
                     
-                    getline; # Read next line
-                    while ($0 !~ /}/) {
-                      if ($0 ~ /"hostname":/) {
-                        gsub(/[",]/, "");
-                        if ($2 != "") hostname = $2;
-                        break;
+                    # Check if IP is in our subnet
+                    if (index(ip, base) == 1) {
+                      # If hostname is "*" or empty, generate one from IP
+                      if (hostname == "*" || hostname == "") {
+                        split(ip, ip_parts, ".");
+                        last_octet = ip_parts[4];
+                        hostname = "dhcp-" last_octet;
                       }
-                      getline;
+                      
+                      print "host-record=" hostname "." domain "," ip "  # Dynamic DHCP";
                     }
-                    
-                    print "host-record=" hostname "." domain "," ip "  # Dynamic DHCP";
                   }
                 }
-              ' /var/lib/kea/dhcp4.leases >> /var/lib/dnsmasq/homelab/dynamic-dns.conf
+              ' /var/lib/dnsmasq/homelab/dhcp.leases >> /var/lib/dnsmasq/homelab/dynamic-dns.conf
               
               DYNAMIC_COUNT=$(wc -l < /var/lib/dnsmasq/homelab/dynamic-dns.conf)
               echo "HOMELAB: $DYNAMIC_COUNT dynamic DNS entries"
@@ -276,6 +316,19 @@ in
           # Include blocklists and dynamic DNS
           conf-file=/var/lib/dnsmasq/homelab/blocklist.conf
           conf-file=/var/lib/dnsmasq/homelab/dynamic-dns.conf
+          
+          # DHCP Configuration
+          ${if homelabDhcpEnabled then ''
+            dhcp-range=${homelabBridge},${homelabCfg.dhcp.start},${homelabCfg.dhcp.end},${homelabCfg.dhcp.leaseTime}
+            dhcp-option=${homelabBridge},3,${homelabCfg.ipAddress}
+            dhcp-option=${homelabBridge},6${concatMapStringsSep "," (s: ",${s}") (homelabCfg.dhcp.dnsServers or [ homelabCfg.ipAddress ])}
+            dhcp-option=${homelabBridge},15,${extractDomain (homelabDns.a_records or {})}
+            dhcp-authoritative
+            dhcp-leasefile=/var/lib/dnsmasq/homelab/dhcp.leases
+            ${concatStringsSep "\n" (map (res: 
+              "dhcp-host=${res.hwAddress},${res.hostname},${res.ipAddress}  # Static reservation"
+            ) (homelabCfg.dhcp.reservations or []))}
+          '' else ""}
           
           # Performance optimizations
           cache-size=10000
@@ -359,7 +412,7 @@ in
           > /var/lib/dnsmasq/lan/dynamic-dns.conf
           
           ${if (lanCfg.dhcp.dynamicDomain or "") != "" then ''
-            if [ -f /var/lib/kea/dhcp4.leases ]; then
+            if [ -f /var/lib/dnsmasq/lan/dhcp.leases ]; then
               ${pkgs.gawk}/bin/awk -v domain="${lanCfg.dhcp.dynamicDomain}" -v subnet="${lanCfg.subnet}" '
                 BEGIN {
                   split(subnet, parts, "/");
@@ -368,29 +421,28 @@ in
                   base = octets[1] "." octets[2] "." octets[3];
                 }
                 
-                # Parse JSON lease file
-                /"ip-address":/ {
-                  gsub(/[",]/, "");
-                  ip = $2;
-                  if (index(ip, base) == 1) {
-                    split(ip, ip_parts, ".");
-                    last_octet = ip_parts[4];
-                    hostname = "dhcp-" last_octet;
+                # Parse dnsmasq lease file format: <expiry-time> <MAC> <IP> <hostname> <client-id>
+                {
+                  if (NF >= 4) {
+                    expiry = $1;
+                    mac = $2;
+                    ip = $3;
+                    hostname = $4;
                     
-                    getline; # Read next line
-                    while ($0 !~ /}/) {
-                      if ($0 ~ /"hostname":/) {
-                        gsub(/[",]/, "");
-                        if ($2 != "") hostname = $2;
-                        break;
+                    # Check if IP is in our subnet
+                    if (index(ip, base) == 1) {
+                      # If hostname is "*" or empty, generate one from IP
+                      if (hostname == "*" || hostname == "") {
+                        split(ip, ip_parts, ".");
+                        last_octet = ip_parts[4];
+                        hostname = "dhcp-" last_octet;
                       }
-                      getline;
+                      
+                      print "host-record=" hostname "." domain "," ip "  # Dynamic DHCP";
                     }
-                    
-                    print "host-record=" hostname "." domain "," ip "  # Dynamic DHCP";
                   }
                 }
-              ' /var/lib/kea/dhcp4.leases >> /var/lib/dnsmasq/lan/dynamic-dns.conf
+              ' /var/lib/dnsmasq/lan/dhcp.leases >> /var/lib/dnsmasq/lan/dynamic-dns.conf
               
               DYNAMIC_COUNT=$(wc -l < /var/lib/dnsmasq/lan/dynamic-dns.conf)
               echo "LAN: $DYNAMIC_COUNT dynamic DNS entries"
@@ -441,6 +493,19 @@ in
           # Include blocklists and dynamic DNS
           conf-file=/var/lib/dnsmasq/lan/blocklist.conf
           conf-file=/var/lib/dnsmasq/lan/dynamic-dns.conf
+          
+          # DHCP Configuration
+          ${if lanDhcpEnabled then ''
+            dhcp-range=${lanBridge},${lanCfg.dhcp.start},${lanCfg.dhcp.end},${lanCfg.dhcp.leaseTime}
+            dhcp-option=${lanBridge},3,${lanCfg.ipAddress}
+            dhcp-option=${lanBridge},6${concatMapStringsSep "," (s: ",${s}") (lanCfg.dhcp.dnsServers or [ lanCfg.ipAddress ])}
+            dhcp-option=${lanBridge},15,${extractDomain (lanDns.a_records or {})}
+            dhcp-authoritative
+            dhcp-leasefile=/var/lib/dnsmasq/lan/dhcp.leases
+            ${concatStringsSep "\n" (map (res: 
+              "dhcp-host=${res.hwAddress},${res.hostname},${res.ipAddress}  # Static reservation"
+            ) (lanCfg.dhcp.reservations or []))}
+          '' else ""}
           
           # Performance optimizations
           cache-size=10000
@@ -586,7 +651,7 @@ in
             > /var/lib/dnsmasq/homelab/dynamic-dns.conf
             
             ${if (homelabCfg.dhcp.dynamicDomain or "") != "" then ''
-              if [ -f /var/lib/kea/dhcp4.leases ]; then
+              if [ -f /var/lib/dnsmasq/homelab/dhcp.leases ]; then
                 ${pkgs.gawk}/bin/awk -v domain="${homelabCfg.dhcp.dynamicDomain}" -v subnet="${homelabCfg.subnet}" '
                   BEGIN {
                     split(subnet, parts, "/");
@@ -595,28 +660,28 @@ in
                     base = octets[1] "." octets[2] "." octets[3];
                   }
                   
-                  /"ip-address":/ {
-                    gsub(/[",]/, "");
-                    ip = $2;
-                    if (index(ip, base) == 1) {
-                      split(ip, ip_parts, ".");
-                      last_octet = ip_parts[4];
-                      hostname = "dhcp-" last_octet;
+                  # Parse dnsmasq lease file format: <expiry-time> <MAC> <IP> <hostname> <client-id>
+                  {
+                    if (NF >= 4) {
+                      expiry = $1;
+                      mac = $2;
+                      ip = $3;
+                      hostname = $4;
                       
-                      getline;
-                      while ($0 !~ /}/) {
-                        if ($0 ~ /"hostname":/) {
-                          gsub(/[",]/, "");
-                          if ($2 != "") hostname = $2;
-                          break;
+                      # Check if IP is in our subnet
+                      if (index(ip, base) == 1) {
+                        # If hostname is "*" or empty, generate one from IP
+                        if (hostname == "*" || hostname == "") {
+                          split(ip, ip_parts, ".");
+                          last_octet = ip_parts[4];
+                          hostname = "dhcp-" last_octet;
                         }
-                        getline;
+                        
+                        print "host-record=" hostname "." domain "," ip "  # Dynamic DHCP";
                       }
-                      
-                      print "host-record=" hostname "." domain "," ip "  # Dynamic DHCP";
                     }
                   }
-                ' /var/lib/kea/dhcp4.leases > /var/lib/dnsmasq/homelab/dynamic-dns.conf
+                ' /var/lib/dnsmasq/homelab/dhcp.leases > /var/lib/dnsmasq/homelab/dynamic-dns.conf
                 
                 # Reload dnsmasq
                 systemctl reload-or-restart dnsmasq-homelab || true
@@ -644,7 +709,7 @@ in
             > /var/lib/dnsmasq/lan/dynamic-dns.conf
             
             ${if (lanCfg.dhcp.dynamicDomain or "") != "" then ''
-              if [ -f /var/lib/kea/dhcp4.leases ]; then
+              if [ -f /var/lib/dnsmasq/lan/dhcp.leases ]; then
                 ${pkgs.gawk}/bin/awk -v domain="${lanCfg.dhcp.dynamicDomain}" -v subnet="${lanCfg.subnet}" '
                   BEGIN {
                     split(subnet, parts, "/");
@@ -653,28 +718,28 @@ in
                     base = octets[1] "." octets[2] "." octets[3];
                   }
                   
-                  /"ip-address":/ {
-                    gsub(/[",]/, "");
-                    ip = $2;
-                    if (index(ip, base) == 1) {
-                      split(ip, ip_parts, ".");
-                      last_octet = ip_parts[4];
-                      hostname = "dhcp-" last_octet;
+                  # Parse dnsmasq lease file format: <expiry-time> <MAC> <IP> <hostname> <client-id>
+                  {
+                    if (NF >= 4) {
+                      expiry = $1;
+                      mac = $2;
+                      ip = $3;
+                      hostname = $4;
                       
-                      getline;
-                      while ($0 !~ /}/) {
-                        if ($0 ~ /"hostname":/) {
-                          gsub(/[",]/, "");
-                          if ($2 != "") hostname = $2;
-                          break;
+                      # Check if IP is in our subnet
+                      if (index(ip, base) == 1) {
+                        # If hostname is "*" or empty, generate one from IP
+                        if (hostname == "*" || hostname == "") {
+                          split(ip, ip_parts, ".");
+                          last_octet = ip_parts[4];
+                          hostname = "dhcp-" last_octet;
                         }
-                        getline;
+                        
+                        print "host-record=" hostname "." domain "," ip "  # Dynamic DHCP";
                       }
-                      
-                      print "host-record=" hostname "." domain "," ip "  # Dynamic DHCP";
                     }
                   }
-                ' /var/lib/kea/dhcp4.leases > /var/lib/dnsmasq/lan/dynamic-dns.conf
+                ' /var/lib/dnsmasq/lan/dhcp.leases > /var/lib/dnsmasq/lan/dynamic-dns.conf
                 
                 # Reload dnsmasq
                 systemctl reload-or-restart dnsmasq-lan || true
@@ -734,7 +799,7 @@ in
       description = "Watch DHCP leases for HOMELAB Dynamic DNS updates";
       wantedBy = [ "multi-user.target" ];
       pathConfig = {
-        PathModified = "/var/lib/kea/dhcp4.leases";
+        PathModified = "/var/lib/dnsmasq/homelab/dhcp.leases";
       };
     };
     
@@ -742,7 +807,7 @@ in
       description = "Watch DHCP leases for LAN Dynamic DNS updates";
       wantedBy = [ "multi-user.target" ];
       pathConfig = {
-        PathModified = "/var/lib/kea/dhcp4.leases";
+        PathModified = "/var/lib/dnsmasq/lan/dhcp.leases";
       };
     };
     
@@ -760,11 +825,11 @@ in
       dnsmasq
     ];
     
-    # Open firewall for DNS
+    # Open firewall for DNS and DHCP
     networking.firewall.interfaces = {
-      br0.allowedUDPPorts = [ 53 ];
+      br0.allowedUDPPorts = [ 53 ] ++ (if homelabDhcpEnabled then [ 67 ] else []);
       br0.allowedTCPPorts = [ 53 ];
-      br1.allowedUDPPorts = [ 53 ];
+      br1.allowedUDPPorts = [ 53 ] ++ (if lanDhcpEnabled then [ 67 ] else []);
       br1.allowedTCPPorts = [ 53 ];
     };
   };

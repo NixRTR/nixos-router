@@ -180,9 +180,8 @@ check_system_health() {
     local critical_services=(
         "postgresql"
         "router-webui-backend"
-        "unbound-homelab"
-        "unbound-lan"
-        "kea-dhcp4"
+        "dnsmasq-homelab"
+        "dnsmasq-lan"
     )
     
     for service in "${critical_services[@]}"; do
@@ -402,8 +401,7 @@ show_upgrade_summary() {
     echo "Critical services will be checked after upgrade:"
     echo "  - PostgreSQL database"
     echo "  - Router WebUI backend"
-    echo "  - DNS services (Unbound)"
-    echo "  - DHCP server (Kea)"
+    echo "  - DNS and DHCP services (dnsmasq)"
     echo
 }
 

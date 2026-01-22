@@ -5,8 +5,7 @@ A NixOS-based router configuration for home networks.
 ## Features
 
 - Multi-network support (isolated LAN segments)
-- DHCP server (Kea)
-- DNS server (Unbound with ad-blocking)
+- DHCP and DNS server (dnsmasq with ad-blocking)
 - Web dashboard for monitoring
 - Dynamic DNS updates (Linode)
 - Firewall and NAT

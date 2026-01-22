@@ -97,26 +97,8 @@ let
 in
 
 {
-  # Kea DHCP4 Server - only enable if at least one network has DHCP enabled
-  services.kea.dhcp4 = mkIf (homelabDhcpEnabled || lanDhcpEnabled) {
-    enable = true;
-    settings = {
-      interfaces-config = {
-        # Listen on bridge interfaces where DHCP is enabled
-        interfaces = bridgeNames;
-      };
-      lease-database = {
-        type = "memfile";
-        persist = true;
-        name = "/var/lib/kea/dhcp4.leases";
-      };
-      # Use per-subnet option-data instead of global
-      # Each subnet defines its own gateway and DNS
-      subnet4 = dhcpSubnets;
-    };
-  };
-
-  # Firewall rules for DHCP - only if service is enabled
-  networking.firewall.allowedUDPPorts = mkIf (homelabDhcpEnabled || lanDhcpEnabled) (mkAfter [ 67 ]);
+  # DHCP is now handled by dnsmasq in modules/dns.nix
+  # This file is kept for reference but Kea is no longer used
+  # Firewall rules for DHCP (port 67) are handled in modules/dns.nix
 }
 

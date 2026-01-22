@@ -21,32 +21,29 @@ This directory contains modular components of the NixOS router configuration. Ea
 - Configures hardware offloading and TCP optimizations
 
 ### `dns.nix`
-**DNS Services (Unbound)**
+**DNS and DHCP Services (dnsmasq)**
 - Recursive DNS resolver with caching
+- DHCP server for dynamic IP assignment
 - Ad-blocking and malware protection via blocklists
 - Local domain support with wildcard DNS
-- DNSSEC validation
-- DNS-over-TLS for privacy
+- Integrated DHCP-DNS registration
 
 **What it does:**
-- Runs separate DNS instances for HOMELAB and LAN networks
-- Listens on bridge interfaces (port 53)
+- Runs separate DNS and DHCP instances for HOMELAB and LAN networks
+- Listens on bridge interfaces (ports 53 for DNS, 67 for DHCP)
 - Resolves local domains (*.homelab.local, *.lan.local)
-- Forwards queries to upstream DNS with encryption
-- Blocks ads and malware via daily-updated blocklists (StevenBlack hosts)
+- Forwards DNS queries to upstream servers
+- Assigns IP addresses to devices via DHCP
+- Automatically registers DHCP clients in DNS
+- Blocks ads and malware via daily-updated blocklists
 - Provides DNS entries: domain, *.domain, and router.domain
+- Supports static DHCP reservations
 
 ### `dhcp.nix`
-**DHCP Server (ISC Kea)**
-- Manages dynamic IP address assignment
-- Supports multiple subnets (one per bridge)
-- Configurable lease times
-- Per-network gateway and DNS settings
-
-**What it does:**
-- Assigns IP addresses to devices on HOMELAB and LAN networks
-- Provides network configuration (gateway, DNS) via DHCP options
-- Maintains lease database
+**Legacy DHCP Configuration (Deprecated)**
+- This module is no longer used
+- DHCP functionality has been moved to `dns.nix` (dnsmasq)
+- Kept for reference only
 
 ### `webui.nix` **NEW!**
 **Modern Web Dashboard (FastAPI + React)**
@@ -60,7 +57,7 @@ This directory contains modular components of the NixOS router configuration. Ea
 - Displays system metrics (CPU, memory, load, uptime)
 - Shows live bandwidth per interface (WAN, HOMELAB, LAN)
 - Lists DHCP clients with search and filter
-- Monitors service status (Unbound, Kea DHCP, PPPoE)
+- Monitors service status (dnsmasq DNS/DHCP, PPPoE)
 - Stores historical metrics for trend analysis
 - Mobile-responsive design with dark mode support
 
@@ -145,8 +142,8 @@ configuration.nix
     ├── secrets.nix (loaded early for sops encryption)
     ├── users.nix (depends on secrets)
     ├── router.nix (core networking, creates bridges)
-    ├── dns.nix (depends on router bridges)
-    ├── dhcp.nix (depends on router bridges)
+    ├── dns.nix (depends on router bridges, handles both DNS and DHCP)
+    ├── dhcp.nix (deprecated, kept for reference only)
     ├── webui.nix (optional, modern monitoring dashboard)
     ├── dashboard.nix (optional, legacy monitoring with Grafana)
     └── linode-dyndns.nix (optional, depends on secrets)

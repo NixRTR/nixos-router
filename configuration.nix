@@ -34,8 +34,7 @@ in
     
     # All modules are now organized in ./modules/
     ./modules/router.nix       # Router networking (WAN, LAN bridges, firewall, NAT)
-    ./modules/dns.nix          # DNS server (dnsmasq with blocklists)
-    ./modules/dhcp.nix         # DHCP server (Kea)
+    ./modules/dns.nix          # DNS and DHCP server (dnsmasq with blocklists)
     ./modules/users.nix        # User account management
     ./modules/secrets.nix      # Secrets management (sops-nix)
     ./modules/dashboard.nix    # Monitoring (Grafana, Prometheus)
