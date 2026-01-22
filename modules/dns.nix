@@ -56,7 +56,8 @@ let
         let
           domain = lib.removePrefix "*." name;
           # Find the IP for the target (usually the main domain)
-          targetRecord = homelabDns.a_records.${record.target} or null;
+          # Try target first, then fall back to domain itself
+          targetRecord = homelabDns.a_records.${record.target} or homelabDns.a_records.${domain} or null;
         in
           if targetRecord != null then {
             domain = domain;
@@ -73,7 +74,8 @@ let
         let
           domain = lib.removePrefix "*." name;
           # Find the IP for the target (usually the main domain)
-          targetRecord = lanDns.a_records.${record.target} or null;
+          # Try target first, then fall back to domain itself
+          targetRecord = lanDns.a_records.${record.target} or lanDns.a_records.${domain} or null;
         in
           if targetRecord != null then {
             domain = domain;
@@ -85,17 +87,18 @@ let
   );
   
   # Convert A records to host records format
+  # Filter out wildcard entries (they should be in CNAME records, not A records)
   homelabARecordsToHostRecords = lib.mapAttrsToList (name: record: {
     hostname = name;
     ip = record.ip;
     comment = record.comment or "";
-  }) (homelabDns.a_records or {});
+  }) (lib.filterAttrs (name: record: !lib.hasPrefix "*." name) (homelabDns.a_records or {}));
   
   lanARecordsToHostRecords = lib.mapAttrsToList (name: record: {
     hostname = name;
     ip = record.ip;
     comment = record.comment or "";
-  }) (lanDns.a_records or {});
+  }) (lib.filterAttrs (name: record: !lib.hasPrefix "*." name) (lanDns.a_records or {}));
   
   # Get list of wildcard base domains (to exclude from host records)
   homelabWildcardDomains = map (w: w.domain) homelabWildcards;
