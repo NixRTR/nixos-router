@@ -55,12 +55,14 @@ echo "Applying port forwarding rules from /etc/nixos/config/port-forwarding.nix.
 echo "Using Python: $PYTHON_BIN"
 echo "Using backend: $BACKEND_PATH"
 
-# Set PYTHONPATH and run the applier
-export PYTHONPATH="$BACKEND_PATH/.."
+# Set PYTHONPATH to the parent directory (router-webui) so relative imports work
+# The backend code uses relative imports like "from ..config import settings"
+ROUTER_WEBUI_PATH="$(dirname "$BACKEND_PATH")"
+export PYTHONPATH="$ROUTER_WEBUI_PATH"
+
+# Run the applier - import from backend.utils since PYTHONPATH is set to router-webui
 "$PYTHON_BIN" -c "
-import sys
-sys.path.insert(0, '$BACKEND_PATH')
-from utils.port_forwarding_applier import apply_port_forwarding_rules
+from backend.utils.port_forwarding_applier import apply_port_forwarding_rules
 apply_port_forwarding_rules()
 "
 
