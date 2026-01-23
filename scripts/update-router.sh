@@ -137,6 +137,7 @@ sync_repository() {
         --exclude "hardware-configuration.nix" \
         --exclude "router-config.nix" \
         --exclude "secrets/secrets.yaml" \
+        --exclude "config/" \
         "${temp_dir}/repo/" "${TARGET_DIR}/"
 
     rm -rf "$temp_dir"

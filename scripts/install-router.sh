@@ -377,6 +377,327 @@ generate_config() {
     log_success "NixOS configuration generated"
 }
 
+# Create config directory structure
+create_config_directories() {
+    log_info "Creating config directory structure"
+    mkdir -p /mnt/etc/nixos/config/dnsmasq
+    log_success "Config directories created"
+}
+
+# Generate CAKE configuration file
+generate_cake_config() {
+    local cake_file="/mnt/etc/nixos/config/cake.nix"
+    cat > "$cake_file" << EOF
+{
+  # CAKE traffic shaping configuration (optional)
+  # CAKE (Common Applications Kept Enhanced) is a comprehensive queue management system
+  # that reduces bufferbloat and improves latency under load
+  
+  # Set to true to enable CAKE traffic shaping
+  enable = $CAKE_ENABLE;
+  
+  # Options: "auto", "conservative", "moderate", "aggressive"
+  # auto: Monitors bandwidth and adjusts automatically (recommended)
+  # conservative: Minimal shaping, best for high-speed links
+  # moderate: Balanced latency/throughput
+  # aggressive: Maximum latency reduction, best for slower links
+  aggressiveness = "$CAKE_AGGRESSIVENESS";
+EOF
+    if [[ -n "$CAKE_UPLOAD_BW" ]]; then
+        echo "  uploadBandwidth = \"$CAKE_UPLOAD_BW\";" >> "$cake_file"
+    fi
+    if [[ -n "$CAKE_DOWNLOAD_BW" ]]; then
+        echo "  downloadBandwidth = \"$CAKE_DOWNLOAD_BW\";" >> "$cake_file"
+    fi
+    cat >> "$cake_file" << EOF
+  
+  # Note: CAKE on root qdisc shapes egress (upload). When uploadBandwidth is set,
+  # autorate-ingress is disabled and explicit bandwidth is used instead.
+}
+EOF
+}
+
+# Generate port forwarding configuration file
+generate_port_forwarding_config() {
+    local pf_file="/mnt/etc/nixos/config/port-forwarding.nix"
+    cat > "$pf_file" << EOF
+[
+  # Add your port forwarding rules here
+  # {
+  #   proto = "both";
+  #   externalPort = 443;
+  #   destination = "192.168.2.33";
+  #   destinationPort = 443;
+  # }
+]
+EOF
+}
+
+# Generate Dynamic DNS configuration file
+generate_dyndns_config() {
+    local dyndns_file="/mnt/etc/nixos/config/dyndns.nix"
+    cat > "$dyndns_file" << EOF
+{
+  enable = false;
+  provider = "linode";
+
+  # Domain and record to update
+  domain = "";
+  subdomain = "";  # Root domain
+
+  # Linode API credentials (stored in sops secrets)
+  domainId = 0;
+  recordId = 0;
+
+  # Update interval
+  checkInterval = "5m";
+}
+EOF
+}
+
+# Generate WebUI configuration file
+generate_webui_config() {
+    local webui_file="/mnt/etc/nixos/config/webui.nix"
+    cat > "$webui_file" << EOF
+{
+  # Enable web-based monitoring dashboard
+  enable = true;
+
+  # Port for the WebUI (default: 8080)
+  port = 8080;
+
+  # Data collection interval in seconds (default: 2)
+  # Lower = more frequent updates, higher CPU usage
+  # Higher = less frequent updates, lower CPU usage
+  collectionInterval = 2;
+
+  # Database settings (PostgreSQL)
+  database = {
+    host = "localhost";
+    port = 5432;
+    name = "router_webui";
+    user = "router_webui";
+  };
+
+  # Historical data retention in days (default: 30)
+  # Older data is automatically cleaned up
+  retentionDays = 30;
+
+  # Access control
+  # The WebUI uses system user authentication (PAM)
+  # Any user with a valid system account can login
+  # To restrict access to specific users, use firewall rules
+  # or configure Nginx reverse proxy with additional auth
+}
+EOF
+}
+
+# Generate Apprise configuration file
+generate_apprise_config() {
+    local apprise_file="/mnt/etc/nixos/config/apprise.nix"
+    cat > "$apprise_file" << EOF
+{
+  # Enable Apprise API notification service
+  enable = false;
+
+  # Internal port for apprise-api (default: 8001, separate from webui)
+  port = 8001;
+
+  # Maximum attachment size in MB (0 = disabled)
+  attachSize = 0;
+
+  # Optional: Attachments directory path
+  # attachmentsDir = "/var/lib/apprise/attachments";
+
+  # Notification Services Configuration
+  # Configure notification services that apprise-api will use
+  # Secrets (passwords, tokens) are stored in secrets/secrets.yaml
+  services = {
+    # Email configuration
+    email = {
+      enable = false;
+      smtpHost = "smtp.gmail.com";
+      smtpPort = 587;
+      username = "your-email@gmail.com";
+      # Password stored in sops secrets as "apprise-email-password"
+      to = "recipient@example.com";
+      # Optional: from address (defaults to username)
+      # from = "your-email@gmail.com";
+    };
+
+    # Home Assistant configuration
+    homeAssistant = {
+      enable = false;
+      host = "homeassistant.local";
+      port = 8123;
+      # Access token stored in sops secrets as "apprise-homeassistant-token"
+      # Optional: use HTTPS
+      # useHttps = false;
+    };
+
+    # Discord configuration
+    discord = {
+      enable = false;
+      # Webhook ID and token stored in sops secrets:
+      # - "apprise-discord-webhook-id"
+      # - "apprise-discord-webhook-token"
+    };
+
+    # Slack configuration
+    slack = {
+      enable = false;
+      # Tokens stored in sops secrets:
+      # - "apprise-slack-token-a"
+      # - "apprise-slack-token-b"
+      # - "apprise-slack-token-c"
+    };
+
+    # Telegram configuration
+    telegram = {
+      enable = false;
+      # Bot token stored in sops secrets as "apprise-telegram-bot-token"
+      chatId = "123456789";  # Can be stored in sops if preferred
+    };
+
+    # ntfy configuration
+    ntfy = {
+      enable = false;
+      topic = "router-notifications";
+      # Optional: custom ntfy server
+      # server = "https://ntfy.sh";
+      # Optional: authentication
+      # Username stored in sops as "apprise-ntfy-username"
+      # Password stored in sops as "apprise-ntfy-password"
+    };
+  };
+}
+EOF
+}
+
+# Generate global DNS configuration file
+generate_global_dns_config() {
+    local global_dns_file="/mnt/etc/nixos/config/dnsmasq/global-dns.nix"
+    cat > "$global_dns_file" << EOF
+{
+  enable = true;
+
+  # Upstream DNS servers (shared by all networks)
+  # Plain DNS format for dnsmasq (no DoT support)
+  upstreamServers = [
+    "1.1.1.1"  # Cloudflare DNS
+    "9.9.9.9"  # Quad9 DNS
+  ];
+}
+EOF
+}
+
+# Generate DHCP configuration for a network
+generate_dhcp_config() {
+    local network=$1
+    local ip=$2
+    local start=$3
+    local end=$4
+    local lease=$5
+    local dhcp_file="/mnt/etc/nixos/config/dnsmasq/dhcp-${network}.nix"
+    
+    cat > "$dhcp_file" << EOF
+{
+  enable = true;  # Set to false to disable DHCP for this network
+  start = "$start";
+  end = "$end";
+  leaseTime = "$lease";
+  dnsServers = [
+    "$ip"
+  ];
+  
+  # Dynamic DNS domain for DHCP clients (optional)
+  # If set, ALL DHCP clients get automatic DNS entries
+  # Example: client with hostname "phone" gets "phone.dhcp.${network}.local"
+  # If no hostname provided, uses: "dhcp-<last-octet>.dhcp.${network}.local"
+  dynamicDomain = "";  # Set to "" to disable dynamic DNS
+  
+  reservations = [
+    # Example: { hostname = "desktop"; hwAddress = "11:22:33:44:55:66"; ipAddress = "192.168.3.50"; }
+    # Example: { hostname = "laptop"; hwAddress = "aa:bb:cc:dd:ee:ff"; ipAddress = "192.168.3.51"; }
+  ];
+}
+EOF
+}
+
+# Generate DNS configuration for a network
+generate_dns_config() {
+    local network=$1
+    local dns_file="/mnt/etc/nixos/config/dnsmasq/dns-${network}.nix"
+    
+    cat > "$dns_file" << EOF
+{
+  a_records = {
+    # Add your DNS records here
+  };
+
+  cname_records = {
+    # Add more aliases as needed:
+    # "app.jeandr.net" = { target = "hera.jeandr.net"; comment = "Application"; };
+    # "api.jeandr.net" = { target = "hera.jeandr.net"; comment = "API"; };
+  };
+}
+EOF
+}
+
+# Generate blocklists configuration for a network
+generate_blocklists_config() {
+    local network=$1
+    local blocklists_file="/mnt/etc/nixos/config/dnsmasq/blocklists-${network}.nix"
+    
+    cat > "$blocklists_file" << EOF
+{
+  enable = false;  # Master switch - set to false to disable all blocking
+
+  stevenblack = {
+    enable = false;
+    url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+    description = "Ads and malware blocking (250K+ domains)";
+    updateInterval = "24h";
+  };
+
+  phishing-army = {
+    enable = false;
+    url = "https://phishing.army/download/phishing_army_blocklist.txt";
+    description = "Phishing and scam protection";
+    updateInterval = "12h";
+  };
+EOF
+    # Add adaway for LAN network
+    if [[ "$network" == "lan" ]]; then
+        cat >> "$blocklists_file" << EOF
+
+  # LAN might want more aggressive blocking for family devices:
+
+  adaway = {
+    enable = false;
+    url = "https://adaway.org/hosts.txt";
+    description = "Mobile-focused ad blocking";
+    updateInterval = "1w";
+  };
+EOF
+    fi
+    echo "}" >> "$blocklists_file"
+}
+
+# Generate whitelist configuration for a network
+generate_whitelist_config() {
+    local network=$1
+    local whitelist_file="/mnt/etc/nixos/config/dnsmasq/whitelist-${network}.nix"
+    
+    cat > "$whitelist_file" << EOF
+[
+  # Add domains to whitelist here (one per line)
+  # Example: "example.com"
+  # Example: "subdomain.example.com"
+]
+EOF
+}
+
 # Clone and setup router configuration
 setup_router_config() {
     log_info "Setting up router configuration"
@@ -384,9 +705,21 @@ setup_router_config() {
     # Clone the router repository (using nix-shell as git isn't in minimal ISO)
     nix-shell -p git --run "git clone $REPO_URL /mnt/etc/nixos/router-config"
 
-    # Copy configuration files
-    cp -r /mnt/etc/nixos/router-config/* /mnt/etc/nixos/
+    # Copy configuration files (excluding config directory which we'll generate)
+    rsync -a --exclude "config/" /mnt/etc/nixos/router-config/* /mnt/etc/nixos/
     rm -rf /mnt/etc/nixos/router-config  # Remove the cloned repo, keep only contents
+
+    # Create config directory structure
+    create_config_directories
+
+    # Generate all config files
+    log_info "Generating configuration files"
+    generate_cake_config
+    generate_port_forwarding_config
+    generate_dyndns_config
+    generate_webui_config
+    generate_apprise_config
+    generate_global_dns_config
 
     # Generate router configuration file
     log_info "Generating router configuration file"
@@ -395,9 +728,15 @@ setup_router_config() {
     NAMESERVERS_NIX="[ $(echo "$NAMESERVERS" | sed 's/\([^ ]*\)/"\1"/g') ]"
 
     if [[ "$MULTI_LAN_MODE" == "false" ]]; then
-        # Simple mode - single bridge
+        # Simple mode - single bridge (homelab network)
         # Convert space-separated interfaces to Nix array format
         LAN_INTERFACES_NIX="[ $(echo "$LAN_INTERFACES" | sed 's/\([^ ]*\)/"\1"/g') ]"
+
+        # Generate network-specific config files
+        generate_dhcp_config "homelab" "$LAN_IP" "$DHCP_START" "$DHCP_END" "$DHCP_LEASE"
+        generate_dns_config "homelab"
+        generate_blocklists_config "homelab"
+        generate_whitelist_config "homelab"
 
         # Create router-config.nix with actual values
         cat > /mnt/etc/nixos/router-config.nix << EOF
@@ -429,19 +768,9 @@ EOF
     if [[ "$CAKE_ENABLE" == "true" ]]; then
         cat >> /mnt/etc/nixos/router-config.nix << EOF
     
-    # CAKE traffic shaping configuration
-    cake = {
-      enable = true;
-      aggressiveness = "$CAKE_AGGRESSIVENESS";
+    # CAKE traffic shaping configuration (imported from config/cake.nix)
+    cake = import ./config/cake.nix;
 EOF
-        # Add bandwidth settings if provided
-        if [[ -n "$CAKE_UPLOAD_BW" ]]; then
-            echo "      uploadBandwidth = \"$CAKE_UPLOAD_BW\";" >> /mnt/etc/nixos/router-config.nix
-        fi
-        if [[ -n "$CAKE_DOWNLOAD_BW" ]]; then
-            echo "      downloadBandwidth = \"$CAKE_DOWNLOAD_BW\";" >> /mnt/etc/nixos/router-config.nix
-        fi
-        echo "    };" >> /mnt/etc/nixos/router-config.nix
     fi
 
     cat >> /mnt/etc/nixos/router-config.nix << EOF
@@ -469,207 +798,34 @@ EOF
     ipAddress = "$LAN_IP";
     subnet = "$LAN_NETWORK/$LAN_PREFIX";
 
-    # DHCP settings
-    dhcp = {
-      enable = true;
-      start = "$DHCP_START";
-      end = "$DHCP_END";
-      leaseTime = "$DHCP_LEASE";
-      dnsServers = [
-        "$LAN_IP"
-      ];
+    # DHCP settings (imported from config/dnsmasq/dhcp-homelab.nix)
+    dhcp = import ./config/dnsmasq/dhcp-homelab.nix;
 
-      # Dynamic DNS domain for DHCP clients (optional)
-      # If set, ALL DHCP clients get automatic DNS entries
-      # Example: client with hostname "phone" gets "phone.dhcp.homelab.local"
-      # If no hostname provided, uses: "dhcp-<last-octet>.dhcp.homelab.local"
-      dynamicDomain = "";  # Set to "" to disable dynamic DNS
-
-      reservations = [
-        # Example: { hostname = "desktop"; hwAddress = "11:22:33:44:55:66"; ipAddress = "192.168.3.50"; }
-        # Example: { hostname = "laptop"; hwAddress = "aa:bb:cc:dd:ee:ff"; ipAddress = "192.168.3.51"; }
-      ];
-    };
-
-    # DNS settings for this network
-    dns = {
+    # DNS settings for this network (imported from config/dnsmasq/dns-homelab.nix)
+    dns = (import ./config/dnsmasq/dns-homelab.nix) // {
       enable = true;  # Set to false to disable DNS server for this network
-      # DNS A Records (hostname → IP address)
-      a_records = {
-        # Add your DNS records here
-      };
 
-      # DNS CNAME Records (alias → canonical name)
-      cname_records = {
-        # Add more aliases as needed:
-        # "app.jeandr.net" = { target = "hera.jeandr.net"; comment = "Application"; };
-        # "api.jeandr.net" = { target = "hera.jeandr.net"; comment = "API"; };
-      };
-
-      # Blocklist configuration
-      blocklists = {
-        enable = false;  # Master switch - set to false to disable all blocking
-
-        stevenblack = {
-          enable = false;
-          url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
-          description = "Ads and malware blocking (250K+ domains)";
-          updateInterval = "24h";
-        };
-
-        phishing-army = {
-          enable = false;
-          url = "https://phishing.army/download/phishing_army_blocklist.txt";
-          description = "Phishing and scam protection";
-          updateInterval = "12h";
-        };
-      };
-      whitelist = [
-      ];
+      # Blocklist configuration (imported from config/dnsmasq/blocklists-homelab.nix)
+      blocklists = import ./config/dnsmasq/blocklists-homelab.nix;
+      # Whitelist configuration (imported from config/dnsmasq/whitelist-homelab.nix)
+      whitelist = import ./config/dnsmasq/whitelist-homelab.nix;
     };
   };
 
-  # Port Forwarding Rules
-  portForwards = [
-    # Add your port forwarding rules here
-    # {
-    #   proto = "both";
-    #   externalPort = 443;
-    #   destination = "192.168.2.33";
-    #   destinationPort = 443;
-    # }
-  ];
+  # Port Forwarding Rules (imported from config/port-forwarding.nix)
+  portForwards = import ./config/port-forwarding.nix;
 
-  # Dynamic DNS Configuration
-  dyndns = {
-    enable = false;
-    provider = "linode";
+  # Dynamic DNS Configuration (imported from config/dyndns.nix)
+  dyndns = import ./config/dyndns.nix;
 
-    # Domain and record to update
-    domain = "";
-    subdomain = "";  # Root domain
+  # Global DNS configuration (imported from config/dnsmasq/global-dns.nix)
+  dns = import ./config/dnsmasq/global-dns.nix;
 
-    # Linode API credentials (stored in sops secrets)
-    domainId = 0;
-    recordId = 0;
+  # Web UI Configuration (imported from config/webui.nix)
+  webui = import ./config/webui.nix;
 
-    # Update interval
-    checkInterval = "5m";
-  };
-
-  # Global DNS configuration
-  dns = {
-    enable = true;
-
-    # Upstream DNS servers (shared by all networks)
-    upstreamServers = [
-      "1.1.1.1@853#cloudflare-dns.com"  # Cloudflare DNS over TLS
-      "9.9.9.9@853#dns.quad9.net"        # Quad9 DNS over TLS
-    ];
-  };
-
-  # Web UI Configuration
-  webui = {
-    # Enable web-based monitoring dashboard
-    enable = true;
-
-    # Port for the WebUI (default: 8080)
-    port = 8080;
-
-    # Data collection interval in seconds (default: 2)
-    # Lower = more frequent updates, higher CPU usage
-    # Higher = less frequent updates, lower CPU usage
-    collectionInterval = 2;
-
-    # Database settings (PostgreSQL)
-    database = {
-      host = "localhost";
-      port = 5432;
-      name = "router_webui";
-      user = "router_webui";
-    };
-
-    # Historical data retention in days (default: 30)
-    # Older data is automatically cleaned up
-    retentionDays = 30;
-  };
-
-  # Apprise API Configuration
-  apprise = {
-    # Enable Apprise API notification service
-    enable = false;
-
-    # Internal port for apprise-api (default: 8001, separate from webui)
-    port = 8001;
-
-    # Maximum attachment size in MB (0 = disabled)
-    attachSize = 0;
-
-    # Optional: Attachments directory path
-    # attachmentsDir = "/var/lib/apprise/attachments";
-
-    # Notification Services Configuration
-    # Configure notification services that apprise-api will use
-    # Secrets (passwords, tokens) are stored in secrets/secrets.yaml
-    services = {
-      # Email configuration
-      email = {
-        enable = false;
-        smtpHost = "smtp.gmail.com";
-        smtpPort = 587;
-        username = "your-email@gmail.com";
-        # Password stored in sops secrets as "apprise-email-password"
-        to = "recipient@example.com";
-        # Optional: from address (defaults to username)
-        # from = "your-email@gmail.com";
-      };
-
-      # Home Assistant configuration
-      homeAssistant = {
-        enable = false;
-        host = "homeassistant.local";
-        port = 8123;
-        # Access token stored in sops secrets as "apprise-homeassistant-token"
-        # Optional: use HTTPS
-        # useHttps = false;
-      };
-
-      # Discord configuration
-      discord = {
-        enable = false;
-        # Webhook ID and token stored in sops secrets:
-        # - "apprise-discord-webhook-id"
-        # - "apprise-discord-webhook-token"
-      };
-
-      # Slack configuration
-      slack = {
-        enable = false;
-        # Tokens stored in sops secrets:
-        # - "apprise-slack-token-a"
-        # - "apprise-slack-token-b"
-        # - "apprise-slack-token-c"
-      };
-
-      # Telegram configuration
-      telegram = {
-        enable = false;
-        # Bot token stored in sops secrets as "apprise-telegram-bot-token"
-        chatId = "123456789";  # Can be stored in sops if preferred
-      };
-
-      # ntfy configuration
-      ntfy = {
-        enable = false;
-        topic = "router-notifications";
-        # Optional: custom ntfy server
-        # server = "https://ntfy.sh";
-        # Optional: authentication
-        # Username stored in sops as "apprise-ntfy-username"
-        # Password stored in sops as "apprise-ntfy-password"
-      };
-    };
-  };
+  # Apprise API Configuration (imported from config/apprise.nix)
+  apprise = import ./config/apprise.nix;
 }
 EOF
 
@@ -686,6 +842,17 @@ EOF
         # Convert space-separated interfaces to Nix array format
         HOMELAB_INTERFACES_NIX="[ $(echo "$HOMELAB_INTERFACES" | sed 's/\([^ ]*\)/"\1"/g') ]"
         LAN_INTERFACES_NIX="[ $(echo "$LAN_INTERFACES" | sed 's/\([^ ]*\)/"\1"/g') ]"
+
+        # Generate network-specific config files for both networks
+        generate_dhcp_config "homelab" "$HOMELAB_IP" "$HOMELAB_DHCP_START" "$HOMELAB_DHCP_END" "$DHCP_LEASE"
+        generate_dns_config "homelab"
+        generate_blocklists_config "homelab"
+        generate_whitelist_config "homelab"
+
+        generate_dhcp_config "lan" "$LAN_IP" "$LAN_DHCP_START" "$LAN_DHCP_END" "$DHCP_LEASE"
+        generate_dns_config "lan"
+        generate_blocklists_config "lan"
+        generate_whitelist_config "lan"
 
         # Create router-config.nix with actual values
         cat > /mnt/etc/nixos/router-config.nix << EOF
@@ -717,19 +884,9 @@ EOF
     if [[ "$CAKE_ENABLE" == "true" ]]; then
         cat >> /mnt/etc/nixos/router-config.nix << EOF
     
-    # CAKE traffic shaping configuration
-    cake = {
-      enable = true;
-      aggressiveness = "$CAKE_AGGRESSIVENESS";
+    # CAKE traffic shaping configuration (imported from config/cake.nix)
+    cake = import ./config/cake.nix;
 EOF
-        # Add bandwidth settings if provided
-        if [[ -n "$CAKE_UPLOAD_BW" ]]; then
-            echo "      uploadBandwidth = \"$CAKE_UPLOAD_BW\";" >> /mnt/etc/nixos/router-config.nix
-        fi
-        if [[ -n "$CAKE_DOWNLOAD_BW" ]]; then
-            echo "      downloadBandwidth = \"$CAKE_DOWNLOAD_BW\";" >> /mnt/etc/nixos/router-config.nix
-        fi
-        echo "    };" >> /mnt/etc/nixos/router-config.nix
     fi
 
     cat >> /mnt/etc/nixos/router-config.nix << EOF
@@ -787,63 +944,17 @@ EOF
     ipAddress = "$HOMELAB_IP";
     subnet = "$HOMELAB_NETWORK/24";
 
-    # DHCP settings
-    dhcp = {
-      enable = true;  # Set to false to disable DHCP for this network
-      start = "$HOMELAB_DHCP_START";
-      end = "$HOMELAB_DHCP_END";
-      leaseTime = "$DHCP_LEASE";
-      dnsServers = [
-        "$HOMELAB_IP"
-      ];
+    # DHCP settings (imported from config/dnsmasq/dhcp-homelab.nix)
+    dhcp = import ./config/dnsmasq/dhcp-homelab.nix;
 
-      # Dynamic DNS domain for DHCP clients (optional)
-      # If set, ALL DHCP clients get automatic DNS entries
-      # Example: client with hostname "phone" gets "phone.dhcp.homelab.local"
-      # If no hostname provided, uses: "dhcp-<last-octet>.dhcp.homelab.local"
-      dynamicDomain = "";  # Set to "" to disable dynamic DNS
-
-      reservations = [
-        # Example: { hostname = "desktop"; hwAddress = "11:22:33:44:55:66"; ipAddress = "192.168.3.50"; }
-        # Example: { hostname = "laptop"; hwAddress = "aa:bb:cc:dd:ee:ff"; ipAddress = "192.168.3.51"; }
-      ];
-    };
-
-    # DNS settings for this network
-    dns = {
+    # DNS settings for this network (imported from config/dnsmasq/dns-homelab.nix)
+    dns = (import ./config/dnsmasq/dns-homelab.nix) // {
       enable = true;  # Set to false to disable DNS server for this network
-      # DNS A Records (hostname → IP address)
-      a_records = {
-        # Add your DNS records here
-      };
 
-      # DNS CNAME Records (alias → canonical name)
-      cname_records = {
-        # Add more aliases as needed:
-        # "app.jeandr.net" = { target = "hera.jeandr.net"; comment = "Application"; };
-        # "api.jeandr.net" = { target = "hera.jeandr.net"; comment = "API"; };
-      };
-
-      # Blocklist configuration
-      blocklists = {
-        enable = false;  # Master switch - set to false to disable all blocking
-
-        stevenblack = {
-          enable = false;
-          url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
-          description = "Ads and malware blocking (250K+ domains)";
-          updateInterval = "24h";
-        };
-
-        phishing-army = {
-          enable = false;
-          url = "https://phishing.army/download/phishing_army_blocklist.txt";
-          description = "Phishing and scam protection";
-          updateInterval = "12h";
-        };
-      };
-      whitelist = [
-      ];
+      # Blocklist configuration (imported from config/dnsmasq/blocklists-homelab.nix)
+      blocklists = import ./config/dnsmasq/blocklists-homelab.nix;
+      # Whitelist configuration (imported from config/dnsmasq/whitelist-homelab.nix)
+      whitelist = import ./config/dnsmasq/whitelist-homelab.nix;
     };
   };
 
@@ -853,216 +964,34 @@ EOF
     ipAddress = "$LAN_IP";
     subnet = "$LAN_NETWORK/24";
 
-    # DHCP settings
-    dhcp = {
-      enable = true;  # Set to false to disable DHCP for this network
-      start = "$LAN_DHCP_START";
-      end = "$LAN_DHCP_END";
-      leaseTime = "$DHCP_LEASE";
-      dnsServers = [
-        "$LAN_IP"
-      ];
+    # DHCP settings (imported from config/dnsmasq/dhcp-lan.nix)
+    dhcp = import ./config/dnsmasq/dhcp-lan.nix;
 
-      # Dynamic DNS domain for DHCP clients (optional)
-      # If set, ALL DHCP clients get automatic DNS entries
-      # Example: client with hostname "phone" gets "phone.dhcp.lan.local"
-      # If no hostname provided, uses: "dhcp-<last-octet>.dhcp.lan.local"
-      dynamicDomain = "";  # Set to "" to disable dynamic DNS
-
-      reservations = [
-        # Example: { hostname = "desktop"; hwAddress = "11:22:33:44:55:66"; ipAddress = "192.168.3.50"; }
-        # Example: { hostname = "laptop"; hwAddress = "aa:bb:cc:dd:ee:ff"; ipAddress = "192.168.3.51"; }
-      ];
-    };
-
-    # DNS settings for this network
-    dns = {
+    # DNS settings for this network (imported from config/dnsmasq/dns-lan.nix)
+    dns = (import ./config/dnsmasq/dns-lan.nix) // {
       enable = true;  # Set to false to disable DNS server for this network
-      # DNS A Records (hostname → IP address)
-      a_records = {
-        # Add LAN-specific devices here:
-        # "workstation.jeandr.net" = { ip = "192.168.3.101"; comment = "Main workstation"; };
-        # "desktop.jeandr.net" = { ip = "192.168.3.50"; comment = "Desktop computer"; };
-      };
 
-      # DNS CNAME Records (alias → canonical name)
-      cname_records = {
-        # Add more aliases as needed
-      };
-
-      # Blocklist configuration (can differ from HOMELAB)
-      blocklists = {
-        enable = false;  # Master switch
-
-        stevenblack = {
-          enable = false;
-          url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
-          description = "Ads and malware blocking (250K+ domains)";
-          updateInterval = "24h";
-        };
-
-        phishing-army = {
-          enable = false;
-          url = "https://phishing.army/download/phishing_army_blocklist.txt";
-          description = "Phishing and scam protection";
-          updateInterval = "12h";
-        };
-
-        # LAN might want more aggressive blocking for family devices:
-
-        adaway = {
-          enable = false;
-          url = "https://adaway.org/hosts.txt";
-          description = "Mobile-focused ad blocking";
-          updateInterval = "1w";
-        };
-      };
-      whitelist = [
-      ];
+      # Blocklist configuration (imported from config/dnsmasq/blocklists-lan.nix)
+      blocklists = import ./config/dnsmasq/blocklists-lan.nix;
+      # Whitelist configuration (imported from config/dnsmasq/whitelist-lan.nix)
+      whitelist = import ./config/dnsmasq/whitelist-lan.nix;
     };
   };
 
-  # Port Forwarding Rules
-  portForwards = [
-    # Add your port forwarding rules here
-    # {
-    #   proto = "both";
-    #   externalPort = 443;
-    #   destination = "192.168.2.33";
-    #   destinationPort = 443;
-    # }
-  ];
+  # Port Forwarding Rules (imported from config/port-forwarding.nix)
+  portForwards = import ./config/port-forwarding.nix;
 
-  # Dynamic DNS Configuration
-  dyndns = {
-    enable = false;
-    provider = "linode";
+  # Dynamic DNS Configuration (imported from config/dyndns.nix)
+  dyndns = import ./config/dyndns.nix;
 
-    # Domain and record to update
-    domain = "";
-    subdomain = "";  # Root domain
+  # Global DNS configuration (imported from config/dnsmasq/global-dns.nix)
+  dns = import ./config/dnsmasq/global-dns.nix;
 
-    # Linode API credentials (stored in sops secrets)
-    domainId = 0;
-    recordId = 0;
+  # Web UI Configuration (imported from config/webui.nix)
+  webui = import ./config/webui.nix;
 
-    # Update interval
-    checkInterval = "5m";
-  };
-
-  # Global DNS configuration
-  dns = {
-    enable = true;
-
-    # Upstream DNS servers (shared by all networks)
-    upstreamServers = [
-      "1.1.1.1@853#cloudflare-dns.com"  # Cloudflare DNS over TLS
-      "9.9.9.9@853#dns.quad9.net"        # Quad9 DNS over TLS
-    ];
-  };
-
-  # Web UI Configuration
-  webui = {
-    # Enable web-based monitoring dashboard
-    enable = true;
-
-    # Port for the WebUI (default: 8080)
-    port = 8080;
-
-    # Data collection interval in seconds (default: 2)
-    # Lower = more frequent updates, higher CPU usage
-    # Higher = less frequent updates, lower CPU usage
-    collectionInterval = 2;
-
-    # Database settings (PostgreSQL)
-    database = {
-      host = "localhost";
-      port = 5432;
-      name = "router_webui";
-      user = "router_webui";
-    };
-
-    # Historical data retention in days (default: 30)
-    # Older data is automatically cleaned up
-    retentionDays = 30;
-  };
-
-  # Apprise API Configuration
-  apprise = {
-    # Enable Apprise API notification service
-    enable = false;
-
-    # Internal port for apprise-api (default: 8001, separate from webui)
-    port = 8001;
-
-    # Maximum attachment size in MB (0 = disabled)
-    attachSize = 0;
-
-    # Optional: Attachments directory path
-    # attachmentsDir = "/var/lib/apprise/attachments";
-
-    # Notification Services Configuration
-    # Configure notification services that apprise-api will use
-    # Secrets (passwords, tokens) are stored in secrets/secrets.yaml
-    services = {
-      # Email configuration
-      email = {
-        enable = false;
-        smtpHost = "smtp.gmail.com";
-        smtpPort = 587;
-        username = "your-email@gmail.com";
-        # Password stored in sops secrets as "apprise-email-password"
-        to = "recipient@example.com";
-        # Optional: from address (defaults to username)
-        # from = "your-email@gmail.com";
-      };
-
-      # Home Assistant configuration
-      homeAssistant = {
-        enable = false;
-        host = "homeassistant.local";
-        port = 8123;
-        # Access token stored in sops secrets as "apprise-homeassistant-token"
-        # Optional: use HTTPS
-        # useHttps = false;
-      };
-
-      # Discord configuration
-      discord = {
-        enable = false;
-        # Webhook ID and token stored in sops secrets:
-        # - "apprise-discord-webhook-id"
-        # - "apprise-discord-webhook-token"
-      };
-
-      # Slack configuration
-      slack = {
-        enable = false;
-        # Tokens stored in sops secrets:
-        # - "apprise-slack-token-a"
-        # - "apprise-slack-token-b"
-        # - "apprise-slack-token-c"
-      };
-
-      # Telegram configuration
-      telegram = {
-        enable = false;
-        # Bot token stored in sops secrets as "apprise-telegram-bot-token"
-        chatId = "123456789";  # Can be stored in sops if preferred
-      };
-
-      # ntfy configuration
-      ntfy = {
-        enable = false;
-        topic = "router-notifications";
-        # Optional: custom ntfy server
-        # server = "https://ntfy.sh";
-        # Optional: authentication
-        # Username stored in sops as "apprise-ntfy-username"
-        # Password stored in sops as "apprise-ntfy-password"
-      };
-    };
-  };
+  # Apprise API Configuration (imported from config/apprise.nix)
+  apprise = import ./config/apprise.nix;
 }
 EOF
 
