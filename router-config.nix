@@ -96,63 +96,18 @@
     ipAddress = "192.168.2.1";
     subnet = "192.168.2.0/24";
 
-    # DHCP settings
-    dhcp = {
-      enable = true;  # Set to false to disable DHCP for this network
-      start = "192.168.2.100";
-      end = "192.168.2.200";
-      leaseTime = "1h";
-      dnsServers = [
-        "192.168.2.1"
-      ];
-      
+    # DHCP settings (imported from dnsmasq/dhcp-homelab.nix)
+    dhcp = (import ./dnsmasq/dhcp-homelab.nix) // {
       # Dynamic DNS domain for DHCP clients (optional)
       # If set, ALL DHCP clients get automatic DNS entries
       # Example: client with hostname "phone" gets "phone.dhcp.homelab.local"
       # If no hostname provided, uses: "dhcp-<last-octet>.dhcp.homelab.local"
       dynamicDomain = "dhcp.homelab.local";  # Set to "" to disable dynamic DNS
-      
-      reservations = [
-        # Example: { hostname = "desktop"; hwAddress = "11:22:33:44:55:66"; ipAddress = "192.168.3.50"; }
-        # Example: { hostname = "laptop"; hwAddress = "aa:bb:cc:dd:ee:ff"; ipAddress = "192.168.3.51"; }
-      ];
     };
 
-    # DNS settings for this network
-    dns = {
+    # DNS settings for this network (imported from dnsmasq/dns-homelab.nix)
+    dns = (import ./dnsmasq/dns-homelab.nix) // {
       enable = true;  # Set to false to disable DNS server for this network
-      # DNS A Records (hostname → IP address)
-      a_records = {
-        "jeandr.net" = {
-          ip = "192.168.2.33";
-          comment = "Main jeandr.net domain - points to Hera";
-        };
-        "router.jeandr.net" = {
-          ip = "192.168.2.1";
-          comment = "Router address";
-        };
-        "hera.jeandr.net" = {
-          ip = "192.168.2.33";
-          comment = "Hera - Main web/app server";
-        };
-        "triton.jeandr.net" = {
-          ip = "192.168.2.31";
-          comment = "Triton - Secondary server";
-        };
-        # Add more servers here as needed:
-        # "nas.jeandr.net" = { ip = "192.168.2.40"; comment = "NAS storage"; };
-      };
-
-      # DNS CNAME Records (alias → canonical name)
-      cname_records = {
-        "*.jeandr.net" = {
-          target = "jeandr.net";
-          comment = "Wildcard - all subdomains point to main domain";
-        };
-        # Add more aliases as needed:
-        # "app.jeandr.net" = { target = "hera.jeandr.net"; comment = "Application"; };
-        # "api.jeandr.net" = { target = "hera.jeandr.net"; comment = "API"; };
-      };
 
       # Blocklist configuration
       blocklists = {
@@ -183,62 +138,18 @@
     ipAddress = "192.168.3.1";
     subnet = "192.168.3.0/24";
 
-    # DHCP settings
-    dhcp = {
-      enable = true;  # Set to false to disable DHCP for this network
-      start = "192.168.3.100";
-      end = "192.168.3.200";
-      leaseTime = "1h";
-      dnsServers = [
-        "192.168.3.1"
-      ];
-      
+    # DHCP settings (imported from dnsmasq/dhcp-lan.nix)
+    dhcp = (import ./dnsmasq/dhcp-lan.nix) // {
       # Dynamic DNS domain for DHCP clients (optional)
       # If set, ALL DHCP clients get automatic DNS entries
       # Example: client with hostname "phone" gets "phone.dhcp.lan.local"
       # If no hostname provided, uses: "dhcp-<last-octet>.dhcp.lan.local"
       dynamicDomain = "dhcp.lan.local";  # Set to "" to disable dynamic DNS
-      
-      reservations = [
-        # Example: { hostname = "desktop"; hwAddress = "11:22:33:44:55:66"; ipAddress = "192.168.3.50"; }
-        # Example: { hostname = "laptop"; hwAddress = "aa:bb:cc:dd:ee:ff"; ipAddress = "192.168.3.51"; }
-      ];
     };
 
-    # DNS settings for this network
-    dns = {
+    # DNS settings for this network (imported from dnsmasq/dns-lan.nix)
+    dns = (import ./dnsmasq/dns-lan.nix) // {
       enable = true;  # Set to false to disable DNS server for this network
-      # DNS A Records (hostname → IP address)
-      a_records = {
-        "jeandr.net" = {
-          ip = "192.168.3.33";
-          comment = "Main jeandr.net domain - points to Hera (HOMELAB)";
-        };
-        "router.jeandr.net" = {
-          ip = "192.168.3.1";
-          comment = "Router address (LAN side)";
-        };
-        "hera.jeandr.net" = {
-          ip = "192.168.3.33";
-          comment = "Hera - Main web/app server";
-        };
-        "triton.jeandr.net" = {
-          ip = "192.168.3.31";
-          comment = "Triton - Secondary server";
-        };
-        # Add LAN-specific devices here:
-        # "workstation.jeandr.net" = { ip = "192.168.3.101"; comment = "Main workstation"; };
-        # "desktop.jeandr.net" = { ip = "192.168.3.50"; comment = "Desktop computer"; };
-      };
-
-      # DNS CNAME Records (alias → canonical name)
-      cname_records = {
-        "*.jeandr.net" = {
-          target = "jeandr.net";
-          comment = "Wildcard for all subdomains";
-        };
-        # Add more aliases as needed
-      };
 
       # Blocklist configuration (can differ from HOMELAB)
       blocklists = {

@@ -735,6 +735,19 @@ in
             fi
             CONFIG_FILE="/var/lib/dnsmasq/$NETWORK/webui-''${COMMAND#write-}.conf"
             ;;
+          write-nix-dns|write-nix-dhcp)
+            NETWORK=$1
+            if [ -z "$NETWORK" ] || [ "$NETWORK" != "homelab" ] && [ "$NETWORK" != "lan" ]; then
+              echo "Invalid network: $NETWORK" >&2
+              exit 1
+            fi
+            # Determine Nix file path
+            if [ "$COMMAND" = "write-nix-dns" ]; then
+              CONFIG_FILE="/etc/nixos/dnsmasq/dns-$NETWORK.nix"
+            else
+              CONFIG_FILE="/etc/nixos/dnsmasq/dhcp-$NETWORK.nix"
+            fi
+            ;;
           revert-dns|revert-dhcp)
             NETWORK=$1
             HISTORY_ID=$2
@@ -764,19 +777,28 @@ in
           exit 1
         fi
         
-        # Set proper permissions
-        chown dnsmasq:dnsmasq "$CONFIG_FILE"
-        chmod 644 "$CONFIG_FILE"
-        
-        # Reload dnsmasq service for this network
-        SERVICE="dnsmasq-$NETWORK.service"
-        ${pkgs.systemd}/bin/systemctl reload "$SERVICE" 2>&1
-        if [ $? -ne 0 ]; then
-          echo "Warning: Failed to reload $SERVICE" >&2
-          # Don't fail the whole operation if reload fails
+        # Set proper permissions (different for Nix files vs dnsmasq config files)
+        if [[ "$COMMAND" == write-nix-* ]]; then
+          # Nix files: owned by root, readable by all
+          chown root:root "$CONFIG_FILE"
+          chmod 644 "$CONFIG_FILE"
+          echo "Nix config written successfully: $CONFIG_FILE"
+          # Note: NixOS rebuild would be needed to apply changes, but we don't trigger it automatically
+        else
+          # dnsmasq config files: owned by dnsmasq user
+          chown dnsmasq:dnsmasq "$CONFIG_FILE"
+          chmod 644 "$CONFIG_FILE"
+          
+          # Reload dnsmasq service for this network
+          SERVICE="dnsmasq-$NETWORK.service"
+          ${pkgs.systemd}/bin/systemctl reload "$SERVICE" 2>&1
+          if [ $? -ne 0 ]; then
+            echo "Warning: Failed to reload $SERVICE" >&2
+            # Don't fail the whole operation if reload fails
+          fi
+          
+          echo "Config written successfully: $CONFIG_FILE"
         fi
-        
-        echo "Config written successfully: $CONFIG_FILE"
       '';
     };
     
