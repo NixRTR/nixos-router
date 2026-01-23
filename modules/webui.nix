@@ -748,6 +748,31 @@ in
               CONFIG_FILE="/etc/nixos/config/dnsmasq/dhcp-$NETWORK.nix"
             fi
             ;;
+          write-nix-cake)
+            CONFIG_FILE="/etc/nixos/config/cake.nix"
+            ;;
+          write-nix-apprise)
+            CONFIG_FILE="/etc/nixos/config/apprise.nix"
+            ;;
+          write-nix-dyndns)
+            CONFIG_FILE="/etc/nixos/config/dyndns.nix"
+            ;;
+          write-nix-port-forwarding)
+            CONFIG_FILE="/etc/nixos/config/port-forwarding.nix"
+            ;;
+          write-nix-blocklists|write-nix-whitelist)
+            NETWORK=$1
+            if [ -z "$NETWORK" ] || [ "$NETWORK" != "homelab" ] && [ "$NETWORK" != "lan" ]; then
+              echo "Invalid network: $NETWORK" >&2
+              exit 1
+            fi
+            # Determine Nix file path
+            if [ "$COMMAND" = "write-nix-blocklists" ]; then
+              CONFIG_FILE="/etc/nixos/config/dnsmasq/blocklists-$NETWORK.nix"
+            else
+              CONFIG_FILE="/etc/nixos/config/dnsmasq/whitelist-$NETWORK.nix"
+            fi
+            ;;
           revert-dns|revert-dhcp)
             NETWORK=$1
             HISTORY_ID=$2
