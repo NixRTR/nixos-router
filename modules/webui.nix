@@ -789,12 +789,11 @@ in
           chown dnsmasq:dnsmasq "$CONFIG_FILE"
           chmod 644 "$CONFIG_FILE"
           
-          # Reload dnsmasq service for this network
+          # Restart dnsmasq service for this network (dnsmasq doesn't support reload)
           SERVICE="dnsmasq-$NETWORK.service"
-          ${pkgs.systemd}/bin/systemctl reload "$SERVICE" 2>&1
-          if [ $? -ne 0 ]; then
-            echo "Warning: Failed to reload $SERVICE" >&2
-            # Don't fail the whole operation if reload fails
+          if ! ${pkgs.systemd}/bin/systemctl restart "$SERVICE" 2>&1; then
+            echo "Error: Failed to restart $SERVICE" >&2
+            exit 1
           fi
           
           echo "Config written successfully: $CONFIG_FILE"
