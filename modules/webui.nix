@@ -808,7 +808,22 @@ in
           chown root:root "$CONFIG_FILE"
           chmod 644 "$CONFIG_FILE"
           echo "Nix config written successfully: $CONFIG_FILE"
-          # Note: NixOS rebuild would be needed to apply changes, but we don't trigger it automatically
+          
+          # For port forwarding, apply iptables rules immediately
+          if [ "$COMMAND" = "write-nix-port-forwarding" ]; then
+            # Apply port forwarding rules using Python script
+            if ${pythonEnv}/bin/python -c "
+import sys
+sys.path.insert(0, '${backendSrc}')
+from utils.port_forwarding_applier import apply_port_forwarding_rules
+apply_port_forwarding_rules()
+" 2>&1; then
+              echo "Port forwarding rules applied to iptables"
+            else
+              echo "Warning: Failed to apply port forwarding rules to iptables" >&2
+              # Don't fail the write operation if rule application fails
+            fi
+          fi
         else
           # dnsmasq config files: owned by dnsmasq user
           chown dnsmasq:dnsmasq "$CONFIG_FILE"
