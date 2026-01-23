@@ -109,26 +109,10 @@
     dns = (import ./dnsmasq/dns-homelab.nix) // {
       enable = true;  # Set to false to disable DNS server for this network
 
-      # Blocklist configuration
-      blocklists = {
-        enable = true;  # Master switch - set to false to disable all blocking
-
-        stevenblack = {
-          enable = false;
-          url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
-          description = "Ads and malware blocking (250K+ domains)";
-          updateInterval = "24h";
-        };
-
-        phishing-army = {
-          enable = true;
-          url = "https://phishing.army/download/phishing_army_blocklist.txt";
-          description = "Phishing and scam protection";
-          updateInterval = "12h";
-        };
-      };
-      whitelist = [
-      ];
+      # Blocklist configuration (imported from dnsmasq/blocklists-homelab.nix)
+      blocklists = import ./dnsmasq/blocklists-homelab.nix;
+      # Whitelist configuration (imported from dnsmasq/whitelist-homelab.nix)
+      whitelist = import ./dnsmasq/whitelist-homelab.nix;
     };
   };
 
@@ -151,35 +135,10 @@
     dns = (import ./dnsmasq/dns-lan.nix) // {
       enable = true;  # Set to false to disable DNS server for this network
 
-      # Blocklist configuration (can differ from HOMELAB)
-      blocklists = {
-        enable = true;  # Master switch
-
-        stevenblack = {
-          enable = false;
-          url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
-          description = "Ads and malware blocking (250K+ domains)";
-          updateInterval = "24h";
-        };
-
-        phishing-army = {
-          enable = true;
-          url = "https://phishing.army/download/phishing_army_blocklist.txt";
-          description = "Phishing and scam protection";
-          updateInterval = "12h";
-        };
-
-        # LAN might want more aggressive blocking for family devices:
-
-        adaway = {
-          enable = true;
-          url = "https://adaway.org/hosts.txt";
-          description = "Mobile-focused ad blocking";
-          updateInterval = "1w";
-        };
-      };
-      whitelist = [
-      ];
+      # Blocklist configuration (imported from dnsmasq/blocklists-lan.nix)
+      blocklists = import ./dnsmasq/blocklists-lan.nix;
+      # Whitelist configuration (imported from dnsmasq/whitelist-lan.nix)
+      whitelist = import ./dnsmasq/whitelist-lan.nix;
     };
   };
 
