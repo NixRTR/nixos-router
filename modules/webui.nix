@@ -743,9 +743,9 @@ in
             fi
             # Determine Nix file path
             if [ "$COMMAND" = "write-nix-dns" ]; then
-              CONFIG_FILE="/etc/nixos/dnsmasq/dns-$NETWORK.nix"
+              CONFIG_FILE="/etc/nixos/config/dnsmasq/dns-$NETWORK.nix"
             else
-              CONFIG_FILE="/etc/nixos/dnsmasq/dhcp-$NETWORK.nix"
+              CONFIG_FILE="/etc/nixos/config/dnsmasq/dhcp-$NETWORK.nix"
             fi
             ;;
           revert-dns|revert-dhcp)

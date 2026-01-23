@@ -96,23 +96,17 @@
     ipAddress = "192.168.2.1";
     subnet = "192.168.2.0/24";
 
-    # DHCP settings (imported from dnsmasq/dhcp-homelab.nix)
-    dhcp = (import ./dnsmasq/dhcp-homelab.nix) // {
-      # Dynamic DNS domain for DHCP clients (optional)
-      # If set, ALL DHCP clients get automatic DNS entries
-      # Example: client with hostname "phone" gets "phone.dhcp.homelab.local"
-      # If no hostname provided, uses: "dhcp-<last-octet>.dhcp.homelab.local"
-      dynamicDomain = "dhcp.homelab.local";  # Set to "" to disable dynamic DNS
-    };
+    # DHCP settings (imported from config/dnsmasq/dhcp-homelab.nix)
+    dhcp = import ./config/dnsmasq/dhcp-homelab.nix;
 
-    # DNS settings for this network (imported from dnsmasq/dns-homelab.nix)
-    dns = (import ./dnsmasq/dns-homelab.nix) // {
+    # DNS settings for this network (imported from config/dnsmasq/dns-homelab.nix)
+    dns = (import ./config/dnsmasq/dns-homelab.nix) // {
       enable = true;  # Set to false to disable DNS server for this network
 
-      # Blocklist configuration (imported from dnsmasq/blocklists-homelab.nix)
-      blocklists = import ./dnsmasq/blocklists-homelab.nix;
-      # Whitelist configuration (imported from dnsmasq/whitelist-homelab.nix)
-      whitelist = import ./dnsmasq/whitelist-homelab.nix;
+      # Blocklist configuration (imported from config/dnsmasq/blocklists-homelab.nix)
+      blocklists = import ./config/dnsmasq/blocklists-homelab.nix;
+      # Whitelist configuration (imported from config/dnsmasq/whitelist-homelab.nix)
+      whitelist = import ./config/dnsmasq/whitelist-homelab.nix;
     };
   };
 
@@ -122,192 +116,32 @@
     ipAddress = "192.168.3.1";
     subnet = "192.168.3.0/24";
 
-    # DHCP settings (imported from dnsmasq/dhcp-lan.nix)
-    dhcp = (import ./dnsmasq/dhcp-lan.nix) // {
-      # Dynamic DNS domain for DHCP clients (optional)
-      # If set, ALL DHCP clients get automatic DNS entries
-      # Example: client with hostname "phone" gets "phone.dhcp.lan.local"
-      # If no hostname provided, uses: "dhcp-<last-octet>.dhcp.lan.local"
-      dynamicDomain = "dhcp.lan.local";  # Set to "" to disable dynamic DNS
-    };
+    # DHCP settings (imported from config/dnsmasq/dhcp-lan.nix)
+    dhcp = import ./config/dnsmasq/dhcp-lan.nix;
 
-    # DNS settings for this network (imported from dnsmasq/dns-lan.nix)
-    dns = (import ./dnsmasq/dns-lan.nix) // {
+    # DNS settings for this network (imported from config/dnsmasq/dns-lan.nix)
+    dns = (import ./config/dnsmasq/dns-lan.nix) // {
       enable = true;  # Set to false to disable DNS server for this network
 
-      # Blocklist configuration (imported from dnsmasq/blocklists-lan.nix)
-      blocklists = import ./dnsmasq/blocklists-lan.nix;
-      # Whitelist configuration (imported from dnsmasq/whitelist-lan.nix)
-      whitelist = import ./dnsmasq/whitelist-lan.nix;
+      # Blocklist configuration (imported from config/dnsmasq/blocklists-lan.nix)
+      blocklists = import ./config/dnsmasq/blocklists-lan.nix;
+      # Whitelist configuration (imported from config/dnsmasq/whitelist-lan.nix)
+      whitelist = import ./config/dnsmasq/whitelist-lan.nix;
     };
   };
 
-  # Port Forwarding Rules
-  portForwards = [
-    # HTTP/HTTPS to Hera
-    {
-      proto = "both";
-      externalPort = 80;
-      destination = "192.168.2.33";
-      destinationPort = 80;
-    }
-    {
-      proto = "both";
-      externalPort = 443;
-      destination = "192.168.2.33";
-      destinationPort = 443;
-    }
-    # Syncthing to Hera
-    {
-      proto = "both";
-      externalPort = 22000;
-      destination = "192.168.2.33";
-      destinationPort = 22000;
-    }
-    # Port 4242 to Triton
-    {
-      proto = "both";
-      externalPort = 4242;
-      destination = "192.168.2.31";
-      destinationPort = 4242;
-    }
-  ];
+  # Port Forwarding Rules (imported from config/port-forwarding.nix)
+  portForwards = import ./config/port-forwarding.nix;
 
-  # Dynamic DNS Configuration
-  dyndns = {
-    enable = true;
-    provider = "linode";
+  # Dynamic DNS Configuration (imported from config/dyndns.nix)
+  dyndns = import ./config/dyndns.nix;
 
-    # Domain and record to update
-    domain = "jeandr.net";
-    subdomain = "";  # Root domain
+  # Global DNS configuration (imported from config/dnsmasq/global-dns.nix)
+  dns = import ./config/dnsmasq/global-dns.nix;
 
-    # Linode API credentials (stored in sops secrets)
-    domainId = 1730384;
-    recordId = 19262732;
+  # Web UI Configuration (imported from config/webui.nix)
+  webui = import ./config/webui.nix;
 
-    # Update interval
-    checkInterval = "5m";
-  };
-
-  # Global DNS configuration
-  dns = {
-    enable = true;
-
-    # Upstream DNS servers (shared by all networks)
-    # Plain DNS format for dnsmasq (no DoT support)
-    upstreamServers = [
-      "1.1.1.1"  # Cloudflare DNS
-      "9.9.9.9"  # Quad9 DNS
-    ];
-  };
-
-  # Web UI Configuration
-  webui = {
-    # Enable web-based monitoring dashboard
-    enable = true;
-
-    # Port for the WebUI (default: 8080)
-    port = 8080;
-
-    # Data collection interval in seconds (default: 2)
-    # Lower = more frequent updates, higher CPU usage
-    # Higher = less frequent updates, lower CPU usage
-    collectionInterval = 2;
-
-    # Database settings (PostgreSQL)
-    database = {
-      host = "localhost";
-      port = 5432;
-      name = "router_webui";
-      user = "router_webui";
-    };
-
-    # Historical data retention in days (default: 30)
-    # Older data is automatically cleaned up
-    retentionDays = 30;
-
-    # Access control
-    # The WebUI uses system user authentication (PAM)
-    # Any user with a valid system account can login
-    # To restrict access to specific users, use firewall rules
-    # or configure Nginx reverse proxy with additional auth
-  };
-
-  # Apprise API Configuration
-  apprise = {
-    # Enable Apprise API notification service
-    enable = true;
-
-    # Internal port for apprise-api (default: 8001, separate from webui)
-    port = 8001;
-
-    # Maximum attachment size in MB (0 = disabled)
-    attachSize = 0;
-
-    # Optional: Attachments directory path
-    # attachmentsDir = "/var/lib/apprise/attachments";
-
-    # Notification Services Configuration
-    # Configure notification services that apprise-api will use
-    # Secrets (passwords, tokens) are stored in secrets/secrets.yaml
-    services = {
-      # Email configuration
-      email = {
-        enable = false;
-        smtpHost = "smtp.gmail.com";
-        smtpPort = 587;
-        username = "your-email@gmail.com";
-        # Password stored in sops secrets as "apprise-email-password"
-        to = "recipient@example.com";
-        # Optional: from address (defaults to username)
-        # from = "your-email@gmail.com";
-      };
-
-      # Home Assistant configuration
-      homeAssistant = {
-        enable = false;
-        host = "homeassistant.local";
-        port = 8123;
-        # Access token stored in sops secrets as "apprise-homeassistant-token"
-        # Optional: use HTTPS
-        # useHttps = false;
-      };
-
-      # Discord configuration
-      discord = {
-        enable = false;
-        # Webhook ID and token stored in sops secrets:
-        # - "apprise-discord-webhook-id"
-        # - "apprise-discord-webhook-token"
-      };
-
-      # Slack configuration
-      slack = {
-        enable = false;
-        # Tokens stored in sops secrets:
-        # - "apprise-slack-token-a"
-        # - "apprise-slack-token-b"
-        # - "apprise-slack-token-c"
-      };
-
-      # Telegram configuration
-      telegram = {
-        enable = false;
-        # Bot token stored in sops secrets as "apprise-telegram-bot-token"
-        chatId = "123456789";  # Can be stored in sops if preferred
-      };
-
-      # ntfy configuration
-      ntfy = {
-        enable = false;
-        topic = "router-notifications";
-        # Optional: custom ntfy server
-        # server = "https://ntfy.sh";
-        # Optional: authentication
-        # Username stored in sops as "apprise-ntfy-username"
-        # Password stored in sops as "apprise-ntfy-password"
-      };
-    };
-  };
+  # Apprise API Configuration (imported from config/apprise.nix)
+  apprise = import ./config/apprise.nix;
 }
