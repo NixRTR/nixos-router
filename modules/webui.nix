@@ -812,8 +812,11 @@ in
           # For port forwarding, apply iptables rules immediately
           if [ "$COMMAND" = "write-nix-port-forwarding" ]; then
             # Apply port forwarding rules using Python script
+            # Set PYTHONPATH so imports work correctly
+            export PYTHONPATH="${backendSrc}"
             if ${pythonEnv}/bin/python -c "
 import sys
+import os
 sys.path.insert(0, '${backendSrc}')
 from utils.port_forwarding_applier import apply_port_forwarding_rules
 apply_port_forwarding_rules()
