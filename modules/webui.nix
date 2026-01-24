@@ -43,7 +43,7 @@ let
     alembic
     bcrypt
     python-pam  # PAM authentication support
-    manuf  # MAC address OUI vendor lookup
+    mac-vendor-lookup  # MAC address OUI vendor lookup
     httpx  # HTTP client for GitHub API requests
     apprise  # Notification service integration
     jinja2  # Template engine for notification messages
