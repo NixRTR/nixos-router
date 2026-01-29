@@ -332,6 +332,7 @@ in
         FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
         SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
         SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
+        NMAP_BIN = "${pkgs.nmap}/bin/nmap";  # Port scanning for device discovery
         # Note: Don't set SUDO_BIN - use the wrapped sudo from /run/wrappers/bin/sudo
         # The store path sudo doesn't have setuid bit, but the wrapper does
       };
@@ -397,6 +398,7 @@ in
         FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
         SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
         SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
+        NMAP_BIN = "${pkgs.nmap}/bin/nmap";
       };
       
       serviceConfig = {
@@ -404,7 +406,7 @@ in
         User = "router-webui";
         Group = "router-webui";
         WorkingDirectory = "${inputs.router-webui}";
-        ExecStart = "${pythonEnv}/bin/python -m celery -A backend.celery_app worker --loglevel=info --concurrency=2 --queues=aggregation,notifications,buffer_flush";
+        ExecStart = "${pythonEnv}/bin/python -m celery -A backend.celery_app worker --loglevel=info --concurrency=2 --queues=aggregation,notifications,buffer_flush,port_scanner";
         Restart = "always";
         RestartSec = "10s";
         
@@ -456,6 +458,7 @@ in
         FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
         SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
         SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
+        NMAP_BIN = "${pkgs.nmap}/bin/nmap";
       };
       
       serviceConfig = {
