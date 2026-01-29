@@ -374,14 +374,14 @@ in
       };
     };
     
-    # Celery worker service for background tasks
-    systemd.services.router-webui-celery-worker = {
-      description = "Router WebUI Celery Worker";
+    # Celery worker for parallel tasks (can run concurrently)
+    systemd.services.router-webui-celery-parallel = {
+      description = "Router WebUI Celery Worker (Parallel)";
       after = [ "network.target" "postgresql.service" "redis.service" "router-webui-initdb.service" ];
       wants = [ "postgresql.service" "redis.service" ];
       requires = [ "router-webui-initdb.service" ];
       wantedBy = [ "multi-user.target" ];
-      
+
       environment = {
         DATABASE_URL = "postgresql+asyncpg://${cfg.database.user}@${cfg.database.host}:${toString cfg.database.port}/${cfg.database.name}";
         PYTHONPATH = "${inputs.router-webui}";
@@ -400,13 +400,13 @@ in
         SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
         NMAP_BIN = "${pkgs.nmap}/bin/nmap";
       };
-      
+
       serviceConfig = {
         Type = "simple";
         User = "router-webui";
         Group = "router-webui";
         WorkingDirectory = "${inputs.router-webui}";
-        ExecStart = "${pythonEnv}/bin/python -m celery -A backend.celery_app worker --loglevel=info --concurrency=2 --queues=aggregation,notifications,buffer_flush,port_scanner";
+        ExecStart = "${pythonEnv}/bin/python -m celery -A backend.celery_app worker --loglevel=info --concurrency=2 --queues=parallel --hostname=parallel@%h";
         Restart = "always";
         RestartSec = "10s";
         
@@ -433,12 +433,68 @@ in
         AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_SYS_PTRACE" "CAP_DAC_READ_SEARCH" ];
       };
     };
+
+    # Celery worker for sequential tasks (one at a time)
+    systemd.services.router-webui-celery-sequential = {
+      description = "Router WebUI Celery Worker (Sequential)";
+      after = [ "network.target" "postgresql.service" "redis.service" "router-webui-initdb.service" ];
+      wants = [ "postgresql.service" "redis.service" ];
+      requires = [ "router-webui-initdb.service" ];
+      wantedBy = [ "multi-user.target" ];
+
+      environment = {
+        DATABASE_URL = "postgresql+asyncpg://${cfg.database.user}@${cfg.database.host}:${toString cfg.database.port}/${cfg.database.name}";
+        PYTHONPATH = "${inputs.router-webui}";
+        COLLECTION_INTERVAL = toString cfg.collectionInterval;
+        DNSMASQ_LEASE_FILES = "/var/lib/dnsmasq/homelab/dhcp.leases /var/lib/dnsmasq/lan/dhcp.leases";
+        ROUTER_CONFIG_FILE = "/etc/nixos/router-config.nix";
+        JWT_SECRET_FILE = "/var/lib/router-webui/jwt-secret";
+        DOCUMENTATION_DIR = "/var/lib/router-webui/docs";
+        NFT_BIN = "${pkgs.nftables}/bin/nft";
+        IP_BIN = "${pkgs.iproute2}/bin/ip";
+        TC_BIN = "${pkgs.iproute2}/bin/tc";
+        CONNTRACK_BIN = "${pkgs.conntrack-tools}/bin/conntrack";
+        FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
+        SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
+        SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
+        NMAP_BIN = "${pkgs.nmap}/bin/nmap";
+      };
+
+      serviceConfig = {
+        Type = "simple";
+        User = "router-webui";
+        Group = "router-webui";
+        WorkingDirectory = "${inputs.router-webui}";
+        ExecStart = "${pythonEnv}/bin/python -m celery -A backend.celery_app worker --loglevel=info --concurrency=1 --queues=sequential --hostname=sequential@%h";
+        Restart = "always";
+        RestartSec = "10s";
+
+        Environment = [
+          "DEBUG=${if cfg.debug then "true" else "false"}"
+          "PATH=/run/wrappers/bin:/run/current-system/sw/bin:/usr/bin:/bin"
+        ];
+
+        PrivateTmp = true;
+        ProtectHome = true;
+        ReadWritePaths = [ "/var/lib/router-webui" "/run" ];
+        ReadOnlyPaths = [
+          "/var/lib/dnsmasq"
+          "/proc"
+          "/sys"
+          "/usr"
+          "/boot"
+        ];
+
+        CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_SYS_PTRACE" "CAP_DAC_READ_SEARCH" ];
+        AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_SYS_PTRACE" "CAP_DAC_READ_SEARCH" ];
+      };
+    };
     
     # Celery Beat service for periodic task scheduling
     systemd.services.router-webui-celery-beat = {
       description = "Router WebUI Celery Beat Scheduler";
-      after = [ "network.target" "postgresql.service" "redis.service" "router-webui-celery-worker.service" ];
-      wants = [ "postgresql.service" "redis.service" "router-webui-celery-worker.service" ];
+      after = [ "network.target" "postgresql.service" "redis.service" "router-webui-celery-parallel.service" ];
+      wants = [ "postgresql.service" "redis.service" "router-webui-celery-parallel.service" ];
       requires = [ "router-webui-initdb.service" ];
       wantedBy = [ "multi-user.target" ];
       
