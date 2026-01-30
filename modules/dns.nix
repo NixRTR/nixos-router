@@ -321,7 +321,7 @@ in
           conf-file=/var/lib/dnsmasq/homelab/webui-dns.conf
           ${if homelabDhcpEnabled then "conf-file=/var/lib/dnsmasq/homelab/webui-dhcp.conf" else ""}
           
-          # DHCP Configuration
+          # DHCP Configuration (static reservations come from webui-dhcp.conf only to avoid duplicate "multiple names" errors)
           ${if homelabDhcpEnabled then ''
             dhcp-range=${homelabBridge},${homelabCfg.dhcp.start},${homelabCfg.dhcp.end},${homelabCfg.dhcp.leaseTime}
             dhcp-option=${homelabBridge},3,${homelabCfg.ipAddress}
@@ -329,9 +329,6 @@ in
             dhcp-option=${homelabBridge},15,${extractDomain (homelabDns.a_records or {})}
             dhcp-authoritative
             dhcp-leasefile=/var/lib/dnsmasq/homelab/dhcp.leases
-            ${concatStringsSep "\n" (map (res: 
-              "dhcp-host=${res.hwAddress},${res.hostname},${res.ipAddress}  # Static reservation"
-            ) (homelabCfg.dhcp.reservations or []))}
           '' else ""}
           
           # Performance optimizations
@@ -539,7 +536,7 @@ in
           conf-file=/var/lib/dnsmasq/lan/webui-dns.conf
           ${if lanDhcpEnabled then "conf-file=/var/lib/dnsmasq/lan/webui-dhcp.conf" else ""}
           
-          # DHCP Configuration
+          # DHCP Configuration (static reservations come from webui-dhcp.conf only to avoid duplicate "multiple names" errors)
           ${if lanDhcpEnabled then ''
             dhcp-range=${lanBridge},${lanCfg.dhcp.start},${lanCfg.dhcp.end},${lanCfg.dhcp.leaseTime}
             dhcp-option=${lanBridge},3,${lanCfg.ipAddress}
@@ -547,9 +544,6 @@ in
             dhcp-option=${lanBridge},15,${extractDomain (lanDns.a_records or {})}
             dhcp-authoritative
             dhcp-leasefile=/var/lib/dnsmasq/lan/dhcp.leases
-            ${concatStringsSep "\n" (map (res: 
-              "dhcp-host=${res.hwAddress},${res.hostname},${res.ipAddress}  # Static reservation"
-            ) (lanCfg.dhcp.reservations or []))}
           '' else ""}
           
           # Performance optimizations
