@@ -13,8 +13,5 @@
   # If no hostname provided, uses: "dhcp-<last-octet>.dhcp.homelab.local"
   dynamicDomain = "dhcp.homelab.local";  # Set to "" to disable dynamic DNS
   
-  reservations = [
-    # Example: { hostname = "desktop"; hwAddress = "11:22:33:44:55:66"; ipAddress = "192.168.3.50"; }
-    # Example: { hostname = "laptop"; hwAddress = "aa:bb:cc:dd:ee:ff"; ipAddress = "192.168.3.51"; }
-  ];
+  reservations = import ./dhcp-reservations-homelab.nix;
 }

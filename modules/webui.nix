@@ -794,7 +794,7 @@ in
             fi
             CONFIG_FILE="/var/lib/dnsmasq/$NETWORK/webui-''${COMMAND#write-}.conf"
             ;;
-          write-nix-dns|write-nix-dhcp)
+          write-nix-dns|write-nix-dhcp|write-nix-dhcp-reservations)
             NETWORK=$1
             if [ -z "$NETWORK" ] || [ "$NETWORK" != "homelab" ] && [ "$NETWORK" != "lan" ]; then
               echo "Invalid network: $NETWORK" >&2
@@ -803,6 +803,8 @@ in
             # Determine Nix file path
             if [ "$COMMAND" = "write-nix-dns" ]; then
               CONFIG_FILE="/etc/nixos/config/dnsmasq/dns-$NETWORK.nix"
+            elif [ "$COMMAND" = "write-nix-dhcp-reservations" ]; then
+              CONFIG_FILE="/etc/nixos/config/dnsmasq/dhcp-reservations-$NETWORK.nix"
             else
               CONFIG_FILE="/etc/nixos/config/dnsmasq/dhcp-$NETWORK.nix"
             fi
