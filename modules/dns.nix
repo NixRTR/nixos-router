@@ -717,8 +717,7 @@ in
           description = "Update dnsmasq Dynamic DNS for HOMELAB";
           serviceConfig = {
             Type = "oneshot";
-            User = "dnsmasq";
-            Group = "dnsmasq";
+            # Run as root so systemctl reload-or-restart can run; chown output file to dnsmasq
           };
           script = ''
             echo "Updating dynamic DNS for HOMELAB..."
@@ -759,7 +758,7 @@ in
                   }
                 ' /var/lib/dnsmasq/homelab/dhcp.leases > /var/lib/dnsmasq/homelab/dynamic-dns.conf
                 
-                # Reload dnsmasq
+                chown dnsmasq:dnsmasq /var/lib/dnsmasq/homelab/dynamic-dns.conf
                 systemctl reload-or-restart dnsmasq-homelab || true
                 
                 DYNAMIC_COUNT=$(wc -l < /var/lib/dnsmasq/homelab/dynamic-dns.conf)
@@ -775,8 +774,7 @@ in
           description = "Update dnsmasq Dynamic DNS for LAN";
           serviceConfig = {
             Type = "oneshot";
-            User = "dnsmasq";
-            Group = "dnsmasq";
+            # Run as root so systemctl reload-or-restart can run; chown output file to dnsmasq
           };
           script = ''
             echo "Updating dynamic DNS for LAN..."
@@ -817,7 +815,7 @@ in
                   }
                 ' /var/lib/dnsmasq/lan/dhcp.leases > /var/lib/dnsmasq/lan/dynamic-dns.conf
                 
-                # Reload dnsmasq
+                chown dnsmasq:dnsmasq /var/lib/dnsmasq/lan/dynamic-dns.conf
                 systemctl reload-or-restart dnsmasq-lan || true
                 
                 DYNAMIC_COUNT=$(wc -l < /var/lib/dnsmasq/lan/dynamic-dns.conf)
