@@ -121,6 +121,12 @@ in
       default = false;
       description = "Enable debug mode (verbose logging, auto-reload, etc.)";
     };
+
+    aggregationCpuQuota = mkOption {
+      type = types.str;
+      default = "50%";
+      description = "Systemd CPUQuota for the aggregation Celery worker (percentage of one CPU core). Recommended: 4+ cores → 50%, 2–3 cores → 25%, 1 core → 15%.";
+    };
   };
   
   config = mkIf cfg.enable {
@@ -163,7 +169,7 @@ in
     users.users.router-webui = {
       isSystemUser = true;
       group = "router-webui";
-      extraGroups = [ "shadow" "dnsmasq" ];  # shadow for PAM auth, dnsmasq for DHCP leases
+      extraGroups = [ "shadow" "dnsmasq" "systemd-journal" ];  # shadow for PAM auth, dnsmasq for DHCP leases, systemd-journal for logs API
       description = "Router WebUI service user";
     };
     
@@ -489,6 +495,64 @@ in
         AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_SYS_PTRACE" "CAP_DAC_READ_SEARCH" ];
       };
     };
+
+    # Celery worker for aggregation (dedicated queue, CPU-throttled)
+    systemd.services.router-webui-celery-aggregation = {
+      description = "Router WebUI Celery Worker (Aggregation)";
+      after = [ "network.target" "postgresql.service" "redis.service" "router-webui-initdb.service" ];
+      wants = [ "postgresql.service" "redis.service" ];
+      requires = [ "router-webui-initdb.service" ];
+      wantedBy = [ "multi-user.target" ];
+
+      environment = {
+        DATABASE_URL = "postgresql+asyncpg://${cfg.database.user}@${cfg.database.host}:${toString cfg.database.port}/${cfg.database.name}";
+        PYTHONPATH = "${inputs.router-webui}";
+        COLLECTION_INTERVAL = toString cfg.collectionInterval;
+        DNSMASQ_LEASE_FILES = "/var/lib/dnsmasq/homelab/dhcp.leases /var/lib/dnsmasq/lan/dhcp.leases";
+        ROUTER_CONFIG_FILE = "/etc/nixos/router-config.nix";
+        JWT_SECRET_FILE = "/var/lib/router-webui/jwt-secret";
+        DOCUMENTATION_DIR = "/var/lib/router-webui/docs";
+        TZ = config.time.timeZone;
+        NFT_BIN = "${pkgs.nftables}/bin/nft";
+        IP_BIN = "${pkgs.iproute2}/bin/ip";
+        TC_BIN = "${pkgs.iproute2}/bin/tc";
+        CONNTRACK_BIN = "${pkgs.conntrack-tools}/bin/conntrack";
+        FASTFETCH_BIN = "${pkgs.fastfetch}/bin/fastfetch";
+        SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
+        SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
+        NMAP_BIN = "${pkgs.nmap}/bin/nmap";
+      };
+
+      serviceConfig = {
+        Type = "simple";
+        User = "router-webui";
+        Group = "router-webui";
+        WorkingDirectory = "${inputs.router-webui}";
+        ExecStart = "${pythonEnv}/bin/python -m celery -A backend.celery_app worker --loglevel=info --concurrency=1 --queues=aggregation --hostname=aggregation@%h";
+        Restart = "always";
+        RestartSec = "10s";
+        CPUQuota = cfg.aggregationCpuQuota;
+
+        Environment = [
+          "DEBUG=${if cfg.debug then "true" else "false"}"
+          "PATH=/run/wrappers/bin:/run/current-system/sw/bin:/usr/bin:/bin"
+        ];
+
+        PrivateTmp = true;
+        ProtectHome = true;
+        ReadWritePaths = [ "/var/lib/router-webui" "/run" ];
+        ReadOnlyPaths = [
+          "/var/lib/dnsmasq"
+          "/proc"
+          "/sys"
+          "/usr"
+          "/boot"
+        ];
+
+        CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_SYS_PTRACE" "CAP_DAC_READ_SEARCH" ];
+        AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_SYS_PTRACE" "CAP_DAC_READ_SEARCH" ];
+      };
+    };
     
     # Celery Beat service for periodic task scheduling
     systemd.services.router-webui-celery-beat = {
@@ -506,6 +570,7 @@ in
         ROUTER_CONFIG_FILE = "/etc/nixos/router-config.nix";
         JWT_SECRET_FILE = "/var/lib/router-webui/jwt-secret";
         DOCUMENTATION_DIR = "/var/lib/router-webui/docs";
+        TZ = config.time.timeZone;
         # Provide absolute binary paths for commands used by backend
         NFT_BIN = "${pkgs.nftables}/bin/nft";
         IP_BIN = "${pkgs.iproute2}/bin/ip";
