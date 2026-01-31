@@ -47,26 +47,24 @@ This directory contains modular components of the NixOS router configuration. Ea
 
 ### `webui.nix` **NEW!**
 **Modern Web Dashboard (FastAPI + React)**
-- Real-time monitoring via WebSockets (2-second updates)
-- PostgreSQL database for 30 days of historical data
+- Real-time monitoring via WebSockets
+- PostgreSQL database for historical data and configuration (DNS, DHCP, Apprise, notifications)
+- Celery + Redis for background tasks (aggregation, notifications, port scanner, history cleanup)
 - System user authentication (PAM + JWT)
-- Beautiful Flowbite React interface
+- Flowbite React interface
 
 **What it does:**
-- Provides modern web-based monitoring at http://router-ip:8080
-- Displays system metrics (CPU, memory, load, uptime)
-- Shows live bandwidth per interface (WAN, HOMELAB, LAN)
-- Lists DHCP clients with search and filter
-- Monitors service status (dnsmasq DNS/DHCP, PPPoE)
-- Stores historical metrics for trend analysis
+- Provides web-based monitoring and configuration management at http://router-ip:8080
+- **Monitoring:** System metrics (CPU, memory, load, uptime), live bandwidth per interface (WAN, HOMELAB, LAN), DHCP client list, service status (dnsmasq DNS/DHCP, PPPoE), device usage, speedtest, logs
+- **Configuration management:** DHCP (networks, static reservations), DNS (zones, records), CAKE traffic shaping, Apprise services, Dynamic DNS, port forwarding, blocklists and whitelist
+- Stores historical metrics for trend analysis; automatic database cleanup (configurable retention)
 - Mobile-responsive design with dark mode support
 
 **Key features:**
-- FastAPI backend with Python data collectors
+- FastAPI backend with Python data collectors; Celery workers and Redis for background jobs and caching
 - React + TypeScript frontend with Flowbite components
 - WebSocket-based real-time updates
-- PostgreSQL time-series storage
-- Automatic database cleanup (30-day retention)
+- PostgreSQL with automatic migrations
 
 See `../webui/README.md` for full documentation.
 

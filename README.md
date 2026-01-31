@@ -66,12 +66,12 @@ Edit `router-config.nix` to configure:
 
 Access at `http://router-ip:8080`
 
-Shows:
+The WebUI provides monitoring and configuration management:
 
-- System metrics (CPU, memory, load)
-- Network interface statistics
-- Device usage and bandwidth
-- Service status
+- **Monitoring:** System metrics (CPU, memory, load), network interface statistics, device usage and bandwidth, service status, speedtest, logs
+- **Configuration:** DHCP (networks, reservations), DNS (zones, records), CAKE traffic shaping, Apprise notifications, Dynamic DNS, port forwarding, blocklists and whitelist
+
+Documentation is available in the WebUI at `http://router-ip:8080/documentation` (opens the docs site) and at [GitHub Pages](https://NixRTR.github.io/docs/).
 
 ## Project Structure
 

@@ -301,12 +301,14 @@ rm -rf result
 
 ## 📚 Additional Documentation
 
-For router configuration and usage:
+Documentation is published at [https://NixRTR.github.io/docs/](https://NixRTR.github.io/docs/). For router configuration and usage:
 
 - **[Main README](../README.md)** - Project overview
-- **[Installation Guide](../docs/installation.md)** - Detailed installation steps
-- **[Configuration Guide](../docs/configuration.md)** - Router configuration options
-- **[Troubleshooting](../docs/troubleshooting.md)** - Common issues
+- **[Installation](https://NixRTR.github.io/docs/installation)** - Installation options and steps
+- **[Installation (NixOS Router)](https://NixRTR.github.io/docs/installation/nixos-router)** - NixOS Router installation
+- **[Configuration](https://NixRTR.github.io/docs/configuration)** - Router configuration options
+- **[Verification](https://NixRTR.github.io/docs/verification)** - Verify setup and troubleshoot
+- **[Upgrading](https://NixRTR.github.io/docs/upgrading)** - Upgrade the router
 
 ## 🤝 Contributing
 
