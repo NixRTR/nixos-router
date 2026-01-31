@@ -125,11 +125,20 @@ in
     aggregationCpuQuota = mkOption {
       type = types.str;
       default = "50%";
-      description = "Systemd CPUQuota for the aggregation Celery worker (percentage of one CPU core). Recommended: 4+ cores → 50%, 2–3 cores → 25%, 1 core → 15%.";
+      description = "Systemd CPUQuota for the aggregation Celery worker (percentage of one CPU core). Recommended: 4+ cores → 50%, 2–3 cores → 25%, 1 core → 15%. When Postgres is also throttled (postgresqlCpuQuota), aggregation will take longer but both DB and worker are capped so core router functions stay responsive.";
+    };
+
+    postgresqlCpuQuota = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Optional systemd CPUQuota for PostgreSQL (e.g. \"100%\" = one core max). Limits DB CPU during aggregation so core router functions stay responsive. Increase if frontend feels slow and you rely on Redis cache.";
     };
   };
   
   config = mkIf cfg.enable {
+    # Optional PostgreSQL CPU limit (when set, aggregation won't starve core router)
+    systemd.services.postgresql.serviceConfig.CPUQuota = mkIf (cfg.postgresqlCpuQuota != null) cfg.postgresqlCpuQuota;
+
     # Enable PostgreSQL
     services.postgresql = {
       enable = true;

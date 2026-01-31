@@ -22,6 +22,10 @@
   # Older data is automatically cleaned up
   retentionDays = 30;
 
+  # Limit PostgreSQL CPU so aggregation doesn't starve core router functions.
+  # 100% = one core max; increase if frontend feels slow and you rely on Redis cache.
+  postgresqlCpuQuota = "100%";
+
   # Access control
   # The WebUI uses system user authentication (PAM)
   # Any user with a valid system account can login
