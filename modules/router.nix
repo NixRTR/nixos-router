@@ -290,13 +290,13 @@ in {
       };
       allowedTCPPorts = mkOption {
         type = types.listOf types.port;
-        default = [ 22 80 443 ];
-        description = "TCP ports open on the LAN interface.";
+        default = [ 80 443 ];
+        description = "TCP ports open on untrusted interfaces (e.g. WAN). Do not add SSH (22); it is only reachable from trusted LAN interfaces.";
       };
       allowedUDPPorts = mkOption {
         type = types.listOf types.port;
-        default = [ 53 67 68 ];
-        description = "UDP ports open on the LAN interface.";
+        default = [ ];
+        description = "UDP ports open on untrusted interfaces (e.g. WAN). Do not add DNS (53) or DHCP (67/68); they are opened only on LAN interfaces by the DNS module.";
       };
     };
 
@@ -426,7 +426,9 @@ in {
       networking.firewall = {
         enable = true;
         allowPing = firewallCfg.allowPing;
-        trustedInterfaces = bridgeNames;  # Trust all LAN bridges for WAN access
+        trustedInterfaces = bridgeNames;  # Trust all LAN bridges; SSH/DNS/DHCP only from LAN
+        allowedTCPPorts = firewallCfg.allowedTCPPorts;
+        allowedUDPPorts = firewallCfg.allowedUDPPorts;
         
         # Block traffic between bridges if isolation is enabled
         extraCommands = mkIf (lanIsolation && (length bridges) > 1) (
