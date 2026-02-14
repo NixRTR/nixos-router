@@ -1,4 +1,7 @@
 {
+  # Domain hosting mode: false = fully hosted (local only), true = partially hosted (forward unlisted to upstream)
+  forward_unlisted = false;
+
   a_records = {
     "jeandr.net" = {
       ip = "192.168.2.33";

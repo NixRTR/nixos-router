@@ -295,7 +295,8 @@ in
           ${if homelabPrimaryDomain != "local" then ''
             domain=${homelabPrimaryDomain}
             # Only use local= if we don't have wildcards (address= handles wildcards and local resolution)
-            ${if homelabWildcards == [] then "local=/${homelabPrimaryDomain}/" else ""}
+            # AND if forward_unlisted is false (fully hosted mode)
+            ${if homelabWildcards == [] && !(homelabDns.forward_unlisted or false) then "local=/${homelabPrimaryDomain}/" else ""}
           '' else ""}
           
           # Wildcard domains (from CNAME records)
@@ -350,7 +351,7 @@ in
           # WebUI-managed DNS configuration
           # Generated automatically from router-config.nix - do not edit manually
           
-          ${if homelabPrimaryDomain != "local" && homelabWildcards == [] then ''
+          ${if homelabPrimaryDomain != "local" && homelabWildcards == [] && !(homelabDns.forward_unlisted or false) then ''
             local=/${homelabPrimaryDomain}/
           '' else ""}
           ${concatStringsSep "\n" (map (wildcard: 
@@ -510,7 +511,8 @@ in
           ${if lanPrimaryDomain != "local" then ''
             domain=${lanPrimaryDomain}
             # Only use local= if we don't have wildcards (address= handles wildcards and local resolution)
-            ${if lanWildcards == [] then "local=/${lanPrimaryDomain}/" else ""}
+            # AND if forward_unlisted is false (fully hosted mode)
+            ${if lanWildcards == [] && !(lanDns.forward_unlisted or false) then "local=/${lanPrimaryDomain}/" else ""}
           '' else ""}
           
           # Wildcard domains (from CNAME records)
@@ -565,7 +567,7 @@ in
           # WebUI-managed DNS configuration
           # Generated automatically from router-config.nix - do not edit manually
           
-          ${if lanPrimaryDomain != "local" && lanWildcards == [] then ''
+          ${if lanPrimaryDomain != "local" && lanWildcards == [] && !(lanDns.forward_unlisted or false) then ''
             local=/${lanPrimaryDomain}/
           '' else ""}
           ${concatStringsSep "\n" (map (wildcard: 
