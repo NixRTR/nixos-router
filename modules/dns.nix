@@ -295,8 +295,8 @@ in
             "9.9.9.9"
           ])}
           
-          # Local domain
-          ${if homelabPrimaryDomain != "local" then ''
+          # Local domain (only set domain= in fully hosted mode)
+          ${if homelabPrimaryDomain != "local" && !homelabForwardUnlisted then ''
             domain=${homelabPrimaryDomain}
           '' else ""}
           # Only use local= if we don't have wildcards (address= handles wildcards and local resolution)
@@ -509,8 +509,8 @@ in
             "9.9.9.9"
           ])}
           
-          # Local domain
-          ${if lanPrimaryDomain != "local" then ''
+          # Local domain (only set domain= in fully hosted mode)
+          ${if lanPrimaryDomain != "local" && !lanForwardUnlisted then ''
             domain=${lanPrimaryDomain}
           '' else ""}
           # Only use local= if we don't have wildcards (address= handles wildcards and local resolution)
