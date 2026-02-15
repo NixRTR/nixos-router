@@ -13,6 +13,10 @@ let
   homelabDns = homelabCfg.dns or {};
   lanDns = lanCfg.dns or {};
   
+  # Get forward_unlisted settings (default to false for backward compatibility)
+  homelabForwardUnlisted = homelabDns.forward_unlisted or false;
+  lanForwardUnlisted = lanDns.forward_unlisted or false;
+  
   # Check if DNS is enabled for each network (defaults to true for backward compatibility)
   homelabDnsEnabled = (routerConfig.dns.enable or true) && (homelabDns.enable or true);
   lanDnsEnabled = (routerConfig.dns.enable or true) && (lanDns.enable or true);
@@ -297,7 +301,7 @@ in
           '' else ""}
           # Only use local= if we don't have wildcards (address= handles wildcards and local resolution)
           # AND if forward_unlisted is false (fully hosted mode)
-          ${if homelabPrimaryDomain != "local" && homelabWildcards == [] && !(homelabDns.forward_unlisted or false) then "local=/${homelabPrimaryDomain}/" else ""}
+          ${if homelabPrimaryDomain != "local" && homelabWildcards == [] && !homelabForwardUnlisted then "local=/${homelabPrimaryDomain}/" else ""}
           
           # Wildcard domains (from CNAME records)
           # address=/domain/IP makes all subdomains resolve to that IP
@@ -351,7 +355,7 @@ in
           # WebUI-managed DNS configuration
           # Generated automatically from router-config.nix - do not edit manually
           
-          ${if homelabPrimaryDomain != "local" && homelabWildcards == [] && !(homelabDns.forward_unlisted or false) then "local=/${homelabPrimaryDomain}/" else ""}
+          ${if homelabPrimaryDomain != "local" && homelabWildcards == [] && !homelabForwardUnlisted then "local=/${homelabPrimaryDomain}/" else ""}
           ${concatStringsSep "\n" (map (wildcard: 
             "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
           ) homelabWildcards)}
@@ -511,7 +515,7 @@ in
           '' else ""}
           # Only use local= if we don't have wildcards (address= handles wildcards and local resolution)
           # AND if forward_unlisted is false (fully hosted mode)
-          ${if lanPrimaryDomain != "local" && lanWildcards == [] && !(lanDns.forward_unlisted or false) then "local=/${lanPrimaryDomain}/" else ""}
+          ${if lanPrimaryDomain != "local" && lanWildcards == [] && !lanForwardUnlisted then "local=/${lanPrimaryDomain}/" else ""}
           
           # Wildcard domains (from CNAME records)
           # address=/domain/IP makes all subdomains resolve to that IP
@@ -565,7 +569,7 @@ in
           # WebUI-managed DNS configuration
           # Generated automatically from router-config.nix - do not edit manually
           
-          ${if lanPrimaryDomain != "local" && lanWildcards == [] && !(lanDns.forward_unlisted or false) then "local=/${lanPrimaryDomain}/" else ""}
+          ${if lanPrimaryDomain != "local" && lanWildcards == [] && !lanForwardUnlisted then "local=/${lanPrimaryDomain}/" else ""}
           ${concatStringsSep "\n" (map (wildcard: 
             "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
           ) lanWildcards)}
