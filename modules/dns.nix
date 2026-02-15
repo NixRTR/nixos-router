@@ -14,8 +14,8 @@ let
   lanDns = lanCfg.dns or {};
   
   # Get forward_unlisted settings (default to false for backward compatibility)
-  homelabForwardUnlisted = homelabDns.forward_unlisted or false;
-  lanForwardUnlisted = lanDns.forward_unlisted or false;
+  homelabForwardUnlisted = false; # homelabDns.forward_unlisted or false;
+  lanForwardUnlisted = false; # lanDns.forward_unlisted or false;
   
   # Check if DNS is enabled for each network (defaults to true for backward compatibility)
   homelabDnsEnabled = (routerConfig.dns.enable or true) && (homelabDns.enable or true);
