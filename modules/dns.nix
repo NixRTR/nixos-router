@@ -294,10 +294,10 @@ in
           # Local domain
           ${if homelabPrimaryDomain != "local" then ''
             domain=${homelabPrimaryDomain}
-            # Only use local= if we don't have wildcards (address= handles wildcards and local resolution)
-            # AND if forward_unlisted is false (fully hosted mode)
-            ${if homelabWildcards == [] && !(homelabDns.forward_unlisted or false) then "local=/${homelabPrimaryDomain}/" else ""}
           '' else ""}
+          # Only use local= if we don't have wildcards (address= handles wildcards and local resolution)
+          # AND if forward_unlisted is false (fully hosted mode)
+          ${if homelabPrimaryDomain != "local" && homelabWildcards == [] && !(homelabDns.forward_unlisted or false) then "local=/${homelabPrimaryDomain}/" else ""}
           
           # Wildcard domains (from CNAME records)
           # address=/domain/IP makes all subdomains resolve to that IP
@@ -510,10 +510,10 @@ in
           # Local domain
           ${if lanPrimaryDomain != "local" then ''
             domain=${lanPrimaryDomain}
-            # Only use local= if we don't have wildcards (address= handles wildcards and local resolution)
-            # AND if forward_unlisted is false (fully hosted mode)
-            ${if lanWildcards == [] && !(lanDns.forward_unlisted or false) then "local=/${lanPrimaryDomain}/" else ""}
           '' else ""}
+          # Only use local= if we don't have wildcards (address= handles wildcards and local resolution)
+          # AND if forward_unlisted is false (fully hosted mode)
+          ${if lanPrimaryDomain != "local" && lanWildcards == [] && !(lanDns.forward_unlisted or false) then "local=/${lanPrimaryDomain}/" else ""}
           
           # Wildcard domains (from CNAME records)
           # address=/domain/IP makes all subdomains resolve to that IP
