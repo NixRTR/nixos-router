@@ -351,9 +351,7 @@ in
           # WebUI-managed DNS configuration
           # Generated automatically from router-config.nix - do not edit manually
           
-          ${if homelabPrimaryDomain != "local" && homelabWildcards == [] && !(homelabDns.forward_unlisted or false) then ''
-            local=/${homelabPrimaryDomain}/
-          '' else ""}
+          ${if homelabPrimaryDomain != "local" && homelabWildcards == [] && !(homelabDns.forward_unlisted or false) then "local=/${homelabPrimaryDomain}/" else ""}
           ${concatStringsSep "\n" (map (wildcard: 
             "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
           ) homelabWildcards)}
@@ -567,9 +565,7 @@ in
           # WebUI-managed DNS configuration
           # Generated automatically from router-config.nix - do not edit manually
           
-          ${if lanPrimaryDomain != "local" && lanWildcards == [] && !(lanDns.forward_unlisted or false) then ''
-            local=/${lanPrimaryDomain}/
-          '' else ""}
+          ${if lanPrimaryDomain != "local" && lanWildcards == [] && !(lanDns.forward_unlisted or false) then "local=/${lanPrimaryDomain}/" else ""}
           ${concatStringsSep "\n" (map (wildcard: 
             "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
           ) lanWildcards)}
