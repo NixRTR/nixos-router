@@ -14,8 +14,8 @@ let
   lanDns = lanCfg.dns or {};
   
   # Get forward_unlisted settings (default to false for backward compatibility)
-  homelabForwardUnlisted = false; # homelabDns.forward_unlisted or false;
-  lanForwardUnlisted = false; # lanDns.forward_unlisted or false;
+  homelabForwardUnlisted = homelabDns.forward_unlisted or false;
+  lanForwardUnlisted = lanDns.forward_unlisted or false;
   
   # Check if DNS is enabled for each network (defaults to true for backward compatibility)
   homelabDnsEnabled = (routerConfig.dns.enable or true) && (homelabDns.enable or true);
@@ -307,12 +307,12 @@ in
           # address=/domain/IP makes all subdomains resolve to that IP
           # This also marks the domain as local, so we don't need local= when wildcards exist
           ${concatStringsSep "\n" (map (wildcard: 
-            "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
+            "address=/${wildcard.domain}/${wildcard.ip}${if (wildcard.comment or "") != "" && wildcard.comment != null then "  # ${wildcard.comment}" else ""}"
           ) homelabWildcards)}
           
           # Specific host records (override wildcards)
           ${concatStringsSep "\n" (map (record: 
-            "host-record=${record.hostname},${record.ip}  # ${record.comment or ""}"
+            "host-record=${record.hostname},${record.ip}${if (record.comment or "") != "" && record.comment != null then "  # ${record.comment}" else ""}"
           ) homelabAllHostRecords)}
           
           # Whitelist - domains that should never be blocked
@@ -357,10 +357,10 @@ in
           
           ${if homelabPrimaryDomain != "local" && homelabWildcards == [] && !homelabForwardUnlisted then "local=/${homelabPrimaryDomain}/" else ""}
           ${concatStringsSep "\n" (map (wildcard: 
-            "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
+            "address=/${wildcard.domain}/${wildcard.ip}${if (wildcard.comment or "") != "" && wildcard.comment != null then "  # ${wildcard.comment}" else ""}"
           ) homelabWildcards)}
           ${concatStringsSep "\n" (map (record: 
-            "host-record=${record.hostname},${record.ip}  # ${record.comment or ""}"
+            "host-record=${record.hostname},${record.ip}${if (record.comment or "") != "" && record.comment != null then "  # ${record.comment}" else ""}"
           ) homelabAllHostRecords)}
           WEBUI_DNS_EOF
           fi
@@ -521,12 +521,12 @@ in
           # address=/domain/IP makes all subdomains resolve to that IP
           # This also marks the domain as local, so we don't need local= when wildcards exist
           ${concatStringsSep "\n" (map (wildcard: 
-            "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
+            "address=/${wildcard.domain}/${wildcard.ip}${if (wildcard.comment or "") != "" && wildcard.comment != null then "  # ${wildcard.comment}" else ""}"
           ) lanWildcards)}
           
           # Specific host records (override wildcards)
           ${concatStringsSep "\n" (map (record: 
-            "host-record=${record.hostname},${record.ip}  # ${record.comment or ""}"
+            "host-record=${record.hostname},${record.ip}${if (record.comment or "") != "" && record.comment != null then "  # ${record.comment}" else ""}"
           ) lanAllHostRecords)}
           
           # Whitelist - domains that should never be blocked
@@ -571,10 +571,10 @@ in
           
           ${if lanPrimaryDomain != "local" && lanWildcards == [] && !lanForwardUnlisted then "local=/${lanPrimaryDomain}/" else ""}
           ${concatStringsSep "\n" (map (wildcard: 
-            "address=/${wildcard.domain}/${wildcard.ip}  # ${wildcard.comment or ""}"
+            "address=/${wildcard.domain}/${wildcard.ip}${if (wildcard.comment or "") != "" && wildcard.comment != null then "  # ${wildcard.comment}" else ""}"
           ) lanWildcards)}
           ${concatStringsSep "\n" (map (record: 
-            "host-record=${record.hostname},${record.ip}  # ${record.comment or ""}"
+            "host-record=${record.hostname},${record.ip}${if (record.comment or "") != "" && record.comment != null then "  # ${record.comment}" else ""}"
           ) lanAllHostRecords)}
           WEBUI_DNS_EOF
           fi
