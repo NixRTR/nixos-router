@@ -114,9 +114,11 @@ in
       };
     
     # Firewall port allowances
+    # Note: Port forwards (80, 443, 22000, 4242) do NOT need to be opened here
+    # They are handled by NAT forwarding rules and should NOT be accessible on the router itself
     firewall = {
-      allowedTCPPorts = [ 80 443 22000 4242 ];
-      allowedUDPPorts = [ 80 443 22000 4242 ];
+      allowedTCPPorts = [ ];
+      allowedUDPPorts = [ ];
     };
     
     # Port forwarding rules (from router-config.nix)

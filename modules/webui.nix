@@ -751,7 +751,11 @@ in
     };
     
     # Firewall configuration (nginx port, not backend port)
-    networking.firewall.allowedTCPPorts = [ cfg.port ];
+    # Only allow access from internal interfaces (homelab and LAN), not WAN
+    networking.firewall.interfaces = {
+      br0.allowedTCPPorts = [ cfg.port ];  # Homelab
+      br1.allowedTCPPorts = [ cfg.port ];  # LAN
+    };
     
     # Ensure nginx can read static files
     users.users.nginx.extraGroups = [ "router-webui" ];
