@@ -130,8 +130,8 @@ in
 
   # Fonts for WebUI (System Info rendering)
   fonts = {
-    enableDefaultFonts = true;
-    fonts = with pkgs; [
+    enableDefaultPackages = true;
+    packages = with pkgs; [
       dejavu_fonts  # Monospace font for terminal output rendering
     ];
   };
@@ -169,7 +169,12 @@ in
   };
 
   # Enable SSH for remote administration
-  services.openssh.enable = true;
+  services.openssh = {
+    enable = true;
+    settings = {
+      PermitRootLogin = "no";
+    };
+  };
 
   # NixOS version (don't change unless you know what you're doing)
   system.stateVersion = "25.11";
