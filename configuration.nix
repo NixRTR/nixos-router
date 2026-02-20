@@ -47,6 +47,16 @@ in
   # Enable Nix flakes and modern command syntax
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
+  # Automatic garbage collection - runs daily and keeps only the past 2 generations
+  nix.gc = {
+    automatic = true;
+    dates = "daily";
+    options = "--delete-older-than 2d";
+  };
+
+  # Limit boot menu to 2 generations
+  boot.loader.systemd-boot.configurationLimit = 2;
+
   # Bootloader configuration
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
