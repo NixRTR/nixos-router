@@ -133,9 +133,75 @@ in
       default = null;
       description = "Optional systemd CPUQuota for PostgreSQL (e.g. \"100%\" = one core max). Limits DB CPU during aggregation so core router functions stay responsive. Increase if frontend feels slow and you rely on Redis cache.";
     };
+
+    metricsRetentionDays = mkOption {
+      type = types.int;
+      default = 30;
+      description = "Delete router time-series metrics (system, interfaces, disk I/O, temperature, services, CAKE, speedtest) older than this many days.";
+    };
+
+    bandwidthStatsRetentionDays = mkOption {
+      type = types.int;
+      default = 180;
+      description = "Maximum age in days for client bandwidth and connection stats after tiered aggregation.";
+    };
+
+    bandwidthAggregateRawAfterDays = mkOption {
+      type = types.int;
+      default = 2;
+      description = "Aggregate raw bandwidth/connection stats to 1m after data is this many days old.";
+    };
+
+    bandwidthAggregate1mAfterDays = mkOption {
+      type = types.int;
+      default = 7;
+      description = "Aggregate 1m stats to 5m after data is this many days old.";
+    };
+
+    bandwidthAggregate5mAfterDays = mkOption {
+      type = types.int;
+      default = 30;
+      description = "Aggregate 5m stats to 1h after data is this many days old.";
+    };
+
+    bandwidthAggregate1hAfterDays = mkOption {
+      type = types.int;
+      default = 90;
+      description = "Aggregate 1h stats to 1d after data is this many days old.";
+    };
+
+    metricsMaxDatabaseGb = mkOption {
+      type = types.int;
+      default = 0;
+      description = "If greater than 0, after daily retention delete oldest bandwidth/connection rows (below metricsEmergencyMinRetentionDays floor) until database size is under this many GiB. Disabled when 0.";
+    };
+
+    metricsEmergencyMinRetentionDays = mkOption {
+      type = types.int;
+      default = 30;
+      description = "Emergency size trim never removes data newer than this many days (floor).";
+    };
+
+    metricsVacuumAnalyzeEnabled = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Schedule nightly VACUUM ANALYZE on metric tables (requires psql on the aggregation Celery worker PATH).";
+    };
   };
   
-  config = mkIf cfg.enable {
+  config = mkIf cfg.enable (let
+    routerWebuiRetentionEnv = {
+      METRICS_RETENTION_DAYS = toString cfg.metricsRetentionDays;
+      BANDWIDTH_STATS_RETENTION_DAYS = toString cfg.bandwidthStatsRetentionDays;
+      BANDWIDTH_AGGREGATE_RAW_AFTER_DAYS = toString cfg.bandwidthAggregateRawAfterDays;
+      BANDWIDTH_AGGREGATE_1M_AFTER_DAYS = toString cfg.bandwidthAggregate1mAfterDays;
+      BANDWIDTH_AGGREGATE_5M_AFTER_DAYS = toString cfg.bandwidthAggregate5mAfterDays;
+      BANDWIDTH_AGGREGATE_1H_AFTER_DAYS = toString cfg.bandwidthAggregate1hAfterDays;
+      METRICS_MAX_DATABASE_GB = toString cfg.metricsMaxDatabaseGb;
+      METRICS_EMERGENCY_MIN_RETENTION_DAYS = toString cfg.metricsEmergencyMinRetentionDays;
+      METRICS_VACUUM_ANALYZE_ENABLED = if cfg.metricsVacuumAnalyzeEnabled then "true" else "false";
+    };
+  in {
     # Optional PostgreSQL CPU limit (when set, aggregation won't starve core router)
     systemd.services.postgresql.serviceConfig.CPUQuota = mkIf (cfg.postgresqlCpuQuota != null) cfg.postgresqlCpuQuota;
 
@@ -147,6 +213,10 @@ in
         name = cfg.database.user;
         ensureDBOwnership = true;
       }];
+
+      settings = {
+        default_toast_compression = "lz4";
+      };
       
       # Allow local trust authentication for the router_webui user
       authentication = pkgs.lib.mkOverride 10 ''
@@ -350,7 +420,7 @@ in
         NMAP_BIN = "${pkgs.nmap}/bin/nmap";  # Port scanning for device discovery
         # Note: Don't set SUDO_BIN - use the wrapped sudo from /run/wrappers/bin/sudo
         # The store path sudo doesn't have setuid bit, but the wrapper does
-      };
+      } // routerWebuiRetentionEnv;
       
       serviceConfig = {
         Type = "simple";
@@ -414,7 +484,7 @@ in
         SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
         SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
         NMAP_BIN = "${pkgs.nmap}/bin/nmap";
-      };
+      } // routerWebuiRetentionEnv;
 
       serviceConfig = {
         Type = "simple";
@@ -473,7 +543,7 @@ in
         SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
         SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
         NMAP_BIN = "${pkgs.nmap}/bin/nmap";
-      };
+      } // routerWebuiRetentionEnv;
 
       serviceConfig = {
         Type = "simple";
@@ -530,7 +600,8 @@ in
         SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
         SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
         NMAP_BIN = "${pkgs.nmap}/bin/nmap";
-      };
+        PSQL_BIN = "${pkgs.postgresql}/bin/psql";
+      } // routerWebuiRetentionEnv;
 
       serviceConfig = {
         Type = "simple";
@@ -544,7 +615,7 @@ in
 
         Environment = [
           "DEBUG=${if cfg.debug then "true" else "false"}"
-          "PATH=/run/wrappers/bin:/run/current-system/sw/bin:/usr/bin:/bin"
+          "PATH=${pkgs.postgresql}/bin:/run/wrappers/bin:/run/current-system/sw/bin:/usr/bin:/bin"
         ];
 
         PrivateTmp = true;
@@ -589,7 +660,7 @@ in
         SPEEDTEST_BIN = "${pkgs.speedtest-cli}/bin/speedtest";
         SYSTEMCTL_BIN = "${pkgs.systemd}/bin/systemctl";
         NMAP_BIN = "${pkgs.nmap}/bin/nmap";
-      };
+      } // routerWebuiRetentionEnv;
       
       serviceConfig = {
         Type = "simple";
@@ -1124,6 +1195,6 @@ PYEOF
         exit $exit_code
       '';
     };
-  };
+  });
 }
 
