@@ -25,6 +25,9 @@
   };
 
   cname_records = {
+    # Apex wildcard: dnsmasq address=/jeandr.net/IP matches every *.jeandr.net name, including
+    # bogus names like oauth2.googleapis.com.jeandr.net when clients append DHCP domain (option 15).
+    # Prefer explicit records, a narrower zone (e.g. *.svc.jeandr.net), or fix DHCP option15Domain.
     "*.jeandr.net" = {
       target = "jeandr.net";
       comment = "Wildcard for all subdomains";

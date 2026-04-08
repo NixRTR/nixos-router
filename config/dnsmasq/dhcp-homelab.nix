@@ -6,6 +6,9 @@
   dnsServers = [
     "192.168.2.1"
   ];
+
+  # DHCP option 15 — see dhcp-lan.nix for wildcard/suffix interaction with *.zone in dns-*.nix.
+  # option15Domain = "dhcp.homelab.local";
   
   # Dynamic DNS domain for DHCP clients (optional)
   # If set, ALL DHCP clients get automatic DNS entries

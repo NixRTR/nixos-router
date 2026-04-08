@@ -61,6 +61,17 @@ let
         if numParts >= 2 then
           "${builtins.elemAt parts (numParts - 2)}.${builtins.elemAt parts (numParts - 1)}"
         else firstRecord;
+
+  # DHCP option 15 (domain name / Windows DNS suffix). If unset, derived from A records (legacy).
+  # If set to "", omit option 15 entirely. See dhcp-*.nix comments: apex wildcards (*.zone) + same suffix break public names.
+  dhcpOption15OrNull = dhcpCfg: aRecords:
+    let
+      v =
+        if builtins.hasAttr "option15Domain" dhcpCfg
+        then dhcpCfg.option15Domain
+        else extractDomain aRecords;
+    in
+      if v == "" then null else v;
   
   # Helper to extract the primary domain from A records
   extractPrimaryDomain = aRecords:
@@ -148,6 +159,9 @@ let
   # Get list of wildcard base domains (to exclude from host records)
   homelabWildcardDomains = map (w: w.domain) homelabWildcards;
   lanWildcardDomains = map (w: w.domain) lanWildcards;
+
+  homelabDhcpOption15 = dhcpOption15OrNull homelabCfg.dhcp (homelabDns.a_records or {});
+  lanDhcpOption15 = dhcpOption15OrNull lanCfg.dhcp (lanDns.a_records or {});
   
   # Filter out base domains that have wildcards (address= already handles them)
   homelabHostRecordsFiltered = lib.filter (record: 
@@ -331,7 +345,7 @@ in
             dhcp-range=${homelabBridge},${homelabCfg.dhcp.start},${homelabCfg.dhcp.end},${homelabCfg.dhcp.leaseTime}
             dhcp-option=${homelabBridge},3,${homelabCfg.ipAddress}
             dhcp-option=${homelabBridge},6${concatMapStringsSep "," (s: ",${s}") (homelabCfg.dhcp.dnsServers or [ homelabCfg.ipAddress ])}
-            dhcp-option=${homelabBridge},15,${extractDomain (homelabDns.a_records or {})}
+            ${lib.optionalString (homelabDhcpOption15 != null) "dhcp-option=${homelabBridge},15,${homelabDhcpOption15}"}
             dhcp-authoritative
             dhcp-leasefile=/var/lib/dnsmasq/homelab/dhcp.leases
           '' else ""}
@@ -545,7 +559,7 @@ in
             dhcp-range=${lanBridge},${lanCfg.dhcp.start},${lanCfg.dhcp.end},${lanCfg.dhcp.leaseTime}
             dhcp-option=${lanBridge},3,${lanCfg.ipAddress}
             dhcp-option=${lanBridge},6${concatMapStringsSep "," (s: ",${s}") (lanCfg.dhcp.dnsServers or [ lanCfg.ipAddress ])}
-            dhcp-option=${lanBridge},15,${extractDomain (lanDns.a_records or {})}
+            ${lib.optionalString (lanDhcpOption15 != null) "dhcp-option=${lanBridge},15,${lanDhcpOption15}"}
             dhcp-authoritative
             dhcp-leasefile=/var/lib/dnsmasq/lan/dhcp.leases
           '' else ""}

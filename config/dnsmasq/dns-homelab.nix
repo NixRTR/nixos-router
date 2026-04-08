@@ -24,6 +24,7 @@
   };
 
   cname_records = {
+    # See dns-lan.nix — apex wildcard + same domain as DHCP option 15 poisons appended public lookups.
     "*.jeandr.net" = {
       target = "jeandr.net";
       comment = "Wildcard - all subdomains point to main domain";
