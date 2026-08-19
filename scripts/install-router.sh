@@ -702,8 +702,13 @@ EOF
 setup_router_config() {
     log_info "Setting up router configuration"
 
-    # Clone the router repository (using nix-shell as git isn't in minimal ISO)
-    nix-shell -p git --run "git clone $REPO_URL /mnt/etc/nixos/router-config"
+    # Clone the router repository. git is bundled on the custom router ISO;
+    # fall back to nix-shell (with flakes enabled) on the plain NixOS ISO.
+    if command -v git >/dev/null 2>&1; then
+        git clone "$REPO_URL" /mnt/etc/nixos/router-config
+    else
+        nix-shell --extra-experimental-features "nix-command flakes" -p git --run "git clone $REPO_URL /mnt/etc/nixos/router-config"
+    fi
 
     # Copy configuration files (excluding config directory which we'll generate)
     rsync -a --exclude "config/" /mnt/etc/nixos/router-config/* /mnt/etc/nixos/

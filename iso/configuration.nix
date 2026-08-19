@@ -188,8 +188,8 @@
   security.sudo.wheelNeedsPassword = false;
   users.users.nixos.extraGroups = [ "wheel" ];
 
-  # Network configuration - enable DHCP on all interfaces by default
-  networking.useDHCP = true;
+  # Network configuration - NetworkManager (enabled by the base installer
+  # profile) already handles DHCP per-interface, so useDHCP is left unset.
   networking.wireless.enable = false;  # We'll use wired connections
 
   # Enable SSH for remote installation (optional)
@@ -202,8 +202,6 @@
   users.users.nixos.initialPassword = "nixos";
 
   # Helpful message on boot
-  boot.kernelParams = [ "console=tty1" ];
-  
   services.getty.helpLine = ''
     
     NixOS Router Installation System
