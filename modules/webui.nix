@@ -6,26 +6,22 @@ let
   cfg = config.services.router-webui;
   routerConfig = import ../router-config.nix;
   
-  # Override packages to disable tests that fail in NixOS build environment
-  # - paho-mqtt: optional MQTT dependency we don't use
-  # - tenacity: dependency of celery, has flaky timing tests
-  # - portalocker: has flaky multiprocessing tests that timeout in build environment
-  # - django: transitive dependency (likely via celery), has flaky XML serializer tests
+  # packageOverrides changes the derivation hash of every package built
+  # against this interpreter, so the whole pythonEnv closure below builds
+  # from source instead of hitting the binary cache. Running each
+  # package's test suite locally is slow and memory-hungry (some suites
+  # are also flaky/timeout in the sandboxed build environment: network
+  # access, multiprocessing, timing-sensitive tests), so tests are
+  # disabled across the board rather than per-package.
   python311WithOverrides = pkgs.python311.override {
-    packageOverrides = self: super: {
-      paho-mqtt = super.paho-mqtt.overridePythonAttrs (attrs: {
-        doCheck = false;
-      });
-      tenacity = super.tenacity.overridePythonAttrs (attrs: {
-        doCheck = false;
-      });
-      portalocker = super.portalocker.overridePythonAttrs (attrs: {
-        doCheck = false;
-      });
-      django = super.django.overridePythonAttrs (attrs: {
-        doCheck = false;
-      });
-    };
+    packageOverrides = self: super:
+      lib.mapAttrs
+        (name: pkg:
+          if lib.isDerivation pkg && (pkg ? overridePythonAttrs) then
+            pkg.overridePythonAttrs (old: { doCheck = false; doInstallCheck = false; })
+          else
+            pkg)
+        super;
   };
   
   # Python environment with all dependencies
