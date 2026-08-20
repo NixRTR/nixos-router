@@ -1115,6 +1115,15 @@ EOF
 install_nixos() {
     log_info "Installing NixOS"
 
+    # Flakes require the flake directory to be a git repo to see the
+    # generated files (only tracked/staged files are visible). Without
+    # this, nixos-install falls back to a raw path: flake reference,
+    # which can crash with a Nix assertion failure in copyInputToStore
+    # when copying the flake input into the target --store.
+    git -C /mnt/etc/nixos init -q
+    git -C /mnt/etc/nixos add -A
+    git -C /mnt/etc/nixos -c user.email="install@nixos-router" -c user.name="NixOS Router Installer" commit -q -m "Initial router configuration"
+
     # Install with flake
     nixos-install --flake /mnt/etc/nixos#router --no-root-passwd
 
