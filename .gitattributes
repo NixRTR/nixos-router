@@ -1,0 +1,5 @@
+# Force LF line endings for all text files. Nix embeds file content
+# byte-for-byte into generated shell scripts (systemd ExecStart,
+# activation scripts, etc.), so CRLF here silently breaks scripts at
+# build or boot time on the target NixOS system.
+* text=auto eol=lf

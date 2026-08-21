@@ -1,0 +1,82 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1782847189,
+        "narHash": "sha256-twXPFqFsrrY5r28Zh7Homgcp2gUMBgQ6WDS98Q/3xFI=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "b6018f87da91d19d0ab4cf979885689b469cdd41",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-25.11",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "router-docs": "router-docs",
+        "router-webui": "router-webui",
+        "sops-nix": "sops-nix"
+      }
+    },
+    "router-docs": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1769904494,
+        "narHash": "sha256-hEfd+vwevVWsnl0+JKu48yi9ijgigZDWs/STunFoTgQ=",
+        "owner": "NixRTR",
+        "repo": "docs",
+        "rev": "3093247ce2d108a0378b5a4cf4186c74c902d15c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixRTR",
+        "repo": "docs",
+        "type": "github"
+      }
+    },
+    "router-webui": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1775423028,
+        "narHash": "sha256-CoxvFW5BlvdPDeMQ/+S6mW+mt9CovBOk/5d6f0jix1k=",
+        "owner": "NixRTR",
+        "repo": "webui",
+        "rev": "c70b496199e6acdc775ed3245de25d099472af8a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixRTR",
+        "repo": "webui",
+        "type": "github"
+      }
+    },
+    "sops-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1786629091,
+        "narHash": "sha256-gkig4nPi1CWc4Z50GBsjE4ygSE7hMpl/TwID2an2Cck=",
+        "owner": "Mic92",
+        "repo": "sops-nix",
+        "rev": "a8627b21b9107c5711c96b84f32a9a4b3d45295f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Mic92",
+        "repo": "sops-nix",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

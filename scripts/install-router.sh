@@ -1093,9 +1093,14 @@ pppoe-password: "$PPPOE_PASS"
 EOF
     fi
 
-    # Store plain text password (will be hashed at runtime)
+    # modules/users.nix reads sops secret "password-hash" as hashedPasswordFile,
+    # so it must already be a crypt(3) hash, not the plaintext password.
+    log_info "Hashing user password"
+    local password_hash
+    password_hash=$(echo "$USER_PASSWORD" | nix shell --experimental-features nix-command --extra-experimental-features flakes nixpkgs#mkpasswd -c mkpasswd -m sha-512 -s)
+
     cat >> "$secrets_yaml" << EOF
-password: "$USER_PASSWORD"
+password-hash: "$password_hash"
 EOF
 
     # Encrypt the secrets file
