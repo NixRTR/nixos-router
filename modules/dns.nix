@@ -201,6 +201,58 @@ let
     in
       builtins.head parts;
 
+  # Shell snippet that writes a network's DHCP lease names to hosts.d/dynamic (hosts format).
+  # dnsmasq watches hosts.d through hostsdir= and picks up changes by itself, so a lease
+  # change never needs a dnsmasq restart.
+  mkDynamicHostsScript = name: label: netCfg: ''
+    mkdir -p /var/lib/dnsmasq/${name}/hosts.d
+    ${if (netCfg.dhcp.dynamicDomain or "") != "" then ''
+      if [ -f /var/lib/dnsmasq/${name}/dhcp.leases ]; then
+        ${pkgs.gawk}/bin/awk -v domain="${netCfg.dhcp.dynamicDomain}" -v subnet="${netCfg.subnet}" '
+          BEGIN {
+            split(subnet, parts, "/");
+            network_prefix = parts[1];
+            split(network_prefix, octets, ".");
+            base = octets[1] "." octets[2] "." octets[3];
+          }
+
+          # Parse dnsmasq lease file format: <expiry-time> <MAC> <IP> <hostname> <client-id>
+          {
+            if (NF >= 4) {
+              ip = $3;
+              hostname = $4;
+
+              # Check if IP is in our subnet
+              if (index(ip, base) == 1) {
+                # If hostname is "*" or empty, generate one from IP
+                if (hostname == "*" || hostname == "") {
+                  split(ip, ip_parts, ".");
+                  last_octet = ip_parts[4];
+                  hostname = "dhcp-" last_octet;
+                }
+
+                print ip " " hostname "." domain;
+              }
+            }
+          }
+        ' /var/lib/dnsmasq/${name}/dhcp.leases > /var/lib/dnsmasq/${name}/hosts.d/.dynamic.tmp
+      else
+        : > /var/lib/dnsmasq/${name}/hosts.d/.dynamic.tmp
+      fi
+
+      # Only replace the file when it changed (a plain renewal changes nothing).
+      # dnsmasq ignores dotfiles in hosts.d, so the temp file is never loaded.
+      if ${pkgs.diffutils}/bin/cmp -s /var/lib/dnsmasq/${name}/hosts.d/.dynamic.tmp /var/lib/dnsmasq/${name}/hosts.d/dynamic; then
+        rm -f /var/lib/dnsmasq/${name}/hosts.d/.dynamic.tmp
+      else
+        mv /var/lib/dnsmasq/${name}/hosts.d/.dynamic.tmp /var/lib/dnsmasq/${name}/hosts.d/dynamic
+        echo "${label}: $(wc -l < /var/lib/dnsmasq/${name}/hosts.d/dynamic) dynamic DNS entries"
+      fi
+    '' else ''
+      rm -f /var/lib/dnsmasq/${name}/hosts.d/dynamic
+    ''}
+  '';
+
 in
 
 {
@@ -220,79 +272,17 @@ in
           # Create state directory
           mkdir -p /var/lib/dnsmasq/homelab
           
-          # Download and process blocklists
-          echo "Downloading blocklists for HOMELAB..."
-          > /tmp/blocklist-homelab-combined.txt  # Clear combined file
-          
-          ${concatMapStringsSep "\n" (url: ''
-            echo "  - Downloading: ${url}"
-            ${pkgs.curl}/bin/curl -s -f -L "${url}" >> /tmp/blocklist-homelab-combined.txt || echo "Warning: Failed to download ${url}"
-          '') homelabBlocklistUrls}
-          
-          # Convert hosts file to dnsmasq format
-          if [ -s /tmp/blocklist-homelab-combined.txt ]; then
-            echo "Processing blocklists..."
-            ${pkgs.gawk}/bin/awk '/^(0\.0\.0\.0|127\.0\.0\.1)[[:space:]]/ {
-              if ($2 !~ /^(localhost|local|broadcasthost|ip6-)/) {
-                print "address=/" $2 "/"
-              }
-            }' /tmp/blocklist-homelab-combined.txt | sort -u > /var/lib/dnsmasq/homelab/blocklist.conf
-            
-            # Count blocked domains
-            BLOCKED_COUNT=$(wc -l < /var/lib/dnsmasq/homelab/blocklist.conf)
-            echo "HOMELAB: Blocking $BLOCKED_COUNT domains"
-            
-            rm /tmp/blocklist-homelab-combined.txt
-          else
-            echo "Warning: No blocklists downloaded, creating empty blocklist"
-            touch /var/lib/dnsmasq/homelab/blocklist.conf
-          fi
-          
-          # Generate dynamic DNS entries from DHCP leases
-          echo "Generating dynamic DNS entries from DHCP leases..."
-          > /var/lib/dnsmasq/homelab/dynamic-dns.conf
-          
-          ${if (homelabCfg.dhcp.dynamicDomain or "") != "" then ''
-            if [ -f /var/lib/dnsmasq/homelab/dhcp.leases ]; then
-              ${pkgs.gawk}/bin/awk -v domain="${homelabCfg.dhcp.dynamicDomain}" -v subnet="${homelabCfg.subnet}" '
-                BEGIN {
-                  split(subnet, parts, "/");
-                  network_prefix = parts[1];
-                  split(network_prefix, octets, ".");
-                  base = octets[1] "." octets[2] "." octets[3];
-                }
-                
-                # Parse dnsmasq lease file format: <expiry-time> <MAC> <IP> <hostname> <client-id>
-                {
-                  if (NF >= 4) {
-                    expiry = $1;
-                    mac = $2;
-                    ip = $3;
-                    hostname = $4;
-                    
-                    # Check if IP is in our subnet
-                    if (index(ip, base) == 1) {
-                      # If hostname is "*" or empty, generate one from IP
-                      if (hostname == "*" || hostname == "") {
-                        split(ip, ip_parts, ".");
-                        last_octet = ip_parts[4];
-                        hostname = "dhcp-" last_octet;
-                      }
-                      
-                      print "host-record=" hostname "." domain "," ip "  # Dynamic DHCP";
-                    }
-                  }
-                }
-              ' /var/lib/dnsmasq/homelab/dhcp.leases >> /var/lib/dnsmasq/homelab/dynamic-dns.conf
-              
-              DYNAMIC_COUNT=$(wc -l < /var/lib/dnsmasq/homelab/dynamic-dns.conf)
-              echo "HOMELAB: $DYNAMIC_COUNT dynamic DNS entries"
-            else
-              echo "No DHCP leases found for HOMELAB"
-            fi
+          # Blocklists are refreshed by dnsmasq-blocklist-update-homelab, not here:
+          # a slow download must never hold up DNS/DHCP startup
+          ${if homelabBlocklistUrls == [] then ''
+            : > /var/lib/dnsmasq/homelab/blocklist.conf
           '' else ''
-            echo "Dynamic DNS disabled for HOMELAB"
+            [ -f /var/lib/dnsmasq/homelab/blocklist.conf ] || touch /var/lib/dnsmasq/homelab/blocklist.conf
           ''}
+
+          # Generate dynamic DNS entries from DHCP leases
+          ${mkDynamicHostsScript "homelab" "HOMELAB" homelabCfg}
+          rm -f /var/lib/dnsmasq/homelab/dynamic-dns.conf
           
           # Generate dnsmasq config
           cat > /var/lib/dnsmasq/homelab/dnsmasq.conf << 'EOF'
@@ -334,7 +324,7 @@ in
           
           # Include blocklists and dynamic DNS
           conf-file=/var/lib/dnsmasq/homelab/blocklist.conf
-          conf-file=/var/lib/dnsmasq/homelab/dynamic-dns.conf
+          hostsdir=/var/lib/dnsmasq/homelab/hosts.d
           
           # WebUI-managed configurations (may not exist if WebUI hasn't written them yet)
           conf-file=/var/lib/dnsmasq/homelab/webui-dns.conf
@@ -434,79 +424,17 @@ in
           # Create state directory
           mkdir -p /var/lib/dnsmasq/lan
           
-          # Download and process blocklists
-          echo "Downloading blocklists for LAN..."
-          > /tmp/blocklist-lan-combined.txt  # Clear combined file
-          
-          ${concatMapStringsSep "\n" (url: ''
-            echo "  - Downloading: ${url}"
-            ${pkgs.curl}/bin/curl -s -f -L "${url}" >> /tmp/blocklist-lan-combined.txt || echo "Warning: Failed to download ${url}"
-          '') lanBlocklistUrls}
-          
-          # Convert hosts file to dnsmasq format
-          if [ -s /tmp/blocklist-lan-combined.txt ]; then
-            echo "Processing blocklists..."
-            ${pkgs.gawk}/bin/awk '/^(0\.0\.0\.0|127\.0\.0\.1)[[:space:]]/ {
-              if ($2 !~ /^(localhost|local|broadcasthost|ip6-)/) {
-                print "address=/" $2 "/"
-              }
-            }' /tmp/blocklist-lan-combined.txt | sort -u > /var/lib/dnsmasq/lan/blocklist.conf
-            
-            # Count blocked domains
-            BLOCKED_COUNT=$(wc -l < /var/lib/dnsmasq/lan/blocklist.conf)
-            echo "LAN: Blocking $BLOCKED_COUNT domains"
-            
-            rm /tmp/blocklist-lan-combined.txt
-          else
-            echo "Warning: No blocklists downloaded, creating empty blocklist"
-            touch /var/lib/dnsmasq/lan/blocklist.conf
-          fi
-          
-          # Generate dynamic DNS entries from DHCP leases
-          echo "Generating dynamic DNS entries from DHCP leases..."
-          > /var/lib/dnsmasq/lan/dynamic-dns.conf
-          
-          ${if (lanCfg.dhcp.dynamicDomain or "") != "" then ''
-            if [ -f /var/lib/dnsmasq/lan/dhcp.leases ]; then
-              ${pkgs.gawk}/bin/awk -v domain="${lanCfg.dhcp.dynamicDomain}" -v subnet="${lanCfg.subnet}" '
-                BEGIN {
-                  split(subnet, parts, "/");
-                  network_prefix = parts[1];
-                  split(network_prefix, octets, ".");
-                  base = octets[1] "." octets[2] "." octets[3];
-                }
-                
-                # Parse dnsmasq lease file format: <expiry-time> <MAC> <IP> <hostname> <client-id>
-                {
-                  if (NF >= 4) {
-                    expiry = $1;
-                    mac = $2;
-                    ip = $3;
-                    hostname = $4;
-                    
-                    # Check if IP is in our subnet
-                    if (index(ip, base) == 1) {
-                      # If hostname is "*" or empty, generate one from IP
-                      if (hostname == "*" || hostname == "") {
-                        split(ip, ip_parts, ".");
-                        last_octet = ip_parts[4];
-                        hostname = "dhcp-" last_octet;
-                      }
-                      
-                      print "host-record=" hostname "." domain "," ip "  # Dynamic DHCP";
-                    }
-                  }
-                }
-              ' /var/lib/dnsmasq/lan/dhcp.leases >> /var/lib/dnsmasq/lan/dynamic-dns.conf
-              
-              DYNAMIC_COUNT=$(wc -l < /var/lib/dnsmasq/lan/dynamic-dns.conf)
-              echo "LAN: $DYNAMIC_COUNT dynamic DNS entries"
-            else
-              echo "No DHCP leases found for LAN"
-            fi
+          # Blocklists are refreshed by dnsmasq-blocklist-update-lan, not here:
+          # a slow download must never hold up DNS/DHCP startup
+          ${if lanBlocklistUrls == [] then ''
+            : > /var/lib/dnsmasq/lan/blocklist.conf
           '' else ''
-            echo "Dynamic DNS disabled for LAN"
+            [ -f /var/lib/dnsmasq/lan/blocklist.conf ] || touch /var/lib/dnsmasq/lan/blocklist.conf
           ''}
+
+          # Generate dynamic DNS entries from DHCP leases
+          ${mkDynamicHostsScript "lan" "LAN" lanCfg}
+          rm -f /var/lib/dnsmasq/lan/dynamic-dns.conf
           
           # Generate dnsmasq config
           cat > /var/lib/dnsmasq/lan/dnsmasq.conf << 'EOF'
@@ -548,7 +476,7 @@ in
           
           # Include blocklists and dynamic DNS
           conf-file=/var/lib/dnsmasq/lan/blocklist.conf
-          conf-file=/var/lib/dnsmasq/lan/dynamic-dns.conf
+          hostsdir=/var/lib/dnsmasq/lan/hosts.d
           
           # WebUI-managed configurations (may not exist if WebUI hasn't written them yet)
           conf-file=/var/lib/dnsmasq/lan/webui-dns.conf
@@ -655,7 +583,7 @@ in
             
             ${concatMapStringsSep "\n" (url: ''
               echo "  - Downloading: ${url}"
-              ${pkgs.curl}/bin/curl -s -f -L "${url}" >> /tmp/blocklist-homelab-combined.txt || echo "Warning: Failed to download ${url}"
+              ${pkgs.curl}/bin/curl -s -f -L --connect-timeout 10 --max-time 60 "${url}" >> /tmp/blocklist-homelab-combined.txt || echo "Warning: Failed to download ${url}"
             '') homelabBlocklistUrls}
             
             if [ -s /tmp/blocklist-homelab-combined.txt ]; then
@@ -669,14 +597,27 @@ in
               BLOCKED_COUNT=$(wc -l < /var/lib/dnsmasq/homelab/blocklist.conf.new)
               echo "HOMELAB: Now blocking $BLOCKED_COUNT domains"
               
-              mv /var/lib/dnsmasq/homelab/blocklist.conf.new /var/lib/dnsmasq/homelab/blocklist.conf
+              if ${pkgs.diffutils}/bin/cmp -s /var/lib/dnsmasq/homelab/blocklist.conf.new /var/lib/dnsmasq/homelab/blocklist.conf; then
+                echo "HOMELAB: blocklist unchanged"
+                rm /var/lib/dnsmasq/homelab/blocklist.conf.new
+              else
+                mv /var/lib/dnsmasq/homelab/blocklist.conf.new /var/lib/dnsmasq/homelab/blocklist.conf
+                # dnsmasq only reads the blocklist at startup; ExecStartPost restarts it (as root)
+                touch /var/lib/dnsmasq/homelab/.blocklist-changed
+              fi
               rm /tmp/blocklist-homelab-combined.txt
-              systemctl reload-or-restart dnsmasq-homelab || true
             else
               echo "No blocklists downloaded for HOMELAB"
             fi
             
             echo "=== HOMELAB blocklist update completed ==="
+          ''}";
+          # "+" runs this as root: the dnsmasq user is not allowed to restart the service
+          ExecStartPost = "+${pkgs.writeShellScript "apply-blocklists-homelab" ''
+            if [ -e /var/lib/dnsmasq/homelab/.blocklist-changed ]; then
+              rm -f /var/lib/dnsmasq/homelab/.blocklist-changed
+              ${pkgs.systemd}/bin/systemctl try-restart dnsmasq-homelab.service
+            fi
           ''}";
         };
       };
@@ -700,7 +641,7 @@ in
             
             ${concatMapStringsSep "\n" (url: ''
               echo "  - Downloading: ${url}"
-              ${pkgs.curl}/bin/curl -s -f -L "${url}" >> /tmp/blocklist-lan-combined.txt || echo "Warning: Failed to download ${url}"
+              ${pkgs.curl}/bin/curl -s -f -L --connect-timeout 10 --max-time 60 "${url}" >> /tmp/blocklist-lan-combined.txt || echo "Warning: Failed to download ${url}"
             '') lanBlocklistUrls}
             
             if [ -s /tmp/blocklist-lan-combined.txt ]; then
@@ -714,131 +655,64 @@ in
               BLOCKED_COUNT=$(wc -l < /var/lib/dnsmasq/lan/blocklist.conf.new)
               echo "LAN: Now blocking $BLOCKED_COUNT domains"
               
-              mv /var/lib/dnsmasq/lan/blocklist.conf.new /var/lib/dnsmasq/lan/blocklist.conf
+              if ${pkgs.diffutils}/bin/cmp -s /var/lib/dnsmasq/lan/blocklist.conf.new /var/lib/dnsmasq/lan/blocklist.conf; then
+                echo "LAN: blocklist unchanged"
+                rm /var/lib/dnsmasq/lan/blocklist.conf.new
+              else
+                mv /var/lib/dnsmasq/lan/blocklist.conf.new /var/lib/dnsmasq/lan/blocklist.conf
+                # dnsmasq only reads the blocklist at startup; ExecStartPost restarts it (as root)
+                touch /var/lib/dnsmasq/lan/.blocklist-changed
+              fi
               rm /tmp/blocklist-lan-combined.txt
-              systemctl reload-or-restart dnsmasq-lan || true
             else
               echo "No blocklists downloaded for LAN"
             fi
             
             echo "=== LAN blocklist update completed ==="
           ''}";
+          # "+" runs this as root: the dnsmasq user is not allowed to restart the service
+          ExecStartPost = "+${pkgs.writeShellScript "apply-blocklists-lan" ''
+            if [ -e /var/lib/dnsmasq/lan/.blocklist-changed ]; then
+              rm -f /var/lib/dnsmasq/lan/.blocklist-changed
+              ${pkgs.systemd}/bin/systemctl try-restart dnsmasq-lan.service
+            fi
+          ''}";
         };
       };
       })
       
-      # Dynamic DNS updater services
+      # Dynamic DNS updater services (started by the .path units below when the lease file changes)
       (mkIf homelabDnsEnabled {
         dnsmasq-dynamic-dns-homelab = {
           description = "Update dnsmasq Dynamic DNS for HOMELAB";
+          # Runs on every lease file write; never let a burst of leases trip the start limit
+          startLimitIntervalSec = 0;
           serviceConfig = {
             Type = "oneshot";
-            # Run as root so systemctl reload-or-restart can run; chown output file to dnsmasq
+            StateDirectory = "dnsmasq/homelab";
+            User = "dnsmasq";
+            Group = "dnsmasq";
+            # Let a burst of lease changes settle so they are handled in one run
+            ExecStartPre = "${pkgs.coreutils}/bin/sleep 2";
           };
-          script = ''
-            echo "Updating dynamic DNS for HOMELAB..."
-            
-            # Regenerate dynamic DNS entries
-            > /var/lib/dnsmasq/homelab/dynamic-dns.conf
-            
-            ${if (homelabCfg.dhcp.dynamicDomain or "") != "" then ''
-              if [ -f /var/lib/dnsmasq/homelab/dhcp.leases ]; then
-                ${pkgs.gawk}/bin/awk -v domain="${homelabCfg.dhcp.dynamicDomain}" -v subnet="${homelabCfg.subnet}" '
-                  BEGIN {
-                    split(subnet, parts, "/");
-                    network_prefix = parts[1];
-                    split(network_prefix, octets, ".");
-                    base = octets[1] "." octets[2] "." octets[3];
-                  }
-                  
-                  # Parse dnsmasq lease file format: <expiry-time> <MAC> <IP> <hostname> <client-id>
-                  {
-                    if (NF >= 4) {
-                      expiry = $1;
-                      mac = $2;
-                      ip = $3;
-                      hostname = $4;
-                      
-                      # Check if IP is in our subnet
-                      if (index(ip, base) == 1) {
-                        # If hostname is "*" or empty, generate one from IP
-                        if (hostname == "*" || hostname == "") {
-                          split(ip, ip_parts, ".");
-                          last_octet = ip_parts[4];
-                          hostname = "dhcp-" last_octet;
-                        }
-                        
-                        print "host-record=" hostname "." domain "," ip "  # Dynamic DHCP";
-                      }
-                    }
-                  }
-                ' /var/lib/dnsmasq/homelab/dhcp.leases > /var/lib/dnsmasq/homelab/dynamic-dns.conf
-                
-                chown dnsmasq:dnsmasq /var/lib/dnsmasq/homelab/dynamic-dns.conf
-                systemctl reload-or-restart dnsmasq-homelab || true
-                
-                DYNAMIC_COUNT=$(wc -l < /var/lib/dnsmasq/homelab/dynamic-dns.conf)
-                echo "HOMELAB: $DYNAMIC_COUNT dynamic DNS entries"
-              fi
-            '' else ""}
-          '';
+          script = mkDynamicHostsScript "homelab" "HOMELAB" homelabCfg;
         };
       })
       
       (mkIf lanDnsEnabled {
         dnsmasq-dynamic-dns-lan = {
           description = "Update dnsmasq Dynamic DNS for LAN";
+          # Runs on every lease file write; never let a burst of leases trip the start limit
+          startLimitIntervalSec = 0;
           serviceConfig = {
             Type = "oneshot";
-            # Run as root so systemctl reload-or-restart can run; chown output file to dnsmasq
+            StateDirectory = "dnsmasq/lan";
+            User = "dnsmasq";
+            Group = "dnsmasq";
+            # Let a burst of lease changes settle so they are handled in one run
+            ExecStartPre = "${pkgs.coreutils}/bin/sleep 2";
           };
-          script = ''
-            echo "Updating dynamic DNS for LAN..."
-            
-            # Regenerate dynamic DNS entries
-            > /var/lib/dnsmasq/lan/dynamic-dns.conf
-            
-            ${if (lanCfg.dhcp.dynamicDomain or "") != "" then ''
-              if [ -f /var/lib/dnsmasq/lan/dhcp.leases ]; then
-                ${pkgs.gawk}/bin/awk -v domain="${lanCfg.dhcp.dynamicDomain}" -v subnet="${lanCfg.subnet}" '
-                  BEGIN {
-                    split(subnet, parts, "/");
-                    network_prefix = parts[1];
-                    split(network_prefix, octets, ".");
-                    base = octets[1] "." octets[2] "." octets[3];
-                  }
-                  
-                  # Parse dnsmasq lease file format: <expiry-time> <MAC> <IP> <hostname> <client-id>
-                  {
-                    if (NF >= 4) {
-                      expiry = $1;
-                      mac = $2;
-                      ip = $3;
-                      hostname = $4;
-                      
-                      # Check if IP is in our subnet
-                      if (index(ip, base) == 1) {
-                        # If hostname is "*" or empty, generate one from IP
-                        if (hostname == "*" || hostname == "") {
-                          split(ip, ip_parts, ".");
-                          last_octet = ip_parts[4];
-                          hostname = "dhcp-" last_octet;
-                        }
-                        
-                        print "host-record=" hostname "." domain "," ip "  # Dynamic DHCP";
-                      }
-                    }
-                  }
-                ' /var/lib/dnsmasq/lan/dhcp.leases > /var/lib/dnsmasq/lan/dynamic-dns.conf
-                
-                chown dnsmasq:dnsmasq /var/lib/dnsmasq/lan/dynamic-dns.conf
-                systemctl reload-or-restart dnsmasq-lan || true
-                
-                DYNAMIC_COUNT=$(wc -l < /var/lib/dnsmasq/lan/dynamic-dns.conf)
-                echo "LAN: $DYNAMIC_COUNT dynamic DNS entries"
-              fi
-            '' else ""}
-          '';
+          script = mkDynamicHostsScript "lan" "LAN" lanCfg;
         };
       })
     ];
@@ -862,25 +736,6 @@ in
         OnBootSec = "5min";
         OnUnitActiveSec = "24h";  # TODO: Use minimum of all blocklist intervals
         Persistent = true;
-      };
-    };
-    
-    # Timers to periodically update dynamic DNS
-    systemd.timers.dnsmasq-dynamic-dns-homelab = mkIf (homelabDnsEnabled && ((homelabCfg.dhcp.dynamicDomain or "") != "")) {
-      description = "Periodically update dnsmasq Dynamic DNS for HOMELAB";
-      wantedBy = [ "timers.target" ];
-      timerConfig = {
-        OnBootSec = "1m";
-        OnUnitActiveSec = "5m";  # Update every 5 minutes
-      };
-    };
-    
-    systemd.timers.dnsmasq-dynamic-dns-lan = mkIf (lanDnsEnabled && ((lanCfg.dhcp.dynamicDomain or "") != "")) {
-      description = "Periodically update dnsmasq Dynamic DNS for LAN";
-      wantedBy = [ "timers.target" ];
-      timerConfig = {
-        OnBootSec = "1m";
-        OnUnitActiveSec = "5m";  # Update every 5 minutes
       };
     };
     
