@@ -47,15 +47,19 @@ in
   # Enable Nix flakes and modern command syntax
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
-  # Automatic garbage collection - runs daily and keeps only the past 2 generations
+  # Enable alternative keyboard
+  console.keyMap = "colemak";
+  services.xserver.xkb.layout = "colemak";
+
+  # Automatic garbage collection - runs weekly
   nix.gc = {
     automatic = true;
     dates = "daily";
-    options = "--delete-older-than 2d";
+    options = "--delete-older-than 7d";
   };
 
-  # Limit boot menu to 2 generations
-  boot.loader.systemd-boot.configurationLimit = 2;
+  # Limit boot menu to 15 generations
+  boot.loader.systemd-boot.configurationLimit = 15;
 
   # Bootloader configuration
   boot.loader.systemd-boot.enable = true;
@@ -153,6 +157,9 @@ in
     jq             # Used by DynDNS timer for JSON parsing
     cacert         # CA certificates for SSL/TLS
     fastfetch      # System information display tool (used by WebUI System Info)
+    helix          # An actually good editor
+    git            # Suprised this isnt standard
+    yazi           # To navigate this (lovely) mess quickly
   ];
 
   # DNS is configured via modules/dns.nix (reads from routerConfig.dns)
