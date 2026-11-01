@@ -160,6 +160,7 @@ in
     helix          # An actually good editor
     git            # Suprised this isnt standard
     yazi           # To navigate this (lovely) mess quickly
+    ethtool        # Debugging tool
   ];
 
   # DNS is configured via modules/dns.nix (reads from routerConfig.dns)
